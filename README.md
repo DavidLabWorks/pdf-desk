@@ -19,7 +19,7 @@ Keep frequently used PDFs on a bookshelf and open them in tabs to read, annotate
 
 ![Recent PDFs shown as cover cards, with controls for favorites, grid view, and list view](docs/screenshots/en/bookshelf.png)
 
-- **Bookshelf.** Recent files and favorites each remember your choice of grid or list view. Cards show the file name, date added, and size. Right-click a file to open its folder or remove it from the list.
+- **Bookshelf.** Recent files and favorites each remember your choice of grid or list view. Use the star to save a PDF directly or choose a favorites folder. Drag a document from the shelf or drop PDFs from File Explorer onto a folder in the left pane. Select a folder to browse, rename, or delete it. Deleting a folder keeps its PDFs in Unfiled. Cards show the file name, date added, and size. Right-click a file to open its location or remove it from the list.
 - **Reading.** Open several documents in tabs and arrange pages in one, two, or three columns. Fit a page to the window or its width, rotate it, switch to night mode, or enter full-screen presentation mode. Session restore remembers your open tabs and whether you left the app on Home.
 - **Navigation.** Jump to a thumbnail, outline entry, personal bookmark, link, or page number. Document search lets you step through matches in either direction. Text selection and highlighting use the PDF’s text layer.
 

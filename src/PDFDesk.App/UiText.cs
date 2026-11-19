@@ -23,6 +23,24 @@ public sealed class UiText : INotifyPropertyChanged
     }
 
     public string LibraryStorage => Chinese ? "文件存储" : "File storage";
+    public string FavoriteFoldersLabel => Chinese ? "收藏文件夹" : "Favorite folders";
+    public string FolderNameExample => Chinese ? "例如：阅读资料" : "e.g. Reading list";
+    public string AllFavorites => Chinese ? "全部收藏" : "All favorites";
+    public string UnfiledFavorites => Chinese ? "未归类" : "Unfiled";
+    public string NewFavoriteFolder => Chinese ? "新建文件夹" : "New folder";
+    public string FavoriteOptions => Chinese ? "收藏选项" : "Favorite options";
+    public string RenameFolder => Chinese ? "重命名文件夹" : "Rename folder";
+    public string DeleteFolder => Chinese ? "删除文件夹" : "Delete folder";
+    public string FolderName => Chinese ? "文件夹名称" : "Folder name";
+    public string FolderNameTaken => Chinese ? "已有同名文件夹，请换一个名称。" : "A folder already has this name. Choose another.";
+    public string SaveToFolder => Chinese ? "收藏到文件夹" : "Save to folder";
+    public string MoveFavorite => Chinese ? "移动收藏" : "Move favorite";
+    public string FavoriteDirectly => Chinese ? "直接收藏" : "Save without a folder";
+    public string EmptyFavoriteFolder => Chinese ? "这里还没有收藏" : "No favorites here yet";
+    public string EmptyFolderHint => Chinese ? "点击 PDF 的星标，即可将它收藏到这里。" : "Select the star on a PDF to save it here.";
+    public string ConfirmDeleteFolder(string name) => Chinese
+        ? $"删除「{name}」后，其中的收藏将移至「未归类」。"
+        : $"Favorites in “{name}” will move to Unfiled when you delete this folder.";
     public string LibraryFolderLabel => Chinese ? "书架文件夹" : "Library folder";
     public string LibraryFolderHint => Chinese ? "新建或复制到书架的 PDF 将保存在这里。" : "Blank PDFs and files copied to the library are saved here.";
     public string ChangeFolder => Chinese ? "更改文件夹" : "Change folder";

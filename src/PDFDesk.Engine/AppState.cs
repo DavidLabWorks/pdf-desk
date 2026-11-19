@@ -25,6 +25,7 @@ public sealed class RecentFile
     public int LayoutColumns => PageColumns is >= 1 and <= 3 ? PageColumns.Value : TwoPage ? 2 : 1;
     public bool IsLibraryCopy { get; set; }
     public bool IsFavorite { get; set; }
+    public Guid? FavoriteFolderId { get; set; }
     public int PageIndex { get; set; }
     public double Zoom { get; set; }
     public int Rotation { get; set; }
@@ -54,6 +55,8 @@ public sealed class AppSettings
     public bool RecentUsesList { get; set; }
     public bool FavoritesUseList { get; set; }
     public bool FavoritesTabSelected { get; set; }
+    // null shows every favorite; Guid.Empty shows only unfiled documents.
+    public Guid? FavoriteFolderFilter { get; set; }
 
     /// <summary>Invert page colors (night reading mode).</summary>
     public bool NightMode { get; set; }
@@ -176,6 +179,45 @@ public sealed class ToolStyle
 public sealed class AppState
 {
     public List<RecentFile> Recents { get; set; } = [];
+    public Dictionary<Guid, string> FavoriteFolders { get; set; } = [];
+
+    public bool CanDropFavorite(string path, Guid? destination)
+    {
+        if (destination is Guid id && id != Guid.Empty && !FavoriteFolders.ContainsKey(id)) return false;
+        if (!System.IO.Path.IsPathFullyQualified(path) ||
+            !string.Equals(System.IO.Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase)) return false;
+        var entry = FindRecent(path);
+        return entry?.IsFavorite != true || (destination.HasValue && (entry.FavoriteFolderId ?? Guid.Empty) != destination);
+    }
+
+    public bool AddDroppedFavorites(IEnumerable<string> paths, Guid? destination)
+    {
+        bool changed = false;
+        foreach (var path in paths.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!CanDropFavorite(path, destination)) continue;
+            var entry = FindRecent(path);
+            if (entry is null)
+            {
+                Remember(path, System.IO.Path.GetFileName(path), 0, 1, 0, 0);
+                entry = Recents[0];
+            }
+            // The aggregate view accepts new favorites without moving existing ones.
+            Guid? folder = destination == Guid.Empty ? null : destination ?? entry.FavoriteFolderId;
+            entry.IsFavorite = true;
+            entry.FavoriteFolderId = folder;
+            changed = true;
+        }
+        return changed;
+    }
+
+    public void RemoveFavoriteFolder(Guid id)
+    {
+        FavoriteFolders.Remove(id);
+        foreach (var row in Recents.Where(row => row.FavoriteFolderId == id))
+            row.FavoriteFolderId = null;
+        if (Settings.FavoriteFolderFilter == id) Settings.FavoriteFolderFilter = null;
+    }
     public SessionState Session { get; set; } = new();
     public AppSettings Settings { get; set; } = new();
 
@@ -206,6 +248,7 @@ public sealed class AppState
             IsLibraryCopy = existing?.IsLibraryCopy ?? false,
             Bookmarks = existing?.Bookmarks ?? [],
             IsFavorite = existing?.IsFavorite ?? false,
+            FavoriteFolderId = existing?.FavoriteFolderId,
         });
     }
 
@@ -316,6 +359,13 @@ public sealed class AppStateStore
     {
         var comparer = StringComparer.OrdinalIgnoreCase;
         var previous = _lastJson is null ? null : JsonSerializer.Deserialize<AppState>(_lastJson, Options);
+        var oldFolders = previous?.FavoriteFolders ?? [];
+        foreach (var deleted in oldFolders.Keys.Except(state.FavoriteFolders.Keys))
+            latest.FavoriteFolders.Remove(deleted);
+        foreach (var (id, name) in state.FavoriteFolders)
+            if (!oldFolders.TryGetValue(id, out var oldName) || (oldName != name && latest.FavoriteFolders.ContainsKey(id)))
+                latest.FavoriteFolders[id] = name;
+        state.FavoriteFolders = latest.FavoriteFolders;
         var before = (previous?.Recents ?? []).ToDictionary(r => r.Path, comparer);
         var local = state.Recents.ToDictionary(r => r.Path, comparer);
         var merged = latest.Recents.ToDictionary(r => r.Path, comparer);
@@ -326,19 +376,27 @@ public sealed class AppStateStore
             if (before.TryGetValue(row.Path, out var baseline) && merged.TryGetValue(row.Path, out var saved))
             {
                 // A reading-position save must preserve a star changed in another window.
-                bool favorite = row.IsFavorite == baseline.IsFavorite ? saved.IsFavorite : row.IsFavorite;
+                bool localFavoriteChanged = row.IsFavorite != baseline.IsFavorite || row.FavoriteFolderId != baseline.FavoriteFolderId;
+                bool favorite = localFavoriteChanged ? row.IsFavorite : saved.IsFavorite;
+                var folder = localFavoriteChanged ? row.FavoriteFolderId : saved.FavoriteFolderId;
                 baseline.IsFavorite = row.IsFavorite;
+                baseline.FavoriteFolderId = row.FavoriteFolderId;
                 if (JsonSerializer.Serialize(baseline, Options) == JsonSerializer.Serialize(row, Options))
                 {
                     saved.IsFavorite = favorite;
+                    saved.FavoriteFolderId = folder;
                     continue;
                 }
                 row.IsFavorite = favorite;
+                row.FavoriteFolderId = folder;
             }
             if (!before.TryGetValue(row.Path, out var old) ||
                 JsonSerializer.Serialize(old, Options) != JsonSerializer.Serialize(row, Options))
                 merged[row.Path] = row;
         }
         state.Recents = merged.Values.OrderByDescending(r => r.LastOpenedUtc).ToList();
+        foreach (var row in state.Recents)
+            if (row.FavoriteFolderId is Guid id && !state.FavoriteFolders.ContainsKey(id))
+                row.FavoriteFolderId = null;
     }
 }

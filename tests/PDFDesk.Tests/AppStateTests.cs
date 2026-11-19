@@ -5,6 +5,65 @@ namespace PDFDesk.Tests;
 public class AppStateTests
 {
     [Fact]
+    public void DropIntoFavoriteFolder_FilesReferencesOnceAndPreservesReadingState()
+    {
+        var state = new AppState();
+        Guid folder = Guid.NewGuid();
+        state.FavoriteFolders[folder] = "References";
+        string a = Path.GetFullPath("a.pdf"), b = Path.GetFullPath("b.PDF");
+        state.Remember(a, "a.pdf", 6, 1.5, 0, 0.3);
+        Assert.True(state.AddDroppedFavorites([a, b, a, Path.GetFullPath("skip.txt")], folder));
+        Assert.Equal(2, state.Recents.Count);
+        Assert.All(state.Recents, entry => Assert.Equal(folder, entry.FavoriteFolderId));
+        Assert.Equal(6, state.FindRecent(a)!.PageIndex);
+        Assert.False(state.CanDropFavorite(a, folder));
+        Assert.False(state.AddDroppedFavorites([a, b], folder));
+        Assert.True(state.CanDropFavorite(a, Guid.Empty));
+        Assert.False(state.AddDroppedFavorites([a], null));
+        Assert.False(state.AddDroppedFavorites([a], Guid.NewGuid()));
+        Assert.True(state.AddDroppedFavorites([a], Guid.Empty));
+        Assert.Null(state.FindRecent(a)!.FavoriteFolderId);
+        Assert.True(state.FindRecent(a)!.IsFavorite);
+        Assert.Empty(state.Session.OpenPaths);
+    }
+    [Fact]
+    public void FavoriteFolder_PersistsAcrossReadingUpdatesAndDeletionKeepsTheStar()
+    {
+        string dir = Directory.CreateTempSubdirectory("pdfdesk-favorites-").FullName;
+        try
+        {
+            var store = new AppStateStore(dir);
+            var state = store.Load();
+            var folder = Guid.NewGuid();
+            const string path = @"C:\doc.pdf";
+            state.Remember(path, "doc.pdf", 0, 1, 0, 0);
+            store.Save(state);
+            var readerStore = new AppStateStore(dir);
+            var reader = readerStore.Load();
+            state.FavoriteFolders[folder] = "研究";
+            state.Recents.Single().IsFavorite = true;
+            state.Recents.Single().FavoriteFolderId = folder;
+            store.Save(state);
+            reader.Remember(path, "doc.pdf", 7, 1, 0, 0);
+            readerStore.Save(reader);
+
+            var reloaded = store.Load();
+            Assert.Equal("研究", reloaded.FavoriteFolders[folder]);
+            Assert.Equal(folder, reloaded.Recents.Single().FavoriteFolderId);
+            Assert.Equal(7, reloaded.Recents.Single().PageIndex);
+            reloaded.Settings.FavoriteFolderFilter = folder;
+            reloaded.RemoveFavoriteFolder(folder);
+            store.Save(reloaded);
+            reloaded = new AppStateStore(dir).Load();
+            Assert.Empty(reloaded.FavoriteFolders);
+            Assert.True(reloaded.Recents.Single().IsFavorite);
+            Assert.Null(reloaded.Recents.Single().FavoriteFolderId);
+            Assert.Null(reloaded.Settings.FavoriteFolderFilter);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
     public void Remember_MovesFileToTopAndUpdatesPosition()
     {
         var state = new AppState();

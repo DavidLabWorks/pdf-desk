@@ -52,6 +52,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        AttachShelfDragHandlers();
         ViewActionsFlyout.OverlayInputPassThroughElement = Toolbar;
         DocumentActionsFlyout.OverlayInputPassThroughElement = Toolbar;
         Title = AppTitle;
@@ -84,6 +85,8 @@ public sealed partial class MainWindow : Window
         Closed += MainWindow_Closed;
         Activated += (_, args) =>
         {
+            if (args.WindowActivationState == WindowActivationState.Deactivated && _dragCard != null)
+                EndShelfDrag();
             if (args.WindowActivationState != WindowActivationState.Deactivated && SettingsPage.Visibility == Visibility.Visible)
                 RefreshDefaultPdfStatus();
         };
@@ -2154,7 +2157,7 @@ public sealed partial class MainWindow : Window
         var cards = _state.Recents
             .Select(r => new RecentCard(r.Path, r.DisplayName, r.LastOpenedUtc, r.IsFavorite)).ToList();
         RecentThumbs.ItemsSource = cards;
-        FavoriteThumbs.ItemsSource = cards.Where(card => card.IsFavorite).ToList();
+        FilterFavorites();
         UpdateShelfSection();
     }
 
@@ -2163,6 +2166,9 @@ public sealed partial class MainWindow : Window
         bool any = RecentThumbs.Items.Count > 0;
         bool favorites = FavoritesTab.IsChecked == true;
         bool list = favorites ? _state.Settings.FavoritesUseList : _state.Settings.RecentUsesList;
+        bool showFolders = favorites || _state.FavoriteFolders.Count > 0;
+        FolderBar.Visibility = showFolders ? Visibility.Visible : Visibility.Collapsed;
+        if (showFolders) RefreshFolderLocations();
         (list ? ShelfListMode : ShelfCardMode).IsChecked = true;
         RecentsHeading.Visibility = Visibility.Visible;
         EmptyState.Visibility = !any && !favorites ? Visibility.Visible : Visibility.Collapsed;
@@ -2175,7 +2181,12 @@ public sealed partial class MainWindow : Window
         }
         ShelfListSurface.Visibility = list && (any || favorites) ? Visibility.Visible : Visibility.Collapsed;
         if (favorites && FavoriteThumbs.Items.Count == 0)
-            FavoritesHint.Text = any ? UiText.Current.SelectTheStarOnAPDFInRecent : UiText.Current.OpenAPDFThenStarItInRecent;
+        {
+            bool filtered = _state.Settings.FavoriteFolderFilter.HasValue;
+            FavoriteEmptyTitle.Text = filtered ? UiText.Current.EmptyFavoriteFolder : UiText.Current.NoFavoritesYet;
+            FavoritesHint.Text = filtered ? UiText.Current.EmptyFolderHint :
+                any ? UiText.Current.SelectTheStarOnAPDFInRecent : UiText.Current.OpenAPDFThenStarItInRecent;
+        }
         NoFavorites.Visibility = favorites && FavoriteThumbs.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -2195,7 +2206,9 @@ public sealed partial class MainWindow : Window
 
     private void FavoriteStar_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: RecentCard card }) ToggleFavorite(card);
+        if (sender is not ToggleButton { DataContext: RecentCard card } star) return;
+        star.IsChecked = card.IsFavorite;
+        _ = ChooseFavoriteAsync(card);
     }
 
     private void RecentMore_Click(object sender, RoutedEventArgs e)
@@ -2205,15 +2218,6 @@ public sealed partial class MainWindow : Window
             {
                 Placement = FlyoutPlacementMode.BottomEdgeAlignedRight,
             });
-    }
-
-    private void ToggleFavorite(RecentCard card)
-    {
-        if (_state.FindRecent(card.Path) is not { } entry) return;
-        card.IsFavorite = entry.IsFavorite = !card.IsFavorite;
-        _store.Save(_state);
-        FavoriteThumbs.ItemsSource = RecentThumbs.Items.OfType<RecentCard>().Where(item => item.IsFavorite).ToList();
-        UpdateShelfSection();
     }
 
     private void RecentCard_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
@@ -2419,9 +2423,7 @@ public sealed partial class MainWindow : Window
         };
 
         flyout.Items.Clear();
-        var favorite = new MenuFlyoutItem { Text = card.FavoriteAction, Icon = new FontIcon { Glyph = card.StarGlyph } };
-        favorite.Click += (_, _) => ToggleFavorite(card);
-        flyout.Items.Add(favorite);
+        AddFavoriteActions(flyout, card);
         flyout.Items.Add(new MenuFlyoutSeparator());
         if (!managed)
         {
@@ -2643,6 +2645,12 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void Content_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (e.Key == VirtualKey.Escape && _dragCard != null)
+        {
+            EndShelfDrag();
+            e.Handled = true;
+            return;
+        }
         if (e.Handled)
         {
             return;

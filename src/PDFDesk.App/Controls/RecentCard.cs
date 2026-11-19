@@ -34,7 +34,7 @@ public sealed class RecentCard : INotifyPropertyChanged
         }
     }
     public string StarGlyph => IsFavorite ? "\uE735" : "\uE734";
-    public string FavoriteAction => IsFavorite ? UiText.Current.RemoveFromFavorites : UiText.Current.AddToFavorites;
+    public string FavoriteAction => IsFavorite ? UiText.Current.FavoriteOptions : UiText.Current.AddToFavorites;
 
     public RecentCard(string path, string displayName, DateTime lastOpenedUtc, bool isFavorite)
     {

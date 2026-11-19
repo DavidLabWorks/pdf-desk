@@ -12,6 +12,72 @@
         DragOver="RootGrid_DragOver"
         Drop="RootGrid_Drop">
         <Grid.Resources>
+            <DataTemplate x:Key="FavoriteLocationTemplate">
+                <Grid ColumnDefinitions="28,*,Auto" ColumnSpacing="8" MinHeight="40" Padding="2,0">
+                    <FontIcon Glyph="{Binding Glyph}" FontSize="17" Visibility="{Binding GlyphVisibility}" />
+                    <Grid Width="24" Height="20" Visibility="{Binding FolderVisibility}" IsHitTestVisible="False">
+                        <Path Data="M1,4 Q1,2 3,2 L9,2 L12,5 L20,5 Q22,5 22,7 L22,15 L1,15 Z"
+                              Fill="{ThemeResource ShelfFolderIconBrush}" Opacity="0.65" />
+                        <Path Data="M1,8 Q1,7 3,7 L21,7 Q23,7 23,9 L22,17 Q22,18 20,18 L3,18 Q1,18 1,16 Z"
+                              Fill="{ThemeResource ShelfFolderIconBrush}" />
+                    </Grid>
+                    <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               ToolTipService.ToolTip="{Binding Name}" />
+                    <TextBlock Grid.Column="2" Text="{Binding Count}" VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Grid>
+            </DataTemplate>
+            <Style x:Key="FavoriteLocationStyle" TargetType="ListViewItem">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Padding" Value="8,0" />
+            </Style>
+            <Style x:Key="FolderNavigationItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource FavoriteLocationStyle}">
+                <Setter Property="Padding" Value="6,0" />
+                <Setter Property="Margin" Value="0,1,12,1" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListViewItem">
+                            <Grid Background="Transparent">
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters><Setter Target="RowFill.Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" /></VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters><Setter Target="RowFill.Background" Value="{ThemeResource SubtleFillColorTertiaryBrush}" /></VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Selected">
+                                            <VisualState.Setters>
+                                                <Setter Target="RowFill.Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+                                                <Setter Target="RowFill.Opacity" Value="{ThemeResource FolderSelectedOpacity}" />
+                                                <Setter Target="RowContent.Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="PointerOverSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="RowFill.Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+                                                <Setter Target="RowFill.Opacity" Value="{ThemeResource FolderHoverOpacity}" />
+                                                <Setter Target="RowContent.Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="PressedSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="RowFill.Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+                                                <Setter Target="RowFill.Opacity" Value="{ThemeResource FolderPressedOpacity}" />
+                                                <Setter Target="RowContent.Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <Border x:Name="RowFill" Height="42" VerticalAlignment="Top" CornerRadius="7" />
+                                <ContentPresenter x:Name="RowContent" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  Padding="{TemplateBinding Padding}" HorizontalContentAlignment="Stretch" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
             <DataTemplate x:Key="UnsavedDocumentsTemplate">
                 <StackPanel Spacing="12" MaxWidth="380" MinWidth="258">
                     <TextBlock Text="{Binding DiscardChangesHint, Source={StaticResource UiText}}"
@@ -591,12 +657,14 @@
 
             <Grid x:Name="StartPage" Margin="4" Padding="28,0" CornerRadius="6"
                   Background="{ThemeResource HomeCanvasBrush}">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid x:Name="RecentsHeading" Margin="8,24,8,18"
+                <Grid x:Name="RecentsHeading" Grid.ColumnSpan="2" Margin="8,24,8,18"
                       ColumnSpacing="{StaticResource SpaceM}" Visibility="Collapsed">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -641,7 +709,40 @@
                             Grid.Column="2" VerticalAlignment="Stretch" Click="OpenButton_Click" Style="{StaticResource HomeBrowseButtonStyle}" />
                 </Grid>
 
-                <controls:ShelfGridView x:Name="RecentThumbs" ContainerContentChanging="RecentCard_ContainerContentChanging" Grid.Row="1" Margin="8,0,8,24" Padding="8,16,8,0"
+                <Grid x:Name="FolderBar" Grid.Row="2" Width="200" Margin="8,0,4,24" Padding="8,12,2,8" Background="{ThemeResource HomeShelfBrush}" CornerRadius="10" RowDefinitions="Auto,*,Auto" RowSpacing="6" Visibility="Collapsed">
+                    <TextBlock Text="{Binding FavoriteFoldersLabel, Source={StaticResource UiText}}" Margin="10,0,0,0"
+                               Padding="0,6" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <ListView x:Name="FolderLocations" Grid.Row="1" ItemContainerStyle="{StaticResource FolderNavigationItemStyle}" SelectionChanged="FolderLocation_Changed"
+                              AutomationProperties.Name="{Binding FavoriteFoldersLabel, Source={StaticResource UiText}}" ContainerContentChanging="FolderLocation_Prepared">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <Border MinHeight="42" Padding="0" CornerRadius="6" BorderThickness="2"
+                                            Background="Transparent" AllowDrop="True"
+                                            DragOver="Folder_DragOver" DragLeave="Folder_DragLeave" Drop="Folder_Drop">
+                                        <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FavoriteLocationTemplate}"
+                                                          HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" />
+                                    </Border>
+                                    <Border Height="1" Margin="4,4,4,5" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                            Visibility="{Binding DividerVisibility}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Grid Grid.Row="2" Margin="0,0,6,0" RowDefinitions="Auto,Auto" RowSpacing="5">
+                        <Border Height="1" Margin="8,0" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                        <Button Grid.Row="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,7"
+                                Style="{ThemeResource SubtleButtonStyle}" Click="NewFavoriteFolder_Click"
+                                AutomationProperties.Name="{Binding NewFavoriteFolder, Source={StaticResource UiText}}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <FontIcon Glyph="&#xE8F4;" FontSize="16" />
+                                <TextBlock Text="{Binding NewFavoriteFolder, Source={StaticResource UiText}}" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Grid>
+                <controls:ShelfGridView x:Name="RecentThumbs" Grid.Column="1" ContainerContentChanging="RecentCard_ContainerContentChanging" Grid.Row="2" Margin="8,0,8,24" Padding="8,16,8,0"
                           Background="{ThemeResource HomeShelfBrush}" CornerRadius="12"
                           SelectionMode="None" ShowsScrollingPlaceholders="False" Visibility="Collapsed">
                     <GridView.ItemsPanel>
@@ -674,7 +775,7 @@
                             </Grid.ContextFlyout>
                             <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                     Padding="0" CornerRadius="10" Background="{ThemeResource HomeCardBrush}"
-                                    Foreground="{ThemeResource HomeTextBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" Click="RecentOpen_Click"
+                                    Foreground="{ThemeResource HomeTextBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" Tag="ShelfDocument" Click="RecentOpen_Click"
                                     AutomationProperties.Name="{x:Bind DisplayName}" ToolTipService.ToolTip="{x:Bind Path}">
                                 <Button.Resources>
                                     <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{ThemeResource HomeCardHoverTextColor}" />
@@ -724,7 +825,7 @@
                         </DataTemplate>
                     </GridView.ItemTemplate>
                 </controls:ShelfGridView>
-                <controls:ShelfGridView x:Name="FavoriteThumbs" Grid.Row="1" Visibility="Collapsed"
+                <controls:ShelfGridView x:Name="FavoriteThumbs" Grid.Column="1" Grid.Row="2" Visibility="Collapsed"
                           Margin="{Binding Margin, ElementName=RecentThumbs}" Padding="{Binding Padding, ElementName=RecentThumbs}"
                           Background="{ThemeResource HomeShelfBrush}" CornerRadius="12"
                           SelectionMode="None" ShowsScrollingPlaceholders="False"
@@ -734,7 +835,7 @@
                           ItemTemplate="{Binding ItemTemplate, ElementName=RecentThumbs}">
                     <GridView.ItemContainerTransitions><TransitionCollection /></GridView.ItemContainerTransitions>
                 </controls:ShelfGridView>
-                <Grid x:Name="ShelfListSurface" Grid.Row="1" Visibility="Collapsed"
+                <Grid x:Name="ShelfListSurface" Grid.Column="1" Grid.Row="2" Visibility="Collapsed"
                       Margin="{Binding Margin, ElementName=RecentThumbs}" Background="{ThemeResource HomeShelfBrush}"
                       CornerRadius="12" Padding="16">
                 <ListView x:Name="ShelfList" VerticalAlignment="Top"
@@ -764,7 +865,7 @@
                                 <Button Grid.ColumnSpan="3" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                         BorderThickness="0" Background="Transparent"
                                         CornerRadius="{StaticResource RadiusMedium}"
-                                        Click="RecentOpen_Click" AutomationProperties.Name="{x:Bind DisplayName}"
+                                        Tag="ShelfDocument" Click="RecentOpen_Click" AutomationProperties.Name="{x:Bind DisplayName}"
                                         ToolTipService.ToolTip="{x:Bind Path}" />
                                 <Grid Width="48" Height="60" VerticalAlignment="Center"
                                       IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw">
@@ -803,7 +904,7 @@
                     </ListView.ItemTemplate>
                 </ListView>
                 </Grid>
-                <Grid x:Name="NoFavorites" Grid.Row="1" Visibility="Collapsed" Margin="24,0,24,24"
+                <Grid x:Name="NoFavorites" Grid.Column="1" Grid.Row="2" Visibility="Collapsed" Margin="24,0,24,24"
                       ColumnDefinitions="Auto,Auto" ColumnSpacing="20"
                       HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Grid Width="56" Height="68" VerticalAlignment="Center"
@@ -820,7 +921,7 @@
                         </Border>
                     </Grid>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="5" MaxWidth="260">
-                        <TextBlock Text="{Binding NoFavoritesYet, Source={StaticResource UiText}}" FontSize="20" FontWeight="SemiBold"
+                        <TextBlock x:Name="FavoriteEmptyTitle" Text="{Binding NoFavoritesYet, Source={StaticResource UiText}}" FontSize="20" FontWeight="SemiBold"
                                    AutomationProperties.HeadingLevel="Level2" Foreground="{ThemeResource HomeTextBrush}" />
                         <TextBlock x:Name="FavoritesHint" TextWrapping="Wrap" FontSize="14" LineHeight="20"
                                    Foreground="{ThemeResource HomeSecondaryTextBrush}" />
@@ -828,8 +929,8 @@
                 </Grid>
 
                 <ScrollViewer
-                    x:Name="EmptyState"
-                    Grid.Row="1"
+                    x:Name="EmptyState" Grid.Column="1"
+                    Grid.Row="2"
                     HorizontalScrollMode="Disabled"
                     SizeChanged="EmptyState_SizeChanged">
                     <Grid MinHeight="{x:Bind EmptyState.ViewportHeight, Mode=OneWay}" Padding="0,8">
@@ -917,6 +1018,24 @@
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>
+                <Canvas x:Name="ShelfDragLayer" Grid.RowSpan="3" Grid.ColumnSpan="2"
+                        IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw">
+                    <Border x:Name="ShelfDragPreview" Visibility="Collapsed" Width="196" Height="52"
+                            Padding="10,6" CornerRadius="8" Background="{ThemeResource HomePaperBrush}"
+                            BorderBrush="{ThemeResource HomePaperStrokeBrush}" BorderThickness="1">
+                        <Border.RenderTransform><TranslateTransform x:Name="ShelfDragOffset" /></Border.RenderTransform>
+                        <Grid ColumnDefinitions="30,*" ColumnSpacing="10">
+                            <FontIcon x:Name="ShelfDragFileIcon" Glyph="&#xEA90;" FontSize="22" />
+                            <Image x:Name="ShelfDragCover" Stretch="Uniform" />
+                            <Border x:Name="ShelfDragBlocked" Grid.Column="0" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                    Visibility="Collapsed" Background="{ThemeResource HomePaperBrush}" Padding="2" CornerRadius="9">
+                                <FontIcon Glyph="&#xE733;" FontSize="14" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                            </Border>
+                            <TextBlock Grid.Column="1" x:Name="ShelfDragName" VerticalAlignment="Center"
+                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </Border>
+                </Canvas>
             </Grid>
 
             <!-- Window-level notices: messages that arrive with no document to

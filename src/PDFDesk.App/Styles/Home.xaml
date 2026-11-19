@@ -4,6 +4,10 @@
 
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="ShelfFolderIconBrush" Color="#D99A00" />
+            <x:Double x:Key="FolderSelectedOpacity">0.12</x:Double>
+            <x:Double x:Key="FolderHoverOpacity">0.17</x:Double>
+            <x:Double x:Key="FolderPressedOpacity">0.22</x:Double>
             <SolidColorBrush x:Key="ShelfFavoriteBrush" Color="#D99A00" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#DFDFDF" />
             <SolidColorBrush x:Key="CaptionMinimizeHoverBrush" Color="#E7E7E7" />
@@ -32,6 +36,10 @@
             <Color x:Key="HomeCardHoverTextColor">#202020</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="ShelfFolderIconBrush" Color="#EAC474" />
+            <x:Double x:Key="FolderSelectedOpacity">0.18</x:Double>
+            <x:Double x:Key="FolderHoverOpacity">0.23</x:Double>
+            <x:Double x:Key="FolderPressedOpacity">0.28</x:Double>
             <SolidColorBrush x:Key="ShelfFavoriteBrush" Color="#FFD255" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="#393A3D" />
             <SolidColorBrush x:Key="CaptionMinimizeHoverBrush" Color="#333436" />
@@ -60,6 +68,10 @@
             <Color x:Key="HomeCardHoverTextColor">#F2F2F2</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="ShelfFolderIconBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <x:Double x:Key="FolderSelectedOpacity">0.12</x:Double>
+            <x:Double x:Key="FolderHoverOpacity">0.17</x:Double>
+            <x:Double x:Key="FolderPressedOpacity">0.22</x:Double>
             <SolidColorBrush x:Key="ShelfFavoriteBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="CaptionHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="CaptionMinimizeHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
@@ -148,6 +160,7 @@
     </Style>
 
     <Style x:Key="ShelfSectionStyle" TargetType="RadioButton">
+        <Setter Property="MinWidth" Value="0" />
         <Setter Property="Height" Value="48" />
         <Setter Property="FontSize" Value="20" />
         <Setter Property="FontWeight" Value="SemiBold" />
@@ -166,7 +179,7 @@
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
                         <Border x:Name="Fill" CornerRadius="11" Background="{ThemeResource HomeSectionBrush}" Opacity="0" />
-                        <ContentPresenter Padding="20,0" Content="{TemplateBinding Content}"
+                        <ContentPresenter Padding="18,0" Content="{TemplateBinding Content}"
                                           HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                     </Grid>
                 </ControlTemplate>
