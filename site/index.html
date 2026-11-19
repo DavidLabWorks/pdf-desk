@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rune - a fast, free, modern PDF reader for Windows</title>
-<meta name="description" content="Rune is a free, open-source PDF reader for Windows. The speed of SumatraPDF, the look of GNOME Papers, native on Windows 11. No account, no telemetry, no networking code at all.">
-<link rel="icon" href="img/rune.svg" type="image/svg+xml">
+<title>PDF Desk - a fast, free, modern PDF reader for Windows</title>
+<meta name="description" content="PDF Desk is a free, open-source PDF reader for Windows. The speed of SumatraPDF, the look of GNOME Papers, native on Windows 11. No account, no telemetry, no networking code at all.">
+<link rel="icon" href="img/pdfdesk.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 
-<meta property="og:title" content="Rune - a fast, free, modern PDF reader for Windows">
+<meta property="og:title" content="PDF Desk - a fast, free, modern PDF reader for Windows">
 <meta property="og:description" content="The speed of SumatraPDF, the look of GNOME Papers, native on Windows 11. Free, open source, no telemetry.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="img/01-reading-light.jpg">
@@ -19,13 +19,13 @@
 <header class="site">
   <div class="wrap">
     <a class="brand" href="./">
-      <img src="img/rune.svg" alt="">
-      Rune
+      <img src="img/pdfdesk.svg" alt="">
+      PDF Desk
     </a>
     <nav>
       <a href="features.html">Features</a>
       <a href="#download">Download</a>
-      <a class="hide-sm" href="https://github.com/DanialJaved/rune">GitHub</a>
+      <a class="hide-sm" href="https://github.com/DavidLabWorks/pdf-desk-windows">GitHub</a>
     </nav>
   </div>
 </header>
@@ -33,22 +33,20 @@
 <main>
 
 <div class="wrap hero">
-  <img class="mark" src="img/rune.svg" alt="">
+  <img class="mark" src="img/pdfdesk.svg" alt="">
   <h1>A PDF reader that keeps up with you</h1>
   <p class="tagline">
     The speed of SumatraPDF, the look of GNOME Papers, built natively for
     Windows 11. Free, open source, and it never phones home.
   </p>
   <div class="cta">
-    <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NH37840QDM6">
-      Get it from the Microsoft Store
-    </a>
+    <a class="btn btn-primary" href="https://github.com/DavidLabWorks/pdf-desk-windows/releases">View releases</a>
     <a class="btn btn-secondary" href="features.html">See what it does</a>
   </div>
   <p class="note">Free and GPLv3. Windows 10 1809 and later, x64 and ARM64.</p>
 
   <img class="shot hero-shot" src="img/01-reading-light.jpg"
-       alt="Rune reading a document, with page thumbnails in the sidebar and the annotation toolbar in the header"
+       alt="PDF Desk reading a document, with page thumbnails in the sidebar and the annotation toolbar in the header"
        width="1280" height="720">
 </div>
 
@@ -61,7 +59,7 @@
       <p>
         SumatraPDF is legendary for speed but wears a 2009 interface. Edge and
         Acrobat are heavy. Okular's Windows port never quite feels native.
-        Rune is an attempt at fast, light and modern together.
+        PDF Desk is an attempt at fast, light and modern together.
       </p>
     </div>
 
@@ -96,7 +94,7 @@
         </div>
         <h3>Keyboard first</h3>
         <p>
-          A command palette, full arrow and vim navigation, and a shortcuts
+          A command palette, arrow-key navigation, and a shortcuts
           overlay on <kbd>F1</kbd>. Every action is reachable without touching
           the mouse.
         </p>
@@ -108,7 +106,7 @@
         </div>
         <h3>Nothing leaves your machine</h3>
         <p>
-          No account, no subscription, no telemetry, no ads. Rune contains no
+          No account, no subscription, no telemetry, no ads. PDF Desk contains no
           networking code at all, so there is nothing to opt out of.
         </p>
       </div>
@@ -189,7 +187,7 @@
           <h3>Sign without a printer</h3>
           <p>
             Draw a signature, type one in a real handwriting face, or
-            photograph one on paper and let Rune key the paper out. It happens
+            photograph one on paper and let PDF Desk key the paper out. It happens
             on your machine, and saved signatures stay there.
           </p>
         </div>
@@ -222,45 +220,22 @@
 <section class="soft" id="download">
   <div class="wrap">
     <div class="section-head">
-      <h2>Install Rune</h2>
+      <h2>Install PDF Desk</h2>
       <p>Free, and free of anything that follows you around.</p>
     </div>
 
     <div class="dl-grid">
       <div class="dl primary">
-        <h3>Microsoft Store <span class="badge">Recommended</span></h3>
-        <p>
-          One click, automatic updates, and it registers itself as a PDF
-          handler. Microsoft signs the package, so there is no certificate step
-          and nothing for SmartScreen to warn about.
-        </p>
-        <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NH37840QDM6">Open in the Store</a>
+        <h3>Portable build</h3>
+        <p>Check GitHub Releases for available builds. Extract the archive and run <code>PDFDesk.exe</code>.</p>
+        <a class="btn btn-primary" href="https://github.com/DavidLabWorks/pdf-desk-windows/releases">View releases</a>
       </div>
-
       <div class="dl">
-        <h3>winget</h3>
-        <p>Same Store package, same signature, from the terminal.</p>
-        <pre><code>winget install --id 9NH37840QDM6 --source msstore --exact</code></pre>
-      </div>
-
-      <div class="dl">
-        <h3>Portable</h3>
-        <p>
-          A zip you can run from a USB stick or a machine you cannot install
-          on. Extract it anywhere and run <code>Rune.exe</code>. No
-          installation, no registry.
-        </p>
-        <a class="btn btn-secondary" href="https://github.com/DanialJaved/rune/releases">Go to Releases</a>
+        <h3>Build from source</h3>
+        <p>Use the .NET 10 SDK on Windows to build and test PDF Desk.</p>
+        <a class="btn btn-secondary" href="https://github.com/DavidLabWorks/pdf-desk-windows#从源码构建">Build instructions</a>
       </div>
     </div>
-
-    <p class="callout">
-      <strong>About the portable build:</strong> it is not code-signed, so Smart
-      App Control will block it and SmartScreen may warn on first run. It does
-      not update itself, and it is not size-optimised, since it carries the full
-      self-contained .NET and Windows App SDK runtimes. The Store build has none
-      of those caveats.
-    </p>
   </div>
 </section>
 
@@ -269,45 +244,11 @@
 <section id="support">
   <div class="wrap">
     <div class="section-head">
-      <h2>Rune is free, and it is staying free</h2>
-      <p>
-        There is no paid tier, no sponsor-only build, and no feature waiting
-        behind a login. If you would like to help anyway, there are three ways.
-      </p>
+      <h2>Contribute to PDF Desk</h2>
+      <p>PDF Desk builds on <a href="https://github.com/DavidLabWorks/pdf-desk-windows#来源与许可">open-source work</a> by Danial Javed and contributors.</p>
     </div>
 
     <div class="grid">
-      <div class="card action">
-        <div class="icon sponsor" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l8.84 8.84 8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>
-        </div>
-        <h3>Sponsor the work</h3>
-        <p>
-          Sponsorship pays for the unglamorous parts: a code-signing
-          certificate so the portable build stops tripping SmartScreen,
-          hardware to test on, and the time to keep going. Monthly or one off,
-          whichever suits.
-        </p>
-        <a class="btn btn-primary" href="https://github.com/sponsors/DanialJaved">
-          Become a sponsor
-        </a>
-      </div>
-
-      <div class="card action">
-        <div class="icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        </div>
-        <h3>Leave a review</h3>
-        <p>
-          Reviews are most of how anyone finds a small app in the Store. A
-          sentence about what you actually use it for is worth more than a
-          rating on its own.
-        </p>
-        <a class="btn btn-secondary" href="https://apps.microsoft.com/detail/9NH37840QDM6">
-          Rate it in the Store
-        </a>
-      </div>
-
       <div class="card action">
         <div class="icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></svg>
@@ -318,7 +259,7 @@
           the PDF that caused it is worth more. The source is GPLv3 and pull
           requests are welcome.
         </p>
-        <a class="btn btn-secondary" href="https://github.com/DanialJaved/rune/issues">
+        <a class="btn btn-secondary" href="https://github.com/DavidLabWorks/pdf-desk-windows/issues">
           Open an issue
         </a>
       </div>
@@ -331,7 +272,7 @@
 <footer class="site">
   <div class="wrap cols">
     <div>
-      <a class="brand" href="./"><img src="img/rune.svg" alt="">Rune</a>
+      <a class="brand" href="./"><img src="img/pdfdesk.svg" alt="">PDF Desk</a>
       <p style="margin-top:12px">
         Free and open source under the GPLv3.<br>
         Built with WinUI 3 and PDFium.
@@ -340,10 +281,10 @@
     <div>
       <h4>Project</h4>
       <ul>
-        <li><a href="https://github.com/DanialJaved/rune">Source on GitHub</a></li>
-        <li><a href="https://github.com/DanialJaved/rune/issues">Report a problem</a></li>
-        <li><a href="https://github.com/DanialJaved/rune/releases">Releases</a></li>
-        <li><a href="https://github.com/sponsors/DanialJaved">Sponsor</a></li>
+        <li><a href="https://github.com/DavidLabWorks/pdf-desk-windows">Source on GitHub</a></li>
+        <li><a href="https://github.com/DavidLabWorks/pdf-desk-windows/issues">Report a problem</a></li>
+        <li><a href="https://github.com/DavidLabWorks/pdf-desk-windows/releases">Releases</a></li>
+        <li><a href="https://github.com/DavidLabWorks/pdf-desk-windows#来源与许可">Project credits</a></li>
       </ul>
     </div>
     <div>
@@ -351,7 +292,7 @@
       <ul>
         <li><a href="features.html">Features and shortcuts</a></li>
         <li><a href="privacy.html">Privacy</a></li>
-        <li><a href="https://github.com/DanialJaved/rune/blob/main/SECURITY.md">Security</a></li>
+        <li><a href="https://github.com/DavidLabWorks/pdf-desk-windows/blob/main/SECURITY.md">Security</a></li>
       </ul>
     </div>
   </div>

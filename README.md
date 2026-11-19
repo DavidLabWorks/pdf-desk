@@ -1,202 +1,99 @@
 <div align="center">
-
-<img src="assets/rune.svg" width="88" alt="">
-
-# Rune
-
-**A fast, free, modern PDF reader for Windows.**
-
-<a href="https://apps.microsoft.com/detail/9NH37840QDM6">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://get.microsoft.com/images/en-us%20dark.svg">
-    <img src="https://get.microsoft.com/images/en-us%20light.svg" alt="Get Rune PDF Reader from the Microsoft Store" height="60">
-  </picture>
-</a>
-
-[![CI](https://github.com/DanialJaved/rune/actions/workflows/ci.yml/badge.svg)](https://github.com/DanialJaved/rune/actions/workflows/ci.yml)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Sponsor](https://img.shields.io/badge/Sponsor-bf3989?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/DanialJaved)
-
-<img src="docs/store-screenshots/01-reading-light.png" alt="Rune reading a 297-page document, with page thumbnails in the sidebar and the annotation toolbar in the header">
-
+  <img src="assets/pdfdesk.svg" width="72" alt="PDF Desk icon">
+  <h1>PDF Desk</h1>
+  <p>A local PDF reader and editor for Windows.</p>
+  <p><strong>English</strong> · <a href="README.zh-CN.md" lang="zh-CN">简体中文</a></p>
 </div>
 
-Windows never had a PDF reader that is fast **and** lightweight **and** modern-looking at the same time. SumatraPDF is legendary for speed but wears a 2009 UI. Edge and Acrobat are heavy. Okular's Windows port never quite feels native. Rune takes:
+Keep frequently used PDFs on a bookshelf and open them in tabs to read, annotate, fill out forms, or assemble a new document from selected pages. PDF Desk processes documents on your computer and works without an account. The interface is available in English and Simplified Chinese.
 
-- the **speed** of SumatraPDF and Zathura: instant open, smooth scrolling through 1,000-page documents, a strict memory budget
-- the **look of GNOME Papers**: one slim header bar, a floating zoom control, a big-thumbnail sidebar, rebuilt natively on Windows 11 with Mica, dark mode and tabs in the title bar
-- a **keyboard-first** workflow: a command palette, full arrow and vim navigation, a shortcuts overlay (`F1`), every action reachable without the mouse
+![PDF Desk reader in Simplified Chinese, with document tabs, page thumbnails, and annotation tools above the open page](docs/screenshots/reader.png)
 
-No account, no subscription, no telemetry, no ads. Rune contains no networking code at all.
+## Getting started
 
-|  |  |
-|---|---|
-| <img src="docs/store-screenshots/02-night-mode.png" alt="Rune in night mode, page colours inverted"><br>**Night mode** inverts page colours on the GPU, thumbnails included. | <img src="docs/store-screenshots/03-chapters.png" alt="Chapter list in the sidebar"><br>**Chapters** from the document outline, alongside thumbnails and your own bookmarks. |
-| <img src="docs/store-screenshots/04-annotation-toolbar.png" alt="Highlighter colour, style and opacity options open under the toolbar"><br>**One toolbar for markup.** Pick a tool and its colours, size and opacity open beneath it. | <img src="docs/store-screenshots/07-signature.png" alt="Add a signature dialog with an imported photo, paper removed"><br>**Photograph a signature** on paper and Rune keys the paper out for you, on your machine. |
+1. Check [GitHub Releases](https://github.com/DavidLabWorks/pdf-desk-windows/releases) for a Windows package matching your device (ARM64 or x64). For the portable edition, keep the folder together and run `PDFDesk.exe`.
+2. Open a PDF from the bookshelf. Choose **Open original** to edit the file in place, or **Copy to library** to keep the original and edit a separate copy.
+3. Use the toolbar above the page to draw, highlight text, add a note, or insert a text box. Press `Ctrl+S` to save or `Ctrl+Shift+S` to save a copy. The Home button in the upper left returns you to the bookshelf.
 
-## Features
+## Bookshelf and reading
 
-### Reading
+![Recent PDFs shown as cover cards, with controls for favorites, grid view, and list view](docs/screenshots/bookshelf.png)
 
-- Tabs in the title bar, Chrome-style and lazy-loaded, so background tabs cost nothing until you show them
-- Continuous virtualized scrolling with tile-based progressive rendering: a fast blurry pass first, then a crisp one. It stays steady even while you search and scroll a 1,000-page document at once
-- Zoom 10–640% at the cursor from a floating pill, plus fit-width, fit-page and rotation. Pinch to zoom on touch and touchpad, `Ctrl` + scroll everywhere else
-- Sidebar (`F9`, open by default) that switches between thumbnails, chapters and bookmarks
-- Internal and web links, with back and forward history (`Alt` + arrows)
-- Text selection and copy, plus find-in-document with highlight-all and hit stepping
-- Night mode (`Ctrl+I`) for reading in the dark, and presentation mode (`F5`) for showing a document fullscreen
-- A recent-documents homepage laid out as first-page thumbnails, and session restore that reopens your tabs at the exact scroll position
-- Opens damaged PDFs gracefully, and streams 4 GB files without loading them into memory
+- **Bookshelf.** Recent files and favorites each remember your choice of grid or list view. Cards show the file name, date added, and size. Right-click a file to open its folder or remove it from the list.
+- **Reading.** Open several documents in tabs and arrange pages in one, two, or three columns. Fit a page to the window or its width, rotate it, switch to night mode, or enter full-screen presentation mode. Session restore remembers your open tabs and whether you left the app on Home.
+- **Navigation.** Jump to a thumbnail, outline entry, personal bookmark, link, or page number. Document search lets you step through matches in either direction. Text selection and highlighting use the PDF’s text layer.
 
-### Markup
+## Annotations, forms, and page editing
 
-- Highlight, underline, strikeout, sticky notes and freehand pen, all written as standard PDF annotations that any reader can open
-- Pen, highlighter, note, text, picture, sign and eraser sit together in the middle of the header. Pick one and its colours, size and opacity open right beneath it
-- The highlighter works in a single gesture: drag across the text. It still writes real markup, so highlights stay attached to the words rather than floating over them
-- Undo and redo (`Ctrl+Z` / `Ctrl+Y`) across annotations and page edits alike
-- Flatten bakes annotations and filled fields into the page so they can't be edited back out
+| Tool | What you can do |
+| --- | --- |
+| Pen and highlighter | Draw across page boundaries, erase part of a stroke, or highlight selected text. Adjust pen color, width, and opacity. |
+| Sticky notes and text boxes | Click a note marker to read or delete it. Insert text, then reopen the box to edit, move, or resize it. Choose the size, color, and alignment. Chinese font choices include Microsoft YaHei, SimSun, and DengXian when installed. |
+| Images and handwritten signatures | Insert a picture, draw a signature, type your name, or import a signature image. Reuse saved signatures and move or resize them on the page. |
+| Forms and digital signatures | Fill in standard AcroForm fields. PDF Desk flags XFA forms that it cannot fill. Document information shows details of existing digital signatures. Certificate and signature validation are currently unsupported. |
+| Page editing | Select multiple thumbnails to reorder, delete, extract, or insert pages. Copy and paste pages between tabs, and undo or redo common edits. |
+| Saving and printing | Save in place, save a copy, flatten annotations into the page, or print through Windows. Print at actual size or shrink oversized pages to the printable area. Save flattened output as a separate file if you want to keep editing the annotations in the original. |
 
-### Typing and pictures
+## What gets saved with the PDF?
 
-- **Type anywhere on a page** (`Ctrl+T`), whether or not there is anything there already: click, and a caret appears with a bar offering font, size, bold, italic, underline, alignment and colour. Every change lands on the words as you make it
-- The usual chords work while you are typing, and **only** while you are typing: `Ctrl+B`, `Ctrl+I` and `Ctrl+U` for bold, italic and underline, `Ctrl+L` `Ctrl+E` `Ctrl+R` `Ctrl+J` to align, `Ctrl+Shift+>` and `Ctrl+Shift+<` to change the size. Press `Esc` and every one of them goes back to meaning what it means to the document. They work the same way in a form field
-- What you type is **real PDF text**, not a picture of text. It stays crisp at any zoom, it is a few hundred bytes rather than a bitmap, and once flattened it is ordinary page text that search and copy find like any other
-- **Place a picture** on a page from any PNG, JPEG, BMP, GIF or TIFF. Transparency is kept, and nothing is keyed out: a picture you chose deliberately lands exactly as it is. `Ctrl`+wheel sizes it before you drop it, and the plain wheel still scrolls so you can get to the right spot first
-- Anything you place can be picked up again. Click it to select, drag to move, pull a corner to resize, `Delete` to remove. Pulling a text box's corner changes **the box**, not the type: the words re-flow to the new width at the size you chose
+| Location | Contents |
+| --- | --- |
+| The PDF file | Saved ink, highlights, sticky notes, images, handwritten signatures, inserted text, form values, and page edits travel with the file. |
+| `PDFDesk\PDFDesk.json` in your Windows Documents folder | Recent files, favorites, personal bookmarks, reading positions, layouts, open tabs, and preferences such as theme and language. |
+| `PDFDesk\Library` in your Windows Documents folder | The default location for library copies and new documents. You can choose another folder in Settings. |
+| `%LOCALAPPDATA%\PDFDesk` | Cached cover thumbnails, reusable signature images, page clipboard data, and the local error log (`errors.log`). |
 
-### Signing
+A handwritten signature is a visible annotation that recipients can see when they open the saved PDF. A digital signature serves a different purpose: it can be used to verify the signer’s identity. See the [privacy policy](PRIVACY.md) for details about local data.
 
-- Draw a signature with the mouse or a pen, type it in a handwriting face, or photograph one on paper and import it. **Rune removes the paper for you**, so only the ink lands on the page instead of a white rectangle over your document
-- Typed signatures use the handwriting fonts Windows already has, so nothing extra is downloaded and the app stays small
-- The matting runs entirely on your machine. Nothing is uploaded and no online service is involved
-- A semi-transparent preview follows the cursor so you can see exactly where it will land. `Ctrl`+scroll to size it, click to place it, then drag it or pull a corner handle if it isn't quite right. Resizing keeps the proportions, so your handwriting never comes out stretched
-- Saved signatures are reusable and stay on your machine
-- This is a *visible* signature, ink on the page like signing a printout, not a cryptographic one
-- **Signature details** reads back what a digitally signed PDF claims: the signer's stated reason, time and format, and whether the signature covers the whole file. Rune does **not** verify signatures. It ships no cryptography and never calls a signature valid
+![Settings for theme, interface language, library location, and default PDF application status](docs/screenshots/settings.png)
 
-### Forms
+## How it works
 
-- Click a field and type. Text boxes, dropdowns, checkboxes and radio buttons all save back into the PDF
-- Right-click a field for **Text appearance** to set the size and colour it fills in with, so your answers can stand apart from the printed form. `Ctrl+Shift+>` and `Ctrl+Shift+<` do the same from the keyboard
-- `Ctrl+B` and `Ctrl+I` bold and italicize a field where the PDF carries that face. Where it doesn't, Rune says so rather than leaving you with a field that has quietly gone blank
-- Standard AcroForm documents only. XFA forms, which some tax and government PDFs use, say so plainly instead of silently swallowing your typing
-- Form JavaScript doesn't run, so auto-calculating fields keep what you type but won't recalculate
+PDF Desk uses **C#, .NET 10, WinUI 3, Win2D, and PDFium**. The UI handles mouse, touch, pen, and keyboard input. The engine manages documents and page layout. The native interop layer owns the PDFium bindings and manages native handles.
 
-### Pages and keyboard
+| Feature | Implementation and source |
+| --- | --- |
+| Large documents | File access callbacks read PDF data on demand. The viewer requests tiles for the visible area and draws them on a Win2D virtual canvas. A scheduler prioritizes rendering and background work, while a cache keeps page handles available for reuse. [File access](src/PDFDesk.PdfiumInterop/FileAccessAdapter.cs) · [Scheduler](src/PDFDesk.Engine/RenderScheduler.cs) · [Page cache](src/PDFDesk.Engine/PdfDocument.PageCache.cs) |
+| Layout, zoom, and search | The layout engine calculates each page’s bounds. Rotation transforms map document coordinates to the screen, zoom uses an anchor to preserve the reading position, and search uses extracted text and character positions. [Layout](src/PDFDesk.Engine/PageLayout.cs) · [Zoom anchor](src/PDFDesk.Engine/ZoomAnchor.cs) · [Search](src/PDFDesk.Engine/DocumentSearch.cs) |
+| Ink, highlights, and notes | The engine writes standard PDF ink, text markup, and text annotations. It splits cross-page strokes at page boundaries, clips ink along the eraser’s path, and stores sticky-note text in the annotation’s `/Contents` entry. [Annotations](src/PDFDesk.Engine/PdfDocument.Annotations.cs) · [Cross-page ink](src/PDFDesk.Engine/PageInkGesture.cs) · [Eraser](src/PDFDesk.Engine/InkEraser.cs) |
+| Editable text and Chinese fonts | Text objects go into a stamp annotation’s appearance stream. PDF Desk retains the original text and layout information for later edits. For supported Chinese fonts, it checks embedding permissions and embeds a TrueType subset containing the glyphs used. [Text boxes](src/PDFDesk.Engine/PdfDocument.Text.cs) · [Font subsetting](src/PDFDesk.Engine/PdfTextFallback.cs) |
+| Images, signatures, and forms | Images and handwritten signatures use stamp annotations. PDF Desk can remove the paper background from an imported signature locally. The PDFium form environment handles form input, and a separate reader inspects existing digital signatures. [Image stamps](src/PDFDesk.Engine/PdfDocument.Stamps.cs) · [Background removal](src/PDFDesk.Engine/SignatureMatte.cs) · [Forms](src/PDFDesk.Engine/PdfDocument.Forms.cs) · [Digital signatures](src/PDFDesk.Engine/PdfDocument.Signatures.cs) |
+| Page operations and printing | PDFium imports, exports, and reorders pages. The print service renders pages for the selected paper and printable area, then passes them to the Windows print pipeline for preview and printing. [Page operations](src/PDFDesk.Engine/PdfDocument.Pages.cs) · [Flattening](src/PDFDesk.Engine/PdfDocument.Flatten.cs) · [Print service](src/PDFDesk.App/Services/PrintService.cs) |
+| Library and desktop integration | Library imports use a temporary copy and handle duplicate file names. Settings writes use a mutex and replace the destination with a temporary file. Single-instance activation routes subsequent file-open requests to the existing window. [Library](src/PDFDesk.Engine/PdfLibrary.cs) · [Settings and sessions](src/PDFDesk.Engine/AppState.cs) · [Window activation](src/PDFDesk.App/Services/SingleInstance.cs) |
 
-- Page editing in the thumbnail sidebar: multi-select, drag to reorder, `Delete`, and copy, cut and paste pages across open tabs. Drop a PDF onto the sidebar to insert its pages
-- Extract the pages you have selected to a new file, leaving the document you are reading untouched
-- Command palette (`Ctrl+K`) with fuzzy filtering and go-to-page
-- Shortcuts overlay (`F1`) listing every binding in two columns
-- Bookmarks (`Ctrl+B`): name a page, jump back to it later, saved per document
-- Vim-style keys (`j k h l`, `gg` / `G`, `p` / `n`) can be switched on in Settings
-- Printing with live preview and page ranges
-- **Share** the open document to another app through the Windows share sheet. Annotations you haven't saved yet go with it, as a copy, so your original file stays exactly as it was
-- **Document properties** (`Ctrl+D`) that answer the questions people actually open it for: page size and paper name, which fonts the file uses and whether they travel with it, what the security settings permit, and where the file lives
+## Build from source
 
-The interface follows GNOME Papers' proportions, one compact header row with the rest tucked into a single menu, but every control is a native Windows 11 one.
+Install the .NET 10 SDK on Windows and run the following commands in PowerShell from the repository root. NuGet restores WinUI, Win2D, PDFium, and the other dependencies. This example produces a self-contained ARM64 portable folder with the required .NET and Windows App SDK components.
 
-### Touch
+```powershell
+dotnet publish src/PDFDesk.App/PDFDesk.App.csproj -c Release -r win-arm64 --self-contained -p:Platform=ARM64 -p:WindowsPackageType=None -o artifacts/portable/win-arm64
+.\artifacts\portable\win-arm64\PDFDesk.exe
+```
 
-Rune works on a 2-in-1 held as a tablet, not just on a desk.
+For x64, use `-r win-x64`, set `-p:Platform=x64`, and choose a separate output folder. To work with the solution in an IDE, open [PDFDesk.slnx](PDFDesk.slnx).
 
-- **Drag to scroll, pinch to zoom.** A plain finger drag always moves the page, never a selection you didn't ask for
-- **Press and hold to select a word**, then lift for the menu: highlight, underline, strikeout, copy. Press on the selection and drag to widen it across a sentence or a paragraph. A double-tap picks out a word too
-- **Tap a form field and the keyboard comes up**, so a form can be filled in with no keyboard attached
-- **Tap a tool's button again to put it away**, and press and hold anything you've placed to delete it
-- Corner handles, links and form fields are all forgiving of a fingertip, without a mouse losing any of its precision
-- Resting a palm while you draw with a pen won't leave a second stroke behind
+### Tests
+
+```powershell
+dotnet test tests/PDFDesk.Tests/PDFDesk.Tests.csproj -c Release
+```
+
+Tests cover page layout, render scheduling, text search, annotation and form round trips, reopening embedded fonts, page operations, and state persistence. Sample documents are in [tests/corpus](tests/corpus). The [desktop test cases and results (Simplified Chinese)](docs/测试用例与结果.md) describe UI scenarios, ARM64 memory measurements, and what was verified.
 
 ## Keyboard shortcuts
 
-Press `F1` in the app for the full list. The essentials:
+| Action | Shortcut |
+| --- | --- |
+| Open / save / save as | `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
+| Find text / go to page | `Ctrl+F` / `Ctrl+G` |
+| Fit width / fit page | `Ctrl+2` / `Ctrl+0` |
+| Pen / highlighter / insert text | `Ctrl+E` / `Ctrl+H` / `Ctrl+T` |
+| Toggle sidebar / present | `F9` / `F5` |
+| Print / document information | `Ctrl+P` / `Ctrl+D` |
+| Find a command / show all shortcuts | `Ctrl+K` / `F1` |
 
-| Action | Keys |
-|---|---|
-| Open / close tab | `Ctrl+O` / `Ctrl+W` |
-| Scroll / screen up-down | `↑` `↓` / `PgUp` `PgDn`, `Space` |
-| Previous / next page | `←` / `→` |
-| First / last page | `Home` / `End` |
-| Find / next / previous | `Ctrl+F` / `F3` / `Shift+F3` |
-| Command palette / shortcuts | `Ctrl+K` / `F1` |
-| Zoom in / out / 100% / fit page / fit width | `Ctrl++` / `Ctrl+-` / `Ctrl+1` / `Ctrl+0` / `Ctrl+2` |
-| Night mode / sidebar | `Ctrl+I` / `F9` |
-| Rotate right / left | `Ctrl+R` / `Ctrl+Shift+R` |
-| Presentation / bookmark page | `F5` / `Ctrl+B` |
-| Highlight / pen / type on the page | `Ctrl+H` / `Ctrl+E` / `Ctrl+T` |
-| Save / save as | `Ctrl+S` / `Ctrl+Shift+S` |
-| Copy / cut / paste (text or pages) | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` |
-| Undo / redo | `Ctrl+Z` / `Ctrl+Y` |
-| Print / properties | `Ctrl+P` / `Ctrl+D` |
-| Bold / italic / underline (while typing) | `Ctrl+B` / `Ctrl+I` / `Ctrl+U` |
-| Align left / centre / right / justify (while typing) | `Ctrl+L` / `Ctrl+E` / `Ctrl+R` / `Ctrl+J` |
-| Bigger / smaller text (while typing) | `Ctrl+Shift+>` / `Ctrl+Shift+<` |
+## Credits and license
 
-Right-click a selection for underline and strikeout, or right-click anywhere to add a note. Click a signature, picture or text box you have placed to select it, then drag it, pull a corner to resize it, or press `Delete`. In the thumbnail sidebar, `Ctrl+C`, `Ctrl+X` and `Ctrl+V` act on **pages**; everywhere else they act on selected text.
+PDF Desk builds on [Rune](https://github.com/DanialJaved/rune) by Danial Javed and contributors. It is licensed under the [GNU GPL v3](LICENSE). Licenses for bundled components are listed in the [third-party notices](THIRD-PARTY-NOTICES.md).
 
-## Install
-
-<a href="https://apps.microsoft.com/detail/9NH37840QDM6">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://get.microsoft.com/images/en-us%20dark.svg">
-    <img src="https://get.microsoft.com/images/en-us%20light.svg" alt="Get Rune PDF Reader from the Microsoft Store" height="60">
-  </picture>
-</a>
-
-**The Store is the way to install Rune.** One click, automatic updates, and it registers itself as a PDF handler. Microsoft signs the package, so there is no certificate step and nothing for SmartScreen or Smart App Control to warn about. It installs from the Store app or [from the web](https://apps.microsoft.com/detail/9NH37840QDM6).
-
-**winget**, if you prefer the terminal. Same Store package, same signature:
-
-```
-winget install --id 9NH37840QDM6 --source msstore --exact
-```
-
-**Portable:** if you want Rune without the Store, on a USB stick or on a machine where you can't install anything, grab `rune-vX.Y.Z-win-x64.zip` from [Releases](https://github.com/DanialJaved/rune/releases), extract it anywhere and run `Rune.exe`. No installation, no registry.
-
-> The portable build is **not code-signed**. Machines with Smart App Control enabled will block it, and SmartScreen may warn on first run (choose "More info", then "Run anyway"). It also doesn't update itself, so check back here or use the Store build. And it isn't size-optimized: it carries the full self-contained .NET and Windows App SDK runtimes.
-
-## Built with
-
-| Layer | Choice |
-|---|---|
-| UI | WinUI 3 (Windows App SDK 2.x), C# on .NET 10 |
-| PDF engine | [PDFium](https://pdfium.googlesource.com/pdfium/), the renderer Chrome uses (BSD-3-Clause / Apache-2.0), via [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) |
-| Rendering | A Win2D virtualized canvas over an LRU tile cache, fed by a single render thread (PDFium is not thread-safe) through thin P/Invoke |
-
-```
-src/
-  Rune.App/            WinUI 3 shell: tabs, viewer control, palette, print
-  Rune.Engine/         document services, render scheduler, layout, search, state
-  Rune.PdfiumInterop/  P/Invoke bindings over pdfium.dll
-tests/
-  Rune.Tests/          xUnit suite against a generated PDF corpus
-```
-
-## Building
-
-.NET 10 SDK on Windows, no Visual Studio required:
-
-```
-dotnet build src/Rune.App/Rune.App.csproj -p:Platform=x64
-dotnet test tests/Rune.Tests/Rune.Tests.csproj
-```
-
-The debug build is an unpackaged self-contained exe, so you can just run it.
-
-## Roadmap
-
-**Next:** more formats (ePub, CBZ), code signing for the portable build, smaller packages still.
-
-**Known limits:** form JavaScript needs a V8-enabled PDFium build; signature *validation* would need a cryptography stack Rune doesn't ship; bold and italic in a *form field* only work where the PDF already carries that face; the editor cannot show you an underline while you type it (it appears the moment the box closes); and a placed picture is stored at up to 1024 pixels along its longest edge.
-
-## License
-
-[GPLv3](LICENSE). Free forever, and derivatives stay free. Rune is built on PDFium (BSD-3-Clause / Apache-2.0), Win2D (MIT), the Windows App SDK and .NET (MIT); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Rune makes no network requests and collects nothing, which [PRIVACY.md](PRIVACY.md) sets out in full.
-
-### A note on the Microsoft Store
-
-Rune is published on the Microsoft Store as **[Rune PDF Reader](https://apps.microsoft.com/detail/9NH37840QDM6)**, where it is covered by the Store's Standard Application License Terms. Those terms are generally considered incompatible with the GPL, so this deserves an explicit word:
-
-Rune's own source is written entirely by its copyright holder, and its dependencies are permissively licensed (PDFium is BSD-3-Clause / Apache-2.0, Win2D and .NET are MIT), so there is no third-party copyleft code in it. As the sole copyright holder I can distribute my own work under whatever terms I choose, and I choose to make it available both under the GPLv3 here and through the Store for people who want automatic updates and one-click installation.
-
-**This does not change anything about the GPLv3 grant.** The source in this repository is, and will remain, GPLv3: you may use, study, modify and redistribute it under those terms. The Store listing is an additional distribution channel, not a replacement, and every release is always available here as a portable download.
+To report a problem, open a [GitHub issue](https://github.com/DavidLabWorks/pdf-desk-windows/issues) with steps to reproduce it, the app version, your Windows version, and system architecture. Redact private file names and paths from screenshots and logs before attaching them.

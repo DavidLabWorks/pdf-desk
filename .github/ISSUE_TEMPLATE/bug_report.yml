@@ -1,22 +1,22 @@
 name: Bug report
-description: Something in Rune does not work the way it should.
+description: Something in PDFDesk does not work the way it should.
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time. Rune has no telemetry, so what you write
+        Thanks for taking the time. PDFDesk has no telemetry, so what you write
         here is genuinely all there is to go on.
 
         **Found something exploitable?** Please do not file it here. Use
-        [private vulnerability reporting](https://github.com/DanialJaved/rune/security/advisories/new)
+        [private vulnerability reporting](https://github.com/DavidLabWorks/pdf-desk-windows/security/advisories/new)
         instead, so a fix can ship before the details are public.
 
   - type: textarea
     id: what-happened
     attributes:
       label: What happened
-      description: What you did, what you expected, and what Rune did instead.
+      description: What you did, what you expected, and what PDFDesk did instead.
       placeholder: |
         I rotated a scanned page with Ctrl+R and then tried to highlight a line.
         I expected the highlight to land on the text. Nothing happened.
@@ -38,7 +38,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Rune version
+      label: PDFDesk version
       description: Settings shows it, and so does "Report a problem…" in the menu.
       placeholder: "0.6.0"
     validations:
@@ -47,9 +47,9 @@ body:
   - type: dropdown
     id: install
     attributes:
-      label: How did you install Rune?
+      label: How did you install PDFDesk?
       options:
-        - Microsoft Store
+        - MSIX package
         - Portable zip from GitHub Releases
         - Built it myself from source
     validations:
@@ -69,8 +69,8 @@ body:
     attributes:
       label: Error log
       description: |
-        If Rune crashed or showed an error, paste the tail of
-        `%LOCALAPPDATA%\Rune\errors.log`. "Report a problem…" in the menu opens
+        If PDFDesk crashed or showed an error, paste the tail of
+        `%LOCALAPPDATA%\PDFDesk\errors.log`. "Report a problem…" in the menu opens
         the folder for you. It is rendered as code, so no backticks needed.
       render: text
     validations:

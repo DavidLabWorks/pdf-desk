@@ -270,7 +270,7 @@ foreach ($info in $built) {
     # url() in an inline style attribute resolves against the DOCUMENT, not the
     # stylesheet. index.html and style.css are siblings here so img/... is right
     # either way, but it is the kind of thing that works locally and 404s on the
-    # /rune/ Pages subpath, so keep it relative and keep it document-relative.
+    # Repository Pages are served under a subpath, so keep the URL document-relative.
     $div = '      <div class="demo" aria-hidden="true" style="--sheet:url(img/demo-' + $clip +
            '.jpg); --frames:' + $info.frames + '; --fw:' + $info.frameWidth +
            '; --fh:' + $info.frameHeight + '"></div>'

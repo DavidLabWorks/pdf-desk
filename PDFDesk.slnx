@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PDFDesk.App/PDFDesk.App.csproj" />
+    <Project Path="src/PDFDesk.Engine/PDFDesk.Engine.csproj" />
+    <Project Path="src/PDFDesk.PdfiumInterop/PDFDesk.PdfiumInterop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PDFDesk.Tests/PDFDesk.Tests.csproj" />
+  </Folder>
+</Solution>

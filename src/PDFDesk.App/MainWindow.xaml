@@ -1,0 +1,1270 @@
+<Window
+    x:Class="PDFDesk.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:PDFDesk.Controls">
+
+    <Grid
+        x:Name="RootGrid"
+        Background="{ThemeResource HomeNavigationBrush}"
+        AllowDrop="True"
+        KeyboardAcceleratorPlacementMode="Hidden"
+        DragOver="RootGrid_DragOver"
+        Drop="RootGrid_Drop">
+        <Grid.Resources>
+            <DataTemplate x:Key="UnsavedDocumentsTemplate">
+                <StackPanel Spacing="12" MaxWidth="380" MinWidth="258">
+                    <TextBlock Text="{Binding DiscardChangesHint, Source={StaticResource UiText}}"
+                               TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <ScrollViewer MaxHeight="148" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+                        <ItemsControl ItemsSource="{Binding}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Padding="0,4">
+                                        <FontIcon Glyph="&#xE8A5;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </StackPanel>
+            </DataTemplate>
+            <ControlTemplate x:Key="OpenChoiceTemplate" TargetType="MenuFlyoutItem">
+                <Grid x:Name="Surface" Margin="4,2" Padding="8,0" Background="Transparent" CornerRadius="4">
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal" />
+                            <VisualState x:Name="PointerOver">
+                                <VisualState.Setters><Setter Target="Surface.Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" /></VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Pressed">
+                                <VisualState.Setters><Setter Target="Surface.Background" Value="{ThemeResource SubtleFillColorTertiaryBrush}" /></VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="20" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ContentPresenter Content="{TemplateBinding Icon}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{TemplateBinding Text}" FontSize="14" />
+                        <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
+            </ControlTemplate>
+            <MenuFlyout x:Key="OpenChoices">
+                <MenuFlyoutItem Text="{Binding OpenOriginal, Source={StaticResource UiText}}" Click="OpenOriginal_Click" Template="{StaticResource OpenChoiceTemplate}"
+                                Tag="{Binding EditTheFileInPlace, Source={StaticResource UiText}}">
+                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8E5;" /></MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="{Binding CopyToLibrary, Source={StaticResource UiText}}" Click="CopyToLibrary_Click" Template="{StaticResource OpenChoiceTemplate}"
+                                Tag="{Binding KeepASeparateCopy, Source={StaticResource UiText}}">
+                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="{Binding CreateBlankPdf, Source={StaticResource UiText}}" Click="CreateBlankPdf_Click" Template="{StaticResource OpenChoiceTemplate}"
+                                Tag="{Binding SaveInLibrary, Source={StaticResource UiText}}">
+                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7C3;" /></MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+            </MenuFlyout>
+            <ControlTemplate x:Key="DocumentTabTemplate" TargetType="TabViewItem">
+                <Grid x:Name="LayoutRoot" Background="Transparent">
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal" />
+                            <VisualState x:Name="PointerOver">
+                                <VisualState.Setters><Setter Target="Surface.Background" Value="{ThemeResource HomeCanvasBrush}" /></VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Pressed">
+                                <VisualState.Setters><Setter Target="Surface.Background" Value="{ThemeResource HomeSectionBrush}" /></VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Selected">
+                                <VisualState.Setters><Setter Target="Selection.Opacity" Value="1" /></VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="PointerOverSelected">
+                                <VisualState.Setters><Setter Target="Selection.Opacity" Value="1" /></VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="PressedSelected">
+                                <VisualState.Setters><Setter Target="Selection.Opacity" Value="1" /></VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
+                    <Grid Height="34" VerticalAlignment="Center" CornerRadius="8">
+                        <Border x:Name="Surface" Background="{ThemeResource HomeLayerBrush}" />
+                        <Grid x:Name="Selection" Opacity="0" Background="{ThemeResource HomePaperBrush}">
+                            <Border BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" />
+                        </Grid>
+                        <Grid Padding="{TemplateBinding Padding}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{TemplateBinding Header}" TextTrimming="CharacterEllipsis"
+                                       FontSize="14" VerticalAlignment="Center" Foreground="{ThemeResource HomeTextBrush}" />
+                            <Button x:Name="CloseButton" Grid.Column="1" Width="24" Height="24" MinWidth="0" MinHeight="0"
+                                    VerticalAlignment="Center" Padding="0" IsTabStop="False" Style="{StaticResource SubtleButtonStyle}">
+                                <FontIcon Glyph="&#xE711;" FontSize="10" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </ControlTemplate>
+            <x:Double x:Key="TitleButtonWidth">48</x:Double>
+            <x:Double x:Key="TitleButtonVisualHeight">38</x:Double>
+            <CornerRadius x:Key="TitleButtonCornerRadius">7</CornerRadius>
+        </Grid.Resources>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Chrome-style: the tab strip IS the title bar. Tabs carry no
+             content (documents render in DocHost below); the footer is the
+             window drag region, padded clear of the caption buttons. -->
+        <Grid x:Name="StripSpace" Grid.Row="0" Margin="0,0,192,0" SizeChanged="StripSpace_SizeChanged">
+        <Grid x:Name="StripGroup" HorizontalAlignment="Left" ColumnDefinitions="*,Auto">
+        <TabView
+            x:Name="Tabs"
+            VerticalAlignment="Center"
+            Padding="0,4"
+            TabWidthMode="SizeToContent"
+            IsAddTabButtonVisible="False"
+            CloseButtonOverlayMode="Always"
+            SelectionChanged="Tabs_SelectionChanged"
+            TabCloseRequested="Tabs_TabCloseRequested">
+            <TabView.Resources>
+                <ResourceDictionary>
+                    <x:Double x:Key="TabViewItemMaxWidth">200</x:Double>
+                    <x:Double x:Key="TabViewItemMinWidth">112</x:Double>
+                    <Style x:Key="TabViewScrollButtonStyle" TargetType="RepeatButton">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </Style>
+                    <Thickness x:Key="TabViewItemLeftScrollButtonContainerPadding">0</Thickness>
+                    <Thickness x:Key="TabViewItemRightScrollButtonContainerPadding">0</Thickness>
+                    <SolidColorBrush x:Key="TabViewBorderBrush" Color="Transparent" />
+                </ResourceDictionary>
+            </TabView.Resources>
+            <TabView.TabStripHeader>
+                <StackPanel x:Name="StripHeader" Orientation="Horizontal" VerticalAlignment="Center" Spacing="12" Margin="12,0,4,0" SizeChanged="StripSpace_SizeChanged">
+                    <Image Width="24" Height="24" VerticalAlignment="Center"
+                           Source="ms-appx:///Assets/Square44x44Logo.targetsize-256.png"
+                           AutomationProperties.Name="PDF Desk" />
+                    <Button x:Name="HomeButton" Click="HomeButton_Click" IsTabStop="False"
+                            VerticalAlignment="Center" Background="Transparent"
+                            AutomationProperties.Name="{Binding Home, Source={StaticResource UiText}}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <ContentPresenter Background="Transparent" Content="{TemplateBinding Content}" />
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Grid Width="{StaticResource TitleButtonWidth}" Height="{StaticResource TouchTargetMin}">
+                            <Border x:Name="HomeSelection" Height="{StaticResource TitleButtonVisualHeight}"
+                                    VerticalAlignment="Center" CornerRadius="{StaticResource TitleButtonCornerRadius}"
+                                    BorderThickness="1" BorderBrush="{ThemeResource HomeOutlineBrush}"
+                                    Background="{ThemeResource HomeCanvasBrush}" />
+                            <FontIcon Glyph="&#xE80F;" FontSize="18"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      AutomationProperties.AccessibilityView="Raw" />
+                        </Grid>
+                    </Button>
+                </StackPanel>
+            </TabView.TabStripHeader>
+            <TabView.TabStripFooter>
+                <Grid x:Name="DragStart" MinWidth="1" />
+            </TabView.TabStripFooter>
+        </TabView>
+        <Button x:Name="NewDocumentButton" Grid.Column="1" Width="34" Height="34" Margin="0,0,16,0"
+                VerticalAlignment="Center" Padding="0" Style="{StaticResource SubtleButtonStyle}"
+                AutomationProperties.Name="{Binding OpenOrCreatePdf, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding OpenOrCreatePdfShortcut, Source={StaticResource UiText}}" Click="OpenButton_Click">
+            <FontIcon Glyph="&#xE710;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Button>
+        </Grid>
+        </Grid>
+        <StackPanel x:Name="CaptionButtons" Orientation="Horizontal" HorizontalAlignment="Right">
+            <StackPanel.Resources>
+                <Style TargetType="Button">
+                    <Setter Property="Width" Value="{StaticResource TitleButtonWidth}" />
+                    <Setter Property="VerticalAlignment" Value="Stretch" />
+                    <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Button">
+                                <Grid x:Name="Surface" Background="Transparent">
+                                    <VisualStateManager.VisualStateGroups>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal" />
+                                            <VisualState x:Name="PointerOver">
+                                                <VisualState.Setters>
+                                                    <Setter Target="HoverFill.Opacity" Value="1" />
+                                                    <Setter Target="GlyphHost.Foreground" Value="{ThemeResource CaptionHoverForegroundBrush}" />
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                            <VisualState x:Name="Pressed">
+                                                <VisualState.Setters>
+                                                    <Setter Target="HoverFill.Opacity" Value="1" />
+                                                    <Setter Target="HoverFill.Background" Value="{ThemeResource CaptionPressedBrush}" />
+                                                    <Setter Target="GlyphHost.Foreground" Value="{ThemeResource CaptionHoverForegroundBrush}" />
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                        </VisualStateGroup>
+                                    </VisualStateManager.VisualStateGroups>
+                                    <Border x:Name="HoverFill" Height="{StaticResource TitleButtonVisualHeight}"
+                                            CornerRadius="{StaticResource TitleButtonCornerRadius}" VerticalAlignment="Center" Background="{TemplateBinding Background}" Opacity="0" />
+                                    <ContentPresenter x:Name="GlyphHost" Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Grid>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </StackPanel.Resources>
+            <Button x:Name="GlobalSettingsButton" Background="{ThemeResource CaptionHoverBrush}" Click="SettingsButton_Click"
+                    AutomationProperties.Name="{Binding Settings, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding Settings, Source={StaticResource UiText}}">
+                <FontIcon Glyph="&#xE713;" FontSize="16" />
+            </Button>
+            <Button Background="{ThemeResource CaptionMinimizeHoverBrush}" AutomationProperties.Name="{Binding Minimize, Source={StaticResource UiText}}" Click="MinimizeCaption_Click">
+                <Path Stroke="{ThemeResource TextFillColorPrimaryBrush}" StrokeThickness="1.1" Data="M0,0.5 H11" />
+            </Button>
+            <Button x:Name="MaximizeCaption" Background="{ThemeResource CaptionHoverBrush}" AutomationProperties.Name="{Binding Maximize, Source={StaticResource UiText}}" Click="MaximizeCaption_Click">
+                <Grid Width="12" Height="12">
+                    <Path x:Name="MaximizeMark" Stroke="{ThemeResource TextFillColorPrimaryBrush}" StrokeThickness="1.1"
+                          Data="M1,1 H11 V11 H1 Z" />
+                    <Path x:Name="RestoreMark" Visibility="Collapsed" Stroke="{ThemeResource TextFillColorPrimaryBrush}" StrokeThickness="1.1"
+                          Data="M3.5,1 H11 V8.5 M1,3.5 H8.5 V11 H1 Z" />
+                </Grid>
+            </Button>
+            <Button Background="{ThemeResource CaptionCloseHoverBrush}" AutomationProperties.Name="{Binding Close, Source={StaticResource UiText}}" Click="CloseCaption_Click">
+                <Button.Resources>
+
+
+                    <SolidColorBrush x:Key="CaptionHoverForegroundBrush" Color="{ThemeResource CaptionCloseGlyphColor}" />
+                    <SolidColorBrush x:Key="CaptionPressedBrush" Color="{ThemeResource CaptionClosePressedColor}" />
+                </Button.Resources>
+                <PathIcon Width="12" Height="12" Data="M0,0.8 L0.8,0 6,5.2 11.2,0 12,0.8 6.8,6 12,11.2 11.2,12 6,6.8 0.8,12 0,11.2 5.2,6 Z" />
+            </Button>
+        </StackPanel>
+
+        <Grid x:Name="Toolbar" Grid.Row="1" Visibility="Collapsed"
+              Margin="{StaticResource ReaderToolbarMargin}" ColumnDefinitions="Auto,*,Auto"
+              ColumnSpacing="{StaticResource ReaderToolbarGroupGap}" SizeChanged="Toolbar_SizeChanged">
+            <Grid.Resources>
+                <ResourceDictionary Source="ms-appx:///Styles/ReaderToolbarFeedback.xaml" />
+            </Grid.Resources>
+            <Border Style="{StaticResource ReaderSideGroupStyle}">
+                <StackPanel Orientation="Horizontal">
+                    <ToggleButton x:Name="SidebarButton" Style="{StaticResource IconToggleButtonStyle}" IsEnabled="False"
+                                  Click="SidebarButton_Click"
+                                  AutomationProperties.Name="{Binding ToggleSidebar, Source={StaticResource UiText}}"
+                                  ToolTipService.ToolTip="{Binding ToggleSidebarF9, Source={StaticResource UiText}}">
+                        <FontIcon Glyph="&#xE8A0;" FontSize="{StaticResource IconGlyphSize}" />
+                    </ToggleButton>
+                    <Border Style="{StaticResource HeaderSeparatorStyle}" Margin="0" />
+                    <Button x:Name="ViewActionsButton" Style="{StaticResource ReaderSideToolButtonStyle}" IsEnabled="False"
+                            AutomationProperties.Name="{Binding ViewOptions, Source={StaticResource UiText}}"
+                            ToolTipService.ToolTip="{Binding ViewOptions, Source={StaticResource UiText}}">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ViewActionsLabel, Source={StaticResource UiText}}" VerticalAlignment="Center" />
+                            <FontIcon x:Name="ViewActionsChevron" Glyph="&#xE70D;" FontSize="9" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout x:Name="ViewActionsFlyout" Placement="BottomEdgeAlignedLeft"
+                                    Opened="ReaderSideFlyout_Opened" Closed="ReaderSideFlyout_Closed">
+                                <Flyout.FlyoutPresenterStyle>
+                                    <Style TargetType="FlyoutPresenter">
+                                        <Setter Property="Background" Value="{ThemeResource HomeCardBrush}" />
+                                        <Setter Property="BorderBrush" Value="{ThemeResource HomeOutlineBrush}" />
+                                        <Setter Property="BorderThickness" Value="1" />
+                                        <Setter Property="CornerRadius" Value="{StaticResource ReaderToolbarRadius}" />
+                                        <Setter Property="Padding" Value="16" />
+                                    </Style>
+                                </Flyout.FlyoutPresenterStyle>
+                                <StackPanel Width="324" Spacing="{StaticResource SpaceS}">
+                                    <StackPanel.Resources>
+                                        <Style x:Key="ViewPanelHeadingStyle" TargetType="TextBlock">
+                                            <Setter Property="FontSize" Value="12" />
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                            <Setter Property="Foreground" Value="{ThemeResource HomeSecondaryTextBrush}" />
+                                        </Style>
+                                        <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="HomeSectionBrush" />
+                                        <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="HomeSectionBrush" />
+                                        <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="HomeSectionBrush" />
+                                        <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="AccentTextFillColorPrimaryBrush" />
+                                        <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="AccentTextFillColorPrimaryBrush" />
+                                        <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="AccentTextFillColorPrimaryBrush" />
+                                    </StackPanel.Resources>
+                                    <TextBlock Text="{Binding PageLayout, Source={StaticResource UiText}}"
+                                               Style="{StaticResource ViewPanelHeadingStyle}" />
+                                    <Border Background="{ThemeResource HomeCanvasBrush}" CornerRadius="{StaticResource RadiusMedium}">
+                                        <Grid ColumnDefinitions="*,*,*">
+                                            <RadioButton x:Name="SinglePageButton" GroupName="PageLayoutMode"
+                                                         Style="{StaticResource PageLayoutSegmentStyle}" CornerRadius="8,0,0,8"
+                                                         Tag="{Binding SingleColumnLabel, Source={StaticResource UiText}}"
+                                                         AutomationProperties.Name="{Binding SinglePageView, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding SinglePageView, Source={StaticResource UiText}}"
+                                                         IsChecked="True" Checked="PageLayout_Checked">
+                                                <RectangleGeometry Rect="5,1,10,14" />
+                                            </RadioButton>
+                                            <RadioButton x:Name="TwoPageButton" Grid.Column="1" GroupName="PageLayoutMode"
+                                                         Style="{StaticResource PageLayoutSegmentStyle}" CornerRadius="0"
+                                                         Tag="{Binding DoubleColumnLabel, Source={StaticResource UiText}}"
+                                                         AutomationProperties.Name="{Binding TwoPageView, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding TwoPageView, Source={StaticResource UiText}}"
+                                                         Checked="PageLayout_Checked">
+                                                <GeometryGroup>
+                                                    <RectangleGeometry Rect="1,1,18,14" />
+                                                    <LineGeometry StartPoint="10,1" EndPoint="10,15" />
+                                                </GeometryGroup>
+                                            </RadioButton>
+                                            <RadioButton x:Name="ThreePageButton" Grid.Column="2" GroupName="PageLayoutMode"
+                                                         Style="{StaticResource PageLayoutSegmentStyle}" CornerRadius="0,8,8,0"
+                                                         Tag="{Binding TripleColumnLabel, Source={StaticResource UiText}}"
+                                                         AutomationProperties.Name="{Binding ThreePageView, Source={StaticResource UiText}}"
+                                                         ToolTipService.ToolTip="{Binding ThreePageView, Source={StaticResource UiText}}"
+                                                         Checked="PageLayout_Checked">
+                                                <GeometryGroup>
+                                                    <RectangleGeometry Rect="1,1,18,14" />
+                                                    <LineGeometry StartPoint="7,1" EndPoint="7,15" />
+                                                    <LineGeometry StartPoint="13,1" EndPoint="13,15" />
+                                                </GeometryGroup>
+                                            </RadioButton>
+                                        </Grid>
+                                    </Border>
+                                    <Border Height="1" Margin="0,4,0,2" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                    <TextBlock Text="{Binding ReaderDisplayOptions, Source={StaticResource UiText}}" Style="{StaticResource ViewPanelHeadingStyle}" />
+                                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{StaticResource SpaceXS}">
+                                        <ToggleButton x:Name="FitWidthItem" Style="{StaticResource ReaderViewActionStyleToggle}"
+                                                Click="FitWidthButton_Click"
+                                                AutomationProperties.Name="{Binding FitWidth, Source={StaticResource UiText}}"
+                                                ToolTipService.ToolTip="{Binding FitWidthCtrl2, Source={StaticResource UiText}}">
+                                            <StackPanel Spacing="{StaticResource SpaceS}">
+                                                <Border Style="{StaticResource ReaderViewTileIconStyle}">
+                                                    <FontIcon Glyph="&#xE9A6;" FontSize="20" />
+                                                </Border>
+                                                <TextBlock Text="{Binding FitWidth, Source={StaticResource UiText}}" Style="{StaticResource ReaderViewTileLabelStyle}" />
+                                            </StackPanel>
+                                        </ToggleButton>
+                                        <ToggleButton x:Name="FitPageItem" Grid.Column="1" Style="{StaticResource ReaderViewActionStyleToggle}"
+                                                Click="FitPageButton_Click"
+                                                AutomationProperties.Name="{Binding FitPage, Source={StaticResource UiText}}"
+                                                ToolTipService.ToolTip="{Binding FitPageCtrl0, Source={StaticResource UiText}}">
+                                            <StackPanel Spacing="{StaticResource SpaceS}">
+                                                <Border Style="{StaticResource ReaderViewTileIconStyle}">
+                                                    <FontIcon Glyph="&#xE9A6;" FontSize="20" RenderTransformOrigin="0.5,0.5">
+                                                        <FontIcon.RenderTransform><RotateTransform Angle="90" /></FontIcon.RenderTransform>
+                                                    </FontIcon>
+                                                </Border>
+                                                <TextBlock Text="{Binding FitPage, Source={StaticResource UiText}}" Style="{StaticResource ReaderViewTileLabelStyle}" />
+                                            </StackPanel>
+                                        </ToggleButton>
+                                        <Button x:Name="RotateLeftButton" Grid.Column="2" Style="{StaticResource ReaderViewActionStyle}"
+                                                Click="RotateLeftButton_Click"
+                                                AutomationProperties.Name="{Binding RotateLeft, Source={StaticResource UiText}}"
+                                                ToolTipService.ToolTip="{Binding RotateLeftCtrlShiftR, Source={StaticResource UiText}}">
+                                            <StackPanel Spacing="{StaticResource SpaceS}">
+                                                <Border Style="{StaticResource ReaderViewTileIconStyle}">
+                                                    <FontIcon Glyph="&#xE7AD;" FontSize="20" RenderTransformOrigin="0.5,0.5">
+                                                        <FontIcon.RenderTransform><ScaleTransform ScaleX="-1" /></FontIcon.RenderTransform>
+                                                    </FontIcon>
+                                                </Border>
+                                                <TextBlock Text="{Binding RotateLeft, Source={StaticResource UiText}}" Style="{StaticResource ReaderViewTileLabelStyle}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="RotateRightButton" Grid.Column="3" Style="{StaticResource ReaderViewActionStyle}"
+                                                Click="RotateButton_Click"
+                                                AutomationProperties.Name="{Binding RotateRight, Source={StaticResource UiText}}"
+                                                ToolTipService.ToolTip="{Binding RotateRightCtrlR, Source={StaticResource UiText}}">
+                                            <StackPanel Spacing="{StaticResource SpaceS}">
+                                                <Border Style="{StaticResource ReaderViewTileIconStyle}">
+                                                    <FontIcon Glyph="&#xE7AD;" FontSize="20" />
+                                                </Border>
+                                                <TextBlock Text="{Binding RotateRight, Source={StaticResource UiText}}" Style="{StaticResource ReaderViewTileLabelStyle}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                    <Border Height="1" Margin="0,4,0,2" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                    <TextBlock Text="{Binding ReaderReadingOptions, Source={StaticResource UiText}}" Style="{StaticResource ViewPanelHeadingStyle}" />
+                                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{StaticResource SpaceXS}">
+                                        <ToggleButton x:Name="NightItem" Style="{StaticResource ReaderViewActionStyleToggle}"
+                                                Click="NightButton_Click"
+                                                AutomationProperties.Name="{Binding NightMode, Source={StaticResource UiText}}"
+                                                ToolTipService.ToolTip="{Binding NightModeInvertPageColorsCtrlI, Source={StaticResource UiText}}">
+                                            <StackPanel Spacing="{StaticResource SpaceS}">
+                                                <Border Style="{StaticResource ReaderViewTileIconStyle}">
+                                                    <FontIcon Glyph="&#xE708;" FontSize="20" />
+                                                </Border>
+                                                <TextBlock Text="{Binding NightMode, Source={StaticResource UiText}}" Style="{StaticResource ReaderViewTileLabelStyle}" />
+                                            </StackPanel>
+                                        </ToggleButton>
+                                        <Button x:Name="BookmarkButton" Grid.Column="1" Style="{StaticResource ReaderViewActionStyle}"
+                                                Click="BookmarkButton_Click"
+                                                AutomationProperties.Name="{Binding BookmarkThisPage, Source={StaticResource UiText}}"
+                                                ToolTipService.ToolTip="{Binding BookmarkThisPage, Source={StaticResource UiText}}">
+                                            <StackPanel Spacing="{StaticResource SpaceS}">
+                                                <Border Style="{StaticResource ReaderViewTileIconStyle}">
+                                                    <FontIcon Glyph="&#xE718;" FontSize="20" />
+                                                </Border>
+                                                <TextBlock Text="{Binding PageBookmarkLabel, Source={StaticResource UiText}}" Style="{StaticResource ReaderViewTileLabelStyle}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <!-- The middle viewport owns all horizontal overflow. The side buttons keep their own columns. -->
+            <Border x:Name="EditToolbarSurface" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="4,1"
+                    Background="{ThemeResource HomeCardBrush}" CornerRadius="{StaticResource ReaderToolbarRadius}"
+                    Translation="0,0,12">
+                <Border.Shadow><ThemeShadow /></Border.Shadow>
+                <ScrollViewer x:Name="EditToolbarScroll" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden"
+                              VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel Orientation="Horizontal" Spacing="2" PointerWheelChanged="EditTools_PointerWheelChanged">
+                        <Button x:Name="UndoButton" Style="{StaticResource IconButtonStyle}"
+                                AutomationProperties.Name="{Binding Undo, Source={StaticResource UiText}}"
+                                ToolTipService.ToolTip="{Binding Undo, Source={StaticResource UiText}}"
+                                Click="UndoButton_Click" IsEnabled="False">
+                            <FontIcon Glyph="&#xE7A7;" FontSize="{StaticResource IconGlyphSize}" />
+                        </Button>
+                        <Button x:Name="RedoButton" Style="{StaticResource IconButtonStyle}"
+                                AutomationProperties.Name="{Binding Redo, Source={StaticResource UiText}}"
+                                ToolTipService.ToolTip="{Binding Redo, Source={StaticResource UiText}}"
+                                Click="RedoButton_Click" IsEnabled="False">
+                            <FontIcon Glyph="&#xE7A6;" FontSize="{StaticResource IconGlyphSize}" />
+                        </Button>
+                        <Border Style="{StaticResource HeaderSeparatorStyle}" />
+                        <ToggleButton
+                            x:Name="PenToolButton"
+                            Style="{StaticResource IconToggleButtonStyle}"
+                            Click="PenToolButton_Click"
+                            PointerEntered="DrawingTool_PointerEntered"
+                            PointerMoved="DrawingTool_PointerEntered"
+                            PointerExited="DrawingTool_PointerExited"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding Pen, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding PenDrawFreehandCtrlE, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xEDFB;" FontSize="{StaticResource IconGlyphSize}" />
+                        </ToggleButton>
+                        <ToggleButton
+                            x:Name="HighlighterToolButton"
+                            Style="{StaticResource IconToggleButtonStyle}"
+                            Click="HighlighterToolButton_Click"
+                            PointerEntered="DrawingTool_PointerEntered"
+                            PointerMoved="DrawingTool_PointerEntered"
+                            PointerExited="DrawingTool_PointerExited"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding Highlighter, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding HighlighterDragOverTextCtrlH, Source={StaticResource UiText}}">
+                            <!-- Chisel-tip marker, with the stroke it leaves on the page. -->
+                            <PathIcon Width="{StaticResource IconGlyphSize}" Height="{StaticResource IconGlyphSize}"
+                                      Data="F0 M6,11 L15.4,1.6 Q16.8,0.2 18.2,1.6 L21.4,4.8 Q22.8,6.2 21.4,7.6 L12,17 L9.3,17.3 L6.8,19.8 L2.5,19.8 L3.7,15.8 L6,13.5 Z
+                                            M8,11.2 L11.8,15 L20.2,6.6 Q20.7,6.1 20.2,5.6 L17.4,2.8 Q16.9,2.3 16.4,2.8 Z
+                                            M2,21.5 L15,21.5 L15,23.5 L2,23.5 Z" />
+                        </ToggleButton>
+                        <ToggleButton
+                            x:Name="NoteToolButton"
+                            Style="{StaticResource IconToggleButtonStyle}"
+                            Click="NoteToolButton_Click"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding StickyNote, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding NoteClickToAddAStickyNote, Source={StaticResource UiText}}">
+                            <ContentPresenter Content="Note" ContentTemplate="{StaticResource StickyNoteGlyph}" />
+                        </ToggleButton>
+                        <ToggleButton
+                            x:Name="TextToolButton"
+                            Style="{StaticResource IconToggleButtonStyle}"
+                            Click="TextToolButton_Click"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding Text, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding TextClickAnywhereOnThePageAndTypeCtrlT, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xE8D2;" FontSize="{StaticResource IconGlyphSize}" />
+                        </ToggleButton>
+                        <ToggleButton
+                            x:Name="EraserToolButton"
+                            Style="{StaticResource IconToggleButtonStyle}"
+                            Click="EraserToolButton_Click"
+                            PointerEntered="DrawingTool_PointerEntered"
+                            PointerMoved="DrawingTool_PointerEntered"
+                            PointerExited="DrawingTool_PointerExited"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding Eraser, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding EraserHint, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xE75C;" FontSize="{StaticResource IconGlyphSize}" />
+                        </ToggleButton>
+                        <ToggleButton
+                            x:Name="ImageToolButton"
+                            Style="{StaticResource IconToggleButtonStyle}"
+                            Click="ImageToolButton_Click"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding Picture, Source={StaticResource UiText}}"
+                            ToolTipService.ToolTip="{Binding PicturePlaceAnImageOnThePageCtrlWheelResizesIt, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xEB9F;" FontSize="{StaticResource IconGlyphSize}" />
+                        </ToggleButton>
+                        <ToggleButton
+                            x:Name="SignToolButton"
+                            Style="{StaticResource IconToggleButtonStyle}"
+                            Click="SignToolButton_Click"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding Sign, Source={StaticResource UiText}}"
+                            ToolTipService.ToolTip="{Binding SignPlaceYourSignature, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xEE56;" FontSize="{StaticResource IconGlyphSize}" />
+                        </ToggleButton>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource ReaderSideGroupStyle}">
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="ReaderSaveButton" Style="{StaticResource IconButtonStyle}" IsEnabled="False"
+                            Click="ReaderSaveButton_Click" AutomationProperties.Name="{Binding Save, Source={StaticResource UiText}}"
+                            ToolTipService.ToolTip="{Binding SaveCtrlS, Source={StaticResource UiText}}">
+                        <FontIcon Glyph="&#xE74E;" FontSize="{StaticResource IconGlyphSize}" />
+                    </Button>
+                    <Border Style="{StaticResource HeaderSeparatorStyle}" Margin="0" />
+                    <Button x:Name="DocumentActionsButton" Style="{StaticResource ReaderSideToolButtonStyle}"
+                            AutomationProperties.Name="{Binding DocumentActions, Source={StaticResource UiText}}"
+                            ToolTipService.ToolTip="{Binding DocumentActions, Source={StaticResource UiText}}">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding DocumentActionsLabel, Source={StaticResource UiText}}" VerticalAlignment="Center" />
+                            <FontIcon x:Name="DocumentActionsChevron" Glyph="&#xE70D;" FontSize="9" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <MenuFlyout x:Name="DocumentActionsFlyout" Placement="BottomEdgeAlignedRight"
+                                        Opened="ReaderSideFlyout_Opened" Closed="ReaderSideFlyout_Closed">
+                                <MenuFlyout.MenuFlyoutPresenterStyle>
+                                    <Style TargetType="MenuFlyoutPresenter">
+                                        <Setter Property="Background" Value="{ThemeResource HomeCardBrush}" />
+                                    </Style>
+                                </MenuFlyout.MenuFlyoutPresenterStyle>
+                                <MenuFlyoutItem x:Name="ReaderSaveAsItem" Text="{Binding SaveAs, Source={StaticResource UiText}}"
+                                                Click="SaveAsButton_Click" KeyboardAcceleratorTextOverride="Ctrl+Shift+S">
+                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE792;" /></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="FindItem" Text="{Binding FindInDocument, Source={StaticResource UiText}}"
+                                                Click="FindButton_Click" KeyboardAcceleratorTextOverride="Ctrl+F">
+                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE721;" /></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem x:Name="PrintItem" Text="{Binding Print, Source={StaticResource UiText}}"
+                                                Click="PrintButton_Click" KeyboardAcceleratorTextOverride="Ctrl+P">
+                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE749;" /></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="CopyPdfFileItem" Text="{Binding CopyPdfFile, Source={StaticResource UiText}}"
+                                                Click="CopyPdfFileItem_Click">
+                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="FlattenItem" Text="{Binding FlattenAnnotations, Source={StaticResource UiText}}"
+                                                Click="FlattenButton_Click">
+                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7C4;" /></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutItem x:Name="DocumentInfoItem" Text="{Binding DocumentInformation, Source={StaticResource UiText}}"
+                                                Click="PropertiesButton_Click" KeyboardAcceleratorTextOverride="Ctrl+D">
+                                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE946;" /></MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutSubItem Text="{Binding Help, Source={StaticResource UiText}}">
+                                    <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE897;" /></MenuFlyoutSubItem.Icon>
+                                    <MenuFlyoutItem Text="{Binding FindACommand, Source={StaticResource UiText}}"
+                                                    Click="PaletteMenuItem_Click" KeyboardAcceleratorTextOverride="Ctrl+K">
+                                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE721;" /></MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem Text="{Binding KeyboardShortcuts, Source={StaticResource UiText}}"
+                                                    Click="ShortcutsMenuItem_Click" KeyboardAcceleratorTextOverride="F1">
+                                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE765;" /></MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem Text="{Binding ReportAProblem, Source={StaticResource UiText}}" Click="ReportProblemMenuItem_Click">
+                                        <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE939;" /></MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                </MenuFlyoutSubItem>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="Workspace" Grid.Row="2">
+            <!-- The selected tab's DocumentView is swapped in here. -->
+            <Border Padding="4" Background="{ThemeResource ReaderWorkspaceBrush}"
+                    Visibility="{Binding Visibility, ElementName=DocHost}">
+                <ContentControl
+                    x:Name="DocHost"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch" />
+            </Border>
+
+            <Grid x:Name="StartPage" Margin="4" Padding="28,0" CornerRadius="6"
+                  Background="{ThemeResource HomeCanvasBrush}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid x:Name="RecentsHeading" Margin="8,24,8,18"
+                      ColumnSpacing="{StaticResource SpaceM}" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <RadioButton Content="{Binding Recent, Source={StaticResource UiText}}" GroupName="ShelfSection" Style="{StaticResource ShelfSectionStyle}"
+                                     IsChecked="True" Checked="ShelfSection_Checked" />
+                        <RadioButton x:Name="FavoritesTab" Content="{Binding Favorites, Source={StaticResource UiText}}" GroupName="ShelfSection"
+                                     Style="{StaticResource ShelfSectionStyle}" Checked="ShelfSection_Checked" />
+                    </StackPanel>
+                    <Border Grid.Column="1" VerticalAlignment="Center" Background="{ThemeResource HomeSectionBrush}"
+                            CornerRadius="{StaticResource RadiusMedium}">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton x:Name="ShelfCardMode" GroupName="ShelfViewMode" Style="{StaticResource ShelfViewSegmentStyle}"
+                                         CornerRadius="8,0,0,8" Checked="ShelfViewMode_Checked"
+                                         AutomationProperties.Name="{Binding CardView, Source={StaticResource UiText}}"
+                                         ToolTipService.ToolTip="{Binding CardView, Source={StaticResource UiText}}">
+                                <GeometryGroup>
+                                    <RectangleGeometry Rect="3,1,5,5" />
+                                    <RectangleGeometry Rect="12,1,5,5" />
+                                    <RectangleGeometry Rect="3,10,5,5" />
+                                    <RectangleGeometry Rect="12,10,5,5" />
+                                </GeometryGroup>
+                            </RadioButton>
+                            <RadioButton x:Name="ShelfListMode" GroupName="ShelfViewMode" Style="{StaticResource ShelfViewSegmentStyle}"
+                                         CornerRadius="0,8,8,0" Checked="ShelfViewMode_Checked"
+                                         AutomationProperties.Name="{Binding ListView, Source={StaticResource UiText}}"
+                                         ToolTipService.ToolTip="{Binding ListView, Source={StaticResource UiText}}">
+                                <GeometryGroup>
+                                    <LineGeometry StartPoint="3,3" EndPoint="17,3" />
+                                    <LineGeometry StartPoint="3,8" EndPoint="17,8" />
+                                    <LineGeometry StartPoint="3,13" EndPoint="17,13" />
+                                </GeometryGroup>
+                            </RadioButton>
+                        </StackPanel>
+                    </Border>
+                    <Button x:Name="ShelfOpenButton" Content="{Binding OpenOrCreatePdf, Source={StaticResource UiText}}"
+                            AutomationProperties.Name="{Binding OpenOrCreatePdf, Source={StaticResource UiText}}"
+                            ToolTipService.ToolTip="{Binding OpenOrCreatePdfShortcut, Source={StaticResource UiText}}"
+                            Grid.Column="2" VerticalAlignment="Stretch" Click="OpenButton_Click" Style="{StaticResource HomeBrowseButtonStyle}" />
+                </Grid>
+
+                <controls:ShelfGridView x:Name="RecentThumbs" ContainerContentChanging="RecentCard_ContainerContentChanging" Grid.Row="1" Margin="8,0,8,24" Padding="8,16,8,0"
+                          Background="{ThemeResource HomeShelfBrush}" CornerRadius="12"
+                          SelectionMode="None" ShowsScrollingPlaceholders="False" Visibility="Collapsed">
+                    <GridView.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <ItemsWrapGrid Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </GridView.ItemsPanel>
+                    <GridView.ItemContainerTransitions>
+                        <TransitionCollection>
+                        </TransitionCollection>
+                    </GridView.ItemContainerTransitions>
+                    <GridView.ItemContainerStyle>
+                        <Style TargetType="GridViewItem">
+                            <Setter Property="Margin" Value="8,0,8,16" />
+                            <Setter Property="IsTabStop" Value="False" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="GridViewItem">
+                                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </GridView.ItemContainerStyle>
+                    <GridView.ItemTemplate>
+                        <DataTemplate x:DataType="controls:RecentCard">
+                            <Grid Width="{StaticResource ShelfCardWidth}" HorizontalAlignment="Center">
+                            <Grid.ContextFlyout>
+                                <MenuFlyout Opening="RecentMenu_Opening" />
+                            </Grid.ContextFlyout>
+                            <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                    Padding="0" CornerRadius="10" Background="{ThemeResource HomeCardBrush}"
+                                    Foreground="{ThemeResource HomeTextBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" Click="RecentOpen_Click"
+                                    AutomationProperties.Name="{x:Bind DisplayName}" ToolTipService.ToolTip="{x:Bind Path}">
+                                <Button.Resources>
+                                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{ThemeResource HomeCardHoverTextColor}" />
+                                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{ThemeResource HomeCardHoverTextColor}" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{ThemeResource HomeCardHoverColor}" />
+                                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{ThemeResource HomeCardHoverColor}" />
+                                </Button.Resources>
+                                <StackPanel Spacing="0">
+                                    <Grid Height="{StaticResource CardHeight}" Padding="14" CornerRadius="9,9,0,0"
+                                          AutomationProperties.AccessibilityView="Raw">
+                                        <Border
+                                        Width="{StaticResource HomePlaceholderCoverWidth}"
+                                        Height="{StaticResource HomePlaceholderCoverHeight}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource HomeCoverStyle}"
+                                        Background="{ThemeResource HomeLayerBrush}"
+                                        Visibility="{x:Bind ShowPlaceholder, Mode=OneWay}">
+                                            <FontIcon
+                                            Glyph="&#xEA90;"
+                                            FontSize="{StaticResource HomePreviewIconSize}"
+                                            Foreground="{ThemeResource HomeSecondaryTextBrush}" />
+                                        </Border>
+                                        <Border
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource HomeCoverStyle}"
+                                        Visibility="{x:Bind HasThumbnail, Mode=OneWay}">
+                                            <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform" />
+                                        </Border>
+                                    </Grid>
+
+                                    <TextBlock Margin="10,0,10,0" FontSize="14" LineHeight="18"
+                                               FontWeight="Normal" TextWrapping="Wrap" MaxLines="2"
+                                               SizeChanged="RecentName_SizeChanged" DataContextChanged="RecentName_DataContextChanged" />
+                                    <TextBlock Text="{x:Bind Metadata, Mode=OneWay}" Margin="10,3,10,10"
+                                               FontSize="12" Opacity="0.72" TextTrimming="CharacterEllipsis"
+                                               ToolTipService.ToolTip="{x:Bind LastOpened}" />
+                                </StackPanel>
+                            </Button>
+                            <ToggleButton Style="{StaticResource ShelfFavoriteToggleStyle}" Margin="4"
+                                          HorizontalAlignment="Right" VerticalAlignment="Top"
+                                          IsChecked="{x:Bind IsFavorite, Mode=OneWay}" Click="FavoriteStar_Click"
+                                          AutomationProperties.Name="{x:Bind FavoriteAction, Mode=OneWay}"
+                                          ToolTipService.ToolTip="{x:Bind FavoriteAction, Mode=OneWay}" />
+                            </Grid>
+                        </DataTemplate>
+                    </GridView.ItemTemplate>
+                </controls:ShelfGridView>
+                <controls:ShelfGridView x:Name="FavoriteThumbs" Grid.Row="1" Visibility="Collapsed"
+                          Margin="{Binding Margin, ElementName=RecentThumbs}" Padding="{Binding Padding, ElementName=RecentThumbs}"
+                          Background="{ThemeResource HomeShelfBrush}" CornerRadius="12"
+                          SelectionMode="None" ShowsScrollingPlaceholders="False"
+                          ContainerContentChanging="RecentCard_ContainerContentChanging"
+                          ItemsPanel="{Binding ItemsPanel, ElementName=RecentThumbs}"
+                          ItemContainerStyle="{Binding ItemContainerStyle, ElementName=RecentThumbs}"
+                          ItemTemplate="{Binding ItemTemplate, ElementName=RecentThumbs}">
+                    <GridView.ItemContainerTransitions><TransitionCollection /></GridView.ItemContainerTransitions>
+                </controls:ShelfGridView>
+                <Grid x:Name="ShelfListSurface" Grid.Row="1" Visibility="Collapsed"
+                      Margin="{Binding Margin, ElementName=RecentThumbs}" Background="{ThemeResource HomeShelfBrush}"
+                      CornerRadius="12" Padding="16">
+                <ListView x:Name="ShelfList" VerticalAlignment="Top"
+                          Background="{ThemeResource HomeCardBrush}" CornerRadius="12"
+                          SelectionMode="None" ShowsScrollingPlaceholders="False"
+                          ContainerContentChanging="RecentCard_ContainerContentChanging">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="IsTabStop" Value="False" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListViewItem">
+                                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="controls:RecentCard">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="{StaticResource SpaceM}"
+                                  MinHeight="84" Padding="16,0,12,0"
+                                  BorderBrush="{ThemeResource HomeOutlineBrush}" BorderThickness="0,0,0,1">
+                                <Grid.ContextFlyout>
+                                    <MenuFlyout Opening="RecentMenu_Opening" />
+                                </Grid.ContextFlyout>
+                                <Button Grid.ColumnSpan="3" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                        BorderThickness="0" Background="Transparent"
+                                        CornerRadius="{StaticResource RadiusMedium}"
+                                        Click="RecentOpen_Click" AutomationProperties.Name="{x:Bind DisplayName}"
+                                        ToolTipService.ToolTip="{x:Bind Path}" />
+                                <Grid Width="48" Height="60" VerticalAlignment="Center"
+                                      IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw">
+                                    <Border Width="40" Height="52" Style="{StaticResource HomeCoverStyle}"
+                                            Visibility="{x:Bind ShowPlaceholder, Mode=OneWay}">
+                                        <FontIcon Glyph="&#xEA90;" FontSize="18" Foreground="{ThemeResource HomeSecondaryTextBrush}" />
+                                    </Border>
+                                    <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="Uniform"
+                                           Visibility="{x:Bind HasThumbnail, Mode=OneWay}" />
+                                </Grid>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind DisplayName}" TextTrimming="CharacterEllipsis"
+                                               FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource HomeTextBrush}"
+                                               IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="{x:Bind FileSize, Mode=OneWay}" FontSize="12" VerticalAlignment="Center"
+                                                   Foreground="{ThemeResource HomeSecondaryTextBrush}" IsHitTestVisible="False" />
+                                        <ToggleButton Style="{StaticResource ShelfFavoriteToggleStyle}" VerticalAlignment="Center"
+                                                      IsChecked="{x:Bind IsFavorite, Mode=OneWay}" Click="FavoriteStar_Click"
+                                                      AutomationProperties.Name="{x:Bind FavoriteAction, Mode=OneWay}"
+                                                      ToolTipService.ToolTip="{x:Bind FavoriteAction, Mode=OneWay}" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{x:Bind LastOpened}" FontSize="12" VerticalAlignment="Center"
+                                           Foreground="{ThemeResource HomeSecondaryTextBrush}" IsHitTestVisible="False"
+                                           AutomationProperties.Name="{Binding LastOpened, Source={StaticResource UiText}}" />
+                                <Button Grid.Column="3" VerticalAlignment="Center" Style="{StaticResource IconButtonStyle}"
+                                        Background="{ThemeResource HomeLayerBrush}" CornerRadius="{StaticResource RadiusMedium}"
+                                        Click="RecentMore_Click"
+                                        AutomationProperties.Name="{Binding MoreFileActions, Source={StaticResource UiText}}"
+                                        ToolTipService.ToolTip="{Binding MoreFileActions, Source={StaticResource UiText}}">
+                                    <SymbolIcon Symbol="More" />
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                </Grid>
+                <Grid x:Name="NoFavorites" Grid.Row="1" Visibility="Collapsed" Margin="24,0,24,24"
+                      ColumnDefinitions="Auto,Auto" ColumnSpacing="20"
+                      HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid Width="56" Height="68" VerticalAlignment="Center"
+                          AutomationProperties.AccessibilityView="Raw" IsHitTestVisible="False">
+                        <Border Width="44" Height="56" CornerRadius="5" Margin="0,0,8,6"
+                                Background="{ThemeResource HomeLayerBrush}" BorderThickness="1"
+                                BorderBrush="{ThemeResource HomePaperStrokeBrush}" RenderTransformOrigin="0.5,0.8">
+                            <Border.RenderTransform><RotateTransform Angle="-10" /></Border.RenderTransform>
+                        </Border>
+                        <Border Width="44" Height="56" CornerRadius="5" Margin="8,4,0,0"
+                                Background="{ThemeResource HomePaperBrush}" BorderThickness="1"
+                                BorderBrush="{ThemeResource HomePaperStrokeBrush}">
+                            <FontIcon Glyph="&#xE735;" FontSize="21" Foreground="{ThemeResource ShelfFavoriteBrush}" />
+                        </Border>
+                    </Grid>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="5" MaxWidth="260">
+                        <TextBlock Text="{Binding NoFavoritesYet, Source={StaticResource UiText}}" FontSize="20" FontWeight="SemiBold"
+                                   AutomationProperties.HeadingLevel="Level2" Foreground="{ThemeResource HomeTextBrush}" />
+                        <TextBlock x:Name="FavoritesHint" TextWrapping="Wrap" FontSize="14" LineHeight="20"
+                                   Foreground="{ThemeResource HomeSecondaryTextBrush}" />
+                    </StackPanel>
+                </Grid>
+
+                <ScrollViewer
+                    x:Name="EmptyState"
+                    Grid.Row="1"
+                    HorizontalScrollMode="Disabled"
+                    SizeChanged="EmptyState_SizeChanged">
+                    <Grid MinHeight="{x:Bind EmptyState.ViewportHeight, Mode=OneWay}" Padding="0,8">
+                        <StackPanel
+                            x:Name="HomeOpener"
+                            Orientation="Horizontal"
+                            Spacing="{StaticResource SpaceXL}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                            <Viewbox
+                                x:Name="HomePaperArt"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                AutomationProperties.AccessibilityView="Raw">
+                                <Grid
+                                    Width="{StaticResource HomePaperStackWidth}"
+                                    Height="{StaticResource HomePaperStackHeight}">
+                                    <Border
+                                        Width="{StaticResource HomePaperWidth}"
+                                        Height="{StaticResource HomePaperHeight}"
+                                        Margin="18,6,0,0"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        CornerRadius="{StaticResource RadiusMedium}"
+                                        Background="{ThemeResource HomeLayerBrush}"
+                                        BorderBrush="{ThemeResource HomePaperStrokeBrush}"
+                                        BorderThickness="1"
+                                        RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <RotateTransform Angle="10" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                    <Border
+                                        Width="{StaticResource HomePaperWidth}"
+                                        Height="{StaticResource HomePaperHeight}"
+                                        Margin="8,12,0,0"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        Padding="10"
+                                        CornerRadius="{StaticResource RadiusMedium}"
+                                        Background="{ThemeResource HomePaperBrush}"
+                                        BorderBrush="{ThemeResource HomePaperStrokeBrush}"
+                                        BorderThickness="1"
+                                        RenderTransformOrigin="0.5,0.5">
+                                        <Border.RenderTransform>
+                                            <RotateTransform Angle="-7" />
+                                        </Border.RenderTransform>
+                                        <Grid>
+                                            <Border
+                                                Padding="4,2"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top"
+                                                Background="{ThemeResource HomeLayerBrush}"
+                                                CornerRadius="{StaticResource RadiusSmall}">
+                                                <TextBlock
+                                                    Text="PDF"
+                                                    FontSize="{StaticResource HomePaperLabelSize}"
+                                                    FontWeight="Bold"
+                                                    Foreground="{ThemeResource HomeTextBrush}" />
+                                            </Border>
+                                            <StackPanel VerticalAlignment="Bottom" Spacing="{StaticResource SpaceXS}">
+                                                <Rectangle Width="36" Height="1" HorizontalAlignment="Left" Fill="{ThemeResource HomePaperStrokeBrush}" />
+                                                <Rectangle Width="28" Height="1" HorizontalAlignment="Left" Fill="{ThemeResource HomePaperStrokeBrush}" />
+                                                <Rectangle Width="20" Height="1" HorizontalAlignment="Left" Fill="{ThemeResource HomePaperStrokeBrush}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </Viewbox>
+                            <StackPanel VerticalAlignment="Center" Spacing="{StaticResource SpaceXS}">
+                                <TextBlock
+                                    x:Name="HomeOpenHeading"
+                                    Text="{Binding NoRecentFiles, Source={StaticResource UiText}}"
+                                    AutomationProperties.HeadingLevel="Level1"
+                                    Style="{StaticResource HomeHeadingStyle}"
+                                    FontSize="{StaticResource HomeOpenerHeadingSize}"
+                                    TextWrapping="Wrap" />
+                                <TextBlock
+                                    x:Name="HomeOpenHint"
+                                    Text="{Binding DragAFileHereToOpenIt, Source={StaticResource UiText}}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource HomeSecondaryTextBrush}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Window-level notices: messages that arrive with no document to
+                 attach them to (startup problems, a missing recent file, a
+                 background failure). Anything about an open document goes to
+                 that DocumentView's own NoticeHost instead, which is bounded to
+                 the page area so it can't cover the sidebar.
+
+                 Declared before the zoom pill and find bar so active UI always
+                 paints over a passive notice, never the other way round. -->
+            <controls:NoticeHost x:Name="WindowNotice" />
+
+            <!-- The format bar for the text box being typed into. It floats at
+                 the top of the page area, out of the way of a caret that is
+                 usually further down, and only exists while a box is open.
+                 Its controls are built in code so the font and size lists come
+                 from one place (TextBoxFonts) rather than being duplicated in
+                 markup that could drift from it. -->
+            <Grid x:Name="ReaderOverlays">
+            <Border
+                x:Name="TextFormatBar"
+                Visibility="Collapsed"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="8,12,8,0"
+                MinHeight="{StaticResource TouchTargetMin}"
+                Padding="6,4"
+                Background="{ThemeResource HomeCardBrush}"
+                CornerRadius="{StaticResource ReaderToolbarRadius}"
+                Translation="0,0,24">
+                <Border.Shadow><ThemeShadow /></Border.Shadow>
+                <Border.Resources>
+                    <ResourceDictionary>
+                        <ResourceDictionary.MergedDictionaries>
+                            <ResourceDictionary Source="ms-appx:///Styles/ReaderToolbarFeedback.xaml" />
+                        </ResourceDictionary.MergedDictionaries>
+                        <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="HomeSectionBrush" />
+                        <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="HomePaperStrokeBrush" />
+                        <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="HomePaperStrokeBrush" />
+                        <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="AccentTextFillColorPrimaryBrush" />
+                        <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="AccentTextFillColorPrimaryBrush" />
+                        <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="AccentTextFillColorPrimaryBrush" />
+                    </ResourceDictionary>
+                </Border.Resources>
+                <ScrollViewer x:Name="TextFormatScroll" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden"
+                              VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="TextFormatControls" Orientation="Horizontal" Spacing="2"
+                                VerticalAlignment="Center" PointerWheelChanged="TextFormat_PointerWheelChanged" />
+                </ScrollViewer>
+            </Border>
+
+            <!-- Find bar -->
+            <Border
+                x:Name="FindBar"
+                Visibility="Collapsed"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Right"
+                Margin="0,8,16,0"
+                Padding="6"
+                Background="{ThemeResource HomeCardBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <TextBox
+                        x:Name="FindBox"
+                        Width="220"
+                        PlaceholderText="{Binding FindInDocument, Source={StaticResource UiText}}"
+                        TextChanged="FindBox_TextChanged"
+                        KeyDown="FindBox_KeyDown" />
+                    <TextBlock
+                        x:Name="FindCount"
+                        VerticalAlignment="Center"
+                        MinWidth="64"
+                        Margin="4,0"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <!-- These four were the smallest targets in the app, about
+                         28x26 from padding alone. Squared off to the touch
+                         minimum; the glyphs are unchanged. -->
+                    <ToggleButton x:Name="MatchCaseButton" Click="MatchCase_Click" AutomationProperties.Name="{Binding MatchCase, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding MatchCase, Source={StaticResource UiText}}"
+                                  Width="{StaticResource TouchTargetMin}" Height="{StaticResource TouchTargetMin}" Padding="0">
+                        <TextBlock Text="Aa" FontSize="13" />
+                    </ToggleButton>
+                    <Button x:Name="FindPrev" Click="FindPrev_Click" AutomationProperties.Name="{Binding PreviousMatch, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding PreviousShiftEnter, Source={StaticResource UiText}}"
+                            Width="{StaticResource TouchTargetMin}" Height="{StaticResource TouchTargetMin}" Padding="0">
+                        <FontIcon Glyph="&#xE70E;" FontSize="12" />
+                    </Button>
+                    <Button x:Name="FindNext" Click="FindNext_Click" AutomationProperties.Name="{Binding NextMatch, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding NextEnter, Source={StaticResource UiText}}"
+                            Width="{StaticResource TouchTargetMin}" Height="{StaticResource TouchTargetMin}" Padding="0">
+                        <FontIcon Glyph="&#xE70D;" FontSize="12" />
+                    </Button>
+                    <Button x:Name="FindClose" Click="FindClose_Click" AutomationProperties.Name="{Binding CloseFindBar, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding CloseEsc, Source={StaticResource UiText}}"
+                            Width="{StaticResource TouchTargetMin}" Height="{StaticResource TouchTargetMin}" Padding="0">
+                        <FontIcon Glyph="&#xE711;" FontSize="12" />
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            </Grid>
+
+            <Border x:Name="ReaderQuickTools" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="8,4,16,16" Padding="3,0" Translation="0,0,24"
+                    Background="{ThemeResource HomeCardBrush}" CornerRadius="{StaticResource ReaderToolbarRadius}">
+                <Border.Resources>
+                    <ResourceDictionary Source="ms-appx:///Styles/ReaderToolbarFeedback.xaml" />
+                </Border.Resources>
+                <Border.Shadow><ThemeShadow /></Border.Shadow>
+                <Grid ColumnDefinitions="Auto,Auto" RowDefinitions="Auto,Auto">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                MinHeight="{StaticResource TouchTargetMin}">
+                        <Button x:Name="QuickToolsToggle" Style="{StaticResource ZoomControlButtonStyle}" Click="QuickToolsToggle_Click">
+                            <FontIcon x:Name="QuickToolsToggleGlyph" FontSize="12" />
+                        </Button>
+                        <Grid Height="28" ColumnDefinitions="Auto,Auto" VerticalAlignment="Center">
+                            <NumberBox x:Name="PageBox" Width="44" Padding="4,0"
+                                       Minimum="1" SpinButtonPlacementMode="Hidden"
+                                       IsEnabled="False" ValueChanged="PageBox_ValueChanged"
+                                       FontSize="12" FontWeight="Normal" Background="{ThemeResource HomeLayerBrush}"
+                                       BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                       CornerRadius="{StaticResource RadiusMedium}"
+                                       AutomationProperties.Name="{Binding PageNumber, Source={StaticResource UiText}}"
+                                       ToolTipService.ToolTip="{Binding GoToPageShortcut, Source={StaticResource UiText}}">
+                                <NumberBox.Template>
+                                    <ControlTemplate TargetType="NumberBox">
+                                        <TextBox x:Name="InputBox" MinWidth="0" MinHeight="0" TextAlignment="Center"
+                                                 InputScope="{TemplateBinding InputScope}" FontFamily="{TemplateBinding FontFamily}"
+                                                 FontSize="{TemplateBinding FontSize}"
+                                                 FontWeight="{TemplateBinding FontWeight}" Foreground="{TemplateBinding Foreground}"
+                                                 Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                                 BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
+                                                 Padding="{TemplateBinding Padding}">
+                                            <TextBox.Template>
+                                                <ControlTemplate TargetType="TextBox">
+                                                    <Grid Background="Transparent">
+                                                        <VisualStateManager.VisualStateGroups>
+                                                            <VisualStateGroup x:Name="CommonStates">
+                                                                <VisualState x:Name="Normal" />
+                                                                <VisualState x:Name="Focused">
+                                                                    <VisualState.Setters>
+                                                                        <Setter Target="FieldBorder.BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+                                                                        <Setter Target="PageNumberDisplay.Visibility" Value="Collapsed" />
+                                                                        <Setter Target="ContentElement.Opacity" Value="1" />
+                                                                    </VisualState.Setters>
+                                                                </VisualState>
+                                                                <VisualState x:Name="Disabled">
+                                                                    <VisualState.Setters>
+                                                                        <Setter Target="PageNumberDisplay.Opacity" Value="0.5" />
+                                                                    </VisualState.Setters>
+                                                                </VisualState>
+                                                            </VisualStateGroup>
+                                                        </VisualStateManager.VisualStateGroups>
+                                                        <Border x:Name="FieldBorder" Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="{TemplateBinding CornerRadius}" />
+                                                        <ScrollViewer x:Name="ContentElement" VerticalAlignment="Center"
+                                                                      Margin="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}"
+                                                                      Opacity="0"
+                                                                      IsTabStop="False" AutomationProperties.AccessibilityView="Raw"
+                                                                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                                                                      ZoomMode="Disabled" />
+                                                        <TextBlock x:Name="PageNumberDisplay" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   Text="{Binding Text, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                   FontFamily="{TemplateBinding FontFamily}" FontSize="{TemplateBinding FontSize}"
+                                                                   FontWeight="{TemplateBinding FontWeight}" Foreground="{TemplateBinding Foreground}"
+                                                                   IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+                                                    </Grid>
+                                                </ControlTemplate>
+                                            </TextBox.Template>
+                                        </TextBox>
+                                    </ControlTemplate>
+                                </NumberBox.Template>
+                            </NumberBox>
+                            <TextBlock x:Name="PageCountLabel" Grid.Column="1" Margin="3,0,1,0" VerticalAlignment="Center"
+                                       FontFamily="{Binding FontFamily, ElementName=PageBox}"
+                                       FontSize="{Binding FontSize, ElementName=PageBox}"
+                                       FontWeight="{Binding FontWeight, ElementName=PageBox}"
+                                       Foreground="{ThemeResource HomeSecondaryTextBrush}" />
+                        </Grid>
+                        <Button x:Name="PreviousPageButton" Style="{StaticResource ZoomControlButtonStyle}" IsEnabled="False"
+                                Click="PreviousPageButton_Click" AutomationProperties.Name="{Binding PreviousPage, Source={StaticResource UiText}}"
+                                ToolTipService.ToolTip="{Binding PreviousPage, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                        </Button>
+                        <Button x:Name="NextPageButton" Style="{StaticResource ZoomControlButtonStyle}" IsEnabled="False"
+                                Click="NextPageButton_Click" AutomationProperties.Name="{Binding NextPage, Source={StaticResource UiText}}"
+                                ToolTipService.ToolTip="{Binding NextPage, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                        </Button>
+                    </StackPanel>
+                    <StackPanel x:Name="QuickZoomTools" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
+                                VerticalAlignment="Center" MinHeight="{StaticResource TouchTargetMin}">
+                        <Border x:Name="QuickZoomSeparator" Style="{StaticResource HeaderSeparatorStyle}" Margin="1,0" />
+                        <Button
+                            x:Name="ZoomOutButton"
+                            Style="{StaticResource ZoomControlButtonStyle}"
+                            Click="ZoomOutButton_Click"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding ZoomOut, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding ZoomOutCtrl, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xE738;" FontSize="14" />
+                        </Button>
+                        <Button
+                            x:Name="ZoomLabelButton"
+                            Background="{ThemeResource HomeLayerBrush}"
+                            BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+                            Height="28"
+                            MinWidth="50"
+                            Padding="4,0"
+                            CornerRadius="{StaticResource RadiusMedium}"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding ZoomLevel, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding ZoomLevel, Source={StaticResource UiText}}">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <TextBlock x:Name="ZoomLabel" Text="100%" FontWeight="SemiBold"
+                                           Style="{StaticResource CaptionTextBlockStyle}" VerticalAlignment="Center" />
+                                <FontIcon Glyph="&#xE70D;" FontSize="9" Foreground="{ThemeResource HomeSecondaryTextBrush}" />
+                            </StackPanel>
+                            <Button.Flyout>
+                                <MenuFlyout Placement="TopEdgeAlignedRight">
+                                    <MenuFlyoutItem Text="50%" Click="ZoomPreset_Click" Tag="0.5" />
+                                    <MenuFlyoutItem Text="100%" Click="ZoomPreset_Click" Tag="1.0" KeyboardAcceleratorTextOverride="Ctrl+1" />
+                                    <MenuFlyoutItem Text="150%" Click="ZoomPreset_Click" Tag="1.5" />
+                                    <MenuFlyoutItem Text="200%" Click="ZoomPreset_Click" Tag="2.0" />
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+                        <Button
+                            x:Name="ZoomInButton"
+                            Style="{StaticResource ZoomControlButtonStyle}"
+                            Click="ZoomInButton_Click"
+                            IsEnabled="False"
+                            AutomationProperties.Name="{Binding ZoomIn, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding ZoomInCtrl, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        </Button>
+                        <Button x:Name="PresentButton" Style="{StaticResource ZoomControlButtonStyle}" IsEnabled="False"
+                                Click="PresentButton_Click" AutomationProperties.Name="{Binding Presentation, Source={StaticResource UiText}}"
+                                ToolTipService.ToolTip="{Binding PresentationShortcut, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xE7F4;" FontSize="14" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border x:Name="ImportStatus" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Top"
+                    Margin="0,12,0,0" Background="{ThemeResource HomeCardBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="14,8" AutomationProperties.LiveSetting="Polite">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <ProgressRing IsActive="True" Width="16" Height="16" />
+                    <TextBlock Text="{Binding CopyingToLibrary, Source={StaticResource UiText}}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+            <controls:CommandPalette x:Name="Palette" />
+        </Grid>
+
+        <ScrollViewer x:Name="SettingsPage" Grid.Row="1" Grid.RowSpan="2" Margin="4" CornerRadius="6"
+                      Background="{ThemeResource HomeCanvasBrush}" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+            <Grid Padding="28,24,28,32">
+                <StackPanel MaxWidth="704" HorizontalAlignment="Stretch" Spacing="20">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button x:Name="SettingsBack" Style="{StaticResource SubtleButtonStyle}" Click="SettingsBack_Click" AutomationProperties.Name="{Binding Back, Source={StaticResource UiText}}">
+                            <FontIcon Glyph="&#xE72B;" FontSize="16" />
+                        </Button>
+                        <TextBlock Text="{Binding Settings, Source={StaticResource UiText}}" Style="{StaticResource TitleTextBlockStyle}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding Appearance, Source={StaticResource UiText}}" FontSize="14" FontWeight="SemiBold" />
+                        <Border Background="{ThemeResource HomeCardBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" BorderThickness="1" CornerRadius="8">
+                            <StackPanel>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" Padding="16,8" MinHeight="52">
+                                    <TextBlock Text="{Binding Theme, Source={StaticResource UiText}}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <ComboBox x:Name="ThemeChoice" Grid.Column="1" Width="158" AutomationProperties.Name="{Binding Theme, Source={StaticResource UiText}}" SelectionChanged="PreferenceChanged">
+                                        <ComboBoxItem Content="{Binding FollowSystem, Source={StaticResource UiText}}" />
+                                        <ComboBoxItem Content="{Binding Light, Source={StaticResource UiText}}" />
+                                        <ComboBoxItem Content="{Binding Dark, Source={StaticResource UiText}}" />
+                                    </ComboBox>
+                                </Grid>
+                                <Border Height="1" Margin="16,0" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" Padding="16,8" MinHeight="52">
+                                    <TextBlock Text="{Binding Language, Source={StaticResource UiText}}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <ComboBox x:Name="LanguageChoice" Grid.Column="1" Width="158" AutomationProperties.Name="{Binding Language, Source={StaticResource UiText}}" SelectionChanged="PreferenceChanged">
+                                        <ComboBoxItem Content="{Binding FollowSystem, Source={StaticResource UiText}}" />
+                                        <ComboBoxItem Content="English" />
+                                        <ComboBoxItem Content="简体中文" />
+                                    </ComboBox>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding LibraryStorage, Source={StaticResource UiText}}" FontSize="14" FontWeight="SemiBold" />
+                        <Border Background="{ThemeResource HomeCardBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" BorderThickness="1" CornerRadius="8" Padding="16,12">
+                            <StackPanel Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel VerticalAlignment="Center" Spacing="4">
+                                        <TextBlock Text="{Binding LibraryFolderLabel, Source={StaticResource UiText}}" />
+                                        <TextBlock x:Name="LibraryPath" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True" />
+                                    </StackPanel>
+                                    <Button x:Name="ChangeLibraryFolder" Grid.Column="1" VerticalAlignment="Center" Click="ChangeLibraryFolder_Click"
+                                            Content="{Binding ChangeFolder, Source={StaticResource UiText}}" />
+                                </Grid>
+                                <TextBlock Text="{Binding LibraryFolderHint, Source={StaticResource UiText}}" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <HyperlinkButton x:Name="ResetLibraryFolder" Padding="0,4" Visibility="Collapsed" Click="ResetLibraryFolder_Click"
+                                                 Content="{Binding ResetFolder, Source={StaticResource UiText}}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding DefaultPdfAppLabel, Source={StaticResource UiText}}" FontSize="14" FontWeight="SemiBold" />
+                        <Border Background="{ThemeResource HomeCardBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" BorderThickness="1" CornerRadius="8">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" Padding="16,12" MinHeight="52">
+                                <TextBlock x:Name="DefaultPdfHint" Text="{Binding DefaultPdfAppHint, Source={StaticResource UiText}}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <TextBlock x:Name="DefaultPdfStatus" Grid.ColumnSpan="2" Text="{Binding DefaultPdfAppStatus, Source={StaticResource UiText}}"
+                                           Visibility="Collapsed" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <Button x:Name="SetDefaultPdfButton" Grid.Column="1" VerticalAlignment="Center" Content="{Binding SetDefaultPdfApp, Source={StaticResource UiText}}"
+                                        Click="SetDefaultPdfApp_Click" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding Startup, Source={StaticResource UiText}}" FontSize="14" FontWeight="SemiBold" />
+                        <Border Background="{ThemeResource HomeCardBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" BorderThickness="1" CornerRadius="8">
+                            <StackPanel>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" Padding="16,8" MinHeight="52">
+                                    <TextBlock Text="{Binding ReopenTabsAtStartup, Source={StaticResource UiText}}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <ToggleSwitch x:Name="RestoreChoice" Grid.Column="1" MinWidth="0" OffContent="" OnContent="" AutomationProperties.Name="{Binding ReopenTabsAtStartup, Source={StaticResource UiText}}" Toggled="RestoreSession_Toggled" />
+                                </Grid>
+                                <Border Height="1" Margin="16,0" Background="{ThemeResource HomeOutlineBrush}" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" Padding="16,8" MinHeight="52">
+                                    <TextBlock Text="{Binding CloseBehavior, Source={StaticResource UiText}}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <ComboBox x:Name="CloseBehaviorChoice" Grid.Column="1" MinWidth="152" VerticalAlignment="Center"
+                                              AutomationProperties.Name="{Binding CloseBehavior, Source={StaticResource UiText}}" SelectionChanged="CloseBehavior_SelectionChanged">
+                                        <ComboBoxItem Content="{Binding CloseToTray, Source={StaticResource UiText}}" />
+                                        <ComboBoxItem Content="{Binding ExitPdfDesk, Source={StaticResource UiText}}" />
+                                    </ComboBox>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Fullscreen presentation overlay: covers ALL rows (tabs included). -->
+        <controls:PresentationView
+            x:Name="Presentation"
+            Grid.Row="0"
+            Grid.RowSpan="3" />
+    </Grid>
+</Window>

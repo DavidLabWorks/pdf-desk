@@ -1,6 +1,6 @@
 # Records short looping demos of the running application for the website.
 #
-# The site's showcase rows are stills, and two of Rune's better moments are
+# The site's showcase rows are stills, and two of PDFDesk's better moments are
 # motion: dragging page thumbnails to reorder a document, and the sidebar
 # sliding open before night mode inverts the page. This drives the real
 # application and grabs a timed frame sequence. tools/gen-site-demos.ps1 turns
@@ -15,10 +15,10 @@
 # never the user's own files, because filenames leak in the tab strip and the
 # recents list. A clip shows the tab strip for its whole duration, so this
 # matters more here than for a still. This script also points the application at
-# a throwaway state directory through RUNE_STATE_DIR (see MainWindow.xaml.cs)
-# and seeds it with a clean state.json, so a recording cannot pick up real
-# recents, theme or tabs. Note RUNE_STATE_DIR redirects the state store ONLY:
-# ThumbnailCache, SignatureStore and ShareService each derive %LOCALAPPDATA%\Rune
+# a throwaway state directory through PDFDESK_STATE_DIR (see MainWindow.xaml.cs)
+# and seeds it with a clean PDFDesk.json, so a recording cannot pick up real
+# recents, theme or tabs. Note PDFDESK_STATE_DIR redirects the state store ONLY:
+# ThumbnailCache, SignatureStore and PdfClipboard each derive %LOCALAPPDATA%\PDFDesk
 # independently. None of them is on screen for these clips, but do not assume
 # full isolation.
 #
@@ -149,7 +149,7 @@ $ErrorActionPreference = 'Stop'
 # This must happen before System.Drawing loads and before any window geometry is
 # read, or GetWindowRect lies to us by the display scaling factor and every
 # bitmap comes out the wrong size.
-Add-Type -Namespace RuneDpi -Name Api -MemberDefinition @'
+Add-Type -Namespace PDFDeskDpi -Name Api -MemberDefinition @'
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 
@@ -163,7 +163,7 @@ Add-Type -Namespace RuneDpi -Name Api -MemberDefinition @'
 $dpiOk = $false
 try {
     # -4 is DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2.
-    $dpiOk = [RuneDpi.Api]::SetProcessDpiAwarenessContext([IntPtr](-4))
+    $dpiOk = [PDFDeskDpi.Api]::SetProcessDpiAwarenessContext([IntPtr](-4))
 } catch {
     $dpiOk = $false
 }
@@ -171,7 +171,7 @@ if (-not $dpiOk) {
     try {
         # 2 is PROCESS_PER_MONITOR_DPI_AWARE. Returns 0 for S_OK, or
         # E_ACCESSDENIED if awareness has already latched for this process.
-        $dpiOk = ([RuneDpi.Api]::SetProcessDpiAwareness(2) -eq 0)
+        $dpiOk = ([PDFDeskDpi.Api]::SetProcessDpiAwareness(2) -eq 0)
     } catch {
         $dpiOk = $false
     }
@@ -182,7 +182,7 @@ if (-not $dpiOk) {
     # before giving up, or -Takes 2 and every re-run would fail on a lie.
     try {
         $current = 0
-        if (([RuneDpi.Api]::GetProcessDpiAwareness([IntPtr]::Zero, [ref]$current) -eq 0) -and ($current -ge 2)) {
+        if (([PDFDeskDpi.Api]::GetProcessDpiAwareness([IntPtr]::Zero, [ref]$current) -eq 0) -and ($current -ge 2)) {
             $dpiOk = $true
         }
     } catch {
@@ -209,7 +209,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 
-public static class RuneCap
+public static class PDFDeskCap
 {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
@@ -334,10 +334,10 @@ function Wait-Ms([double]$ms) {
 }
 
 function Get-ScreenPoint([int]$clientX, [int]$clientY) {
-    $p = New-Object 'RuneCap+POINT'
+    $p = New-Object 'PDFDeskCap+POINT'
     $p.X = $clientX
     $p.Y = $clientY
-    [void][RuneCap]::ClientToScreen($script:Hwnd, [ref]$p)
+    [void][PDFDeskCap]::ClientToScreen($script:Hwnd, [ref]$p)
     return @($p.X, $p.Y)
 }
 
@@ -345,11 +345,11 @@ function Send-MouseTo([int]$screenX, [int]$screenY) {
     # Trap 9: normalised 0..65535 over the primary monitor, not pixels.
     $nx = [uint32][Math]::Round($screenX * 65535.0 / ($script:ScreenW - 1))
     $ny = [uint32][Math]::Round($screenY * 65535.0 / ($script:ScreenH - 1))
-    [RuneCap]::mouse_event([uint32]($MOUSEEVENTF_MOVE -bor $MOUSEEVENTF_ABSOLUTE), $nx, $ny, 0, [UIntPtr]::Zero)
+    [PDFDeskCap]::mouse_event([uint32]($MOUSEEVENTF_MOVE -bor $MOUSEEVENTF_ABSOLUTE), $nx, $ny, 0, [UIntPtr]::Zero)
 }
 
 function Send-MouseButton([int]$flag) {
-    [RuneCap]::mouse_event([uint32]$flag, 0, 0, 0, [UIntPtr]::Zero)
+    [PDFDeskCap]::mouse_event([uint32]$flag, 0, 0, 0, [UIntPtr]::Zero)
 }
 
 function Send-Click([int]$clientX, [int]$clientY) {
@@ -362,41 +362,41 @@ function Send-Click([int]$clientX, [int]$clientY) {
 }
 
 function Send-Key([int]$vk, [switch]$Extended) {
-    $scan = [byte]([RuneCap]::MapVirtualKey([uint32]$vk, 0))
+    $scan = [byte]([PDFDeskCap]::MapVirtualKey([uint32]$vk, 0))
     $flags = 0
     if ($Extended) { $flags = $KEYEVENTF_EXTENDEDKEY }
-    [RuneCap]::keybd_event([byte]$vk, $scan, [uint32]$flags, [UIntPtr]::Zero)
+    [PDFDeskCap]::keybd_event([byte]$vk, $scan, [uint32]$flags, [UIntPtr]::Zero)
     Wait-Ms $DwellMs
-    [RuneCap]::keybd_event([byte]$vk, $scan, [uint32]($flags -bor $KEYEVENTF_KEYUP), [UIntPtr]::Zero)
+    [PDFDeskCap]::keybd_event([byte]$vk, $scan, [uint32]($flags -bor $KEYEVENTF_KEYUP), [UIntPtr]::Zero)
 }
 
 function Send-Chord([int]$modVk, [int]$vk, [switch]$Extended) {
-    $modScan = [byte]([RuneCap]::MapVirtualKey([uint32]$modVk, 0))
-    $keyScan = [byte]([RuneCap]::MapVirtualKey([uint32]$vk, 0))
+    $modScan = [byte]([PDFDeskCap]::MapVirtualKey([uint32]$modVk, 0))
+    $keyScan = [byte]([PDFDeskCap]::MapVirtualKey([uint32]$vk, 0))
     $flags = 0
     if ($Extended) { $flags = $KEYEVENTF_EXTENDEDKEY }
 
-    [RuneCap]::keybd_event([byte]$modVk, $modScan, 0, [UIntPtr]::Zero)
+    [PDFDeskCap]::keybd_event([byte]$modVk, $modScan, 0, [UIntPtr]::Zero)
     Wait-Ms 30
-    [RuneCap]::keybd_event([byte]$vk, $keyScan, [uint32]$flags, [UIntPtr]::Zero)
+    [PDFDeskCap]::keybd_event([byte]$vk, $keyScan, [uint32]$flags, [UIntPtr]::Zero)
     Wait-Ms $DwellMs
-    [RuneCap]::keybd_event([byte]$vk, $keyScan, [uint32]($flags -bor $KEYEVENTF_KEYUP), [UIntPtr]::Zero)
+    [PDFDeskCap]::keybd_event([byte]$vk, $keyScan, [uint32]($flags -bor $KEYEVENTF_KEYUP), [UIntPtr]::Zero)
     Wait-Ms 30
-    [RuneCap]::keybd_event([byte]$modVk, $modScan, [uint32]$KEYEVENTF_KEYUP, [UIntPtr]::Zero)
+    [PDFDeskCap]::keybd_event([byte]$modVk, $modScan, [uint32]$KEYEVENTF_KEYUP, [UIntPtr]::Zero)
 }
 
 function Send-KeyDown([int]$vk, [switch]$Extended) {
-    $scan = [byte]([RuneCap]::MapVirtualKey([uint32]$vk, 0))
+    $scan = [byte]([PDFDeskCap]::MapVirtualKey([uint32]$vk, 0))
     $flags = 0
     if ($Extended) { $flags = $KEYEVENTF_EXTENDEDKEY }
-    [RuneCap]::keybd_event([byte]$vk, $scan, [uint32]$flags, [UIntPtr]::Zero)
+    [PDFDeskCap]::keybd_event([byte]$vk, $scan, [uint32]$flags, [UIntPtr]::Zero)
 }
 
 function Send-KeyUp([int]$vk, [switch]$Extended) {
-    $scan = [byte]([RuneCap]::MapVirtualKey([uint32]$vk, 0))
+    $scan = [byte]([PDFDeskCap]::MapVirtualKey([uint32]$vk, 0))
     $flags = $KEYEVENTF_KEYUP
     if ($Extended) { $flags = $flags -bor $KEYEVENTF_EXTENDEDKEY }
-    [RuneCap]::keybd_event([byte]$vk, $scan, [uint32]$flags, [UIntPtr]::Zero)
+    [PDFDeskCap]::keybd_event([byte]$vk, $scan, [uint32]$flags, [UIntPtr]::Zero)
 }
 
 # Emits a short burst of moves ending at one point. A tick that owns a move cue
@@ -464,10 +464,10 @@ if (($pdfName -notmatch '^NASA') -and (-not $IAcceptLicenceRisk)) {
 }
 
 if (-not $Exe) {
-    $Exe = Join-Path $repo 'src\Rune.App\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\Rune.exe'
+    $Exe = Join-Path $repo 'src\PDFDesk.App\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\PDFDesk.exe'
 }
 if (-not (Test-Path $Exe)) {
-    throw "No Rune.exe at $Exe. Build it first: dotnet build src/Rune.App/Rune.App.csproj -p:Platform=x64"
+    throw "No PDFDesk.exe at $Exe. Build it first: dotnet build src/PDFDesk.App/PDFDesk.App.csproj -p:Platform=x64"
 }
 
 if (-not $OutRoot) { $OutRoot = Join-Path $repo 'artifacts\demo' }
@@ -478,8 +478,8 @@ $clipRoot = Join-Path $OutRoot $Clip
 New-Item -ItemType Directory -Path $clipRoot -Force | Out-Null
 
 $stateDir = Join-Path $OutRoot 'state'
-$ScreenW = [RuneCap]::GetSystemMetrics($SM_CXSCREEN)
-$ScreenH = [RuneCap]::GetSystemMetrics($SM_CYSCREEN)
+$ScreenW = [PDFDeskCap]::GetSystemMetrics($SM_CXSCREEN)
+$ScreenH = [PDFDeskCap]::GetSystemMetrics($SM_CYSCREEN)
 
 "clip        : $Clip"
 "document    : $pdfName"
@@ -516,9 +516,9 @@ function Invoke-Take([int]$TakeNumber) {
             SidebarOpenByDefault = $sidebarOpen
         }
     }
-    $seed | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $stateDir 'state.json') -Encoding UTF8
+    $seed | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $stateDir 'PDFDesk.json') -Encoding UTF8
 
-    $env:RUNE_STATE_DIR = $stateDir
+    $env:PDFDESK_STATE_DIR = $stateDir
 
     # Quoted, because Start-Process joins ArgumentList with spaces and quotes
     # nothing, and this repo's own path contains one ("...\code\pdf reader").
@@ -534,29 +534,29 @@ function Invoke-Take([int]$TakeNumber) {
         while ([DateTime]::UtcNow -lt $deadline) {
             $proc.Refresh()
             if ($proc.HasExited) {
-                throw "Rune.exe exited with code $($proc.ExitCode) before showing a window. If this is 0x800711C7, Smart App Control has flipped to Enforce and is blocking unsigned local builds (PROJECT.md section 7)."
+                throw "PDFDesk.exe exited with code $($proc.ExitCode) before showing a window. If this is 0x800711C7, Smart App Control has flipped to Enforce and is blocking unsigned local builds (PROJECT.md section 7)."
             }
             if ($proc.MainWindowHandle -ne [IntPtr]::Zero) { $hwnd = $proc.MainWindowHandle; break }
             Start-Sleep -Milliseconds 150
         }
-        if ($hwnd -eq [IntPtr]::Zero) { throw "Rune.exe never produced a main window within 30 s." }
+        if ($hwnd -eq [IntPtr]::Zero) { throw "PDFDesk.exe never produced a main window within 30 s." }
         $script:Hwnd = $hwnd
 
         # Position and size, then leave it alone. Never SW_MAXIMIZE, and never
         # re-focus after sizing: PROJECT.md section 13 trap 4 records that
         # maximizing after sizing to 1920x1080 silently invalidates every
         # coordinate computed below.
-        [void][RuneCap]::ShowWindow($hwnd, $SW_RESTORE)
+        [void][PDFDeskCap]::ShowWindow($hwnd, $SW_RESTORE)
         Start-Sleep -Milliseconds 250
-        [void][RuneCap]::SetForegroundWindow($hwnd)
+        [void][PDFDeskCap]::SetForegroundWindow($hwnd)
         Start-Sleep -Milliseconds 250
-        [void][RuneCap]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, $WindowWidth, $WindowHeight, $SWP_NOZORDER)
+        [void][PDFDeskCap]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, $WindowWidth, $WindowHeight, $SWP_NOZORDER)
         Start-Sleep -Milliseconds 400
 
         # Trap 2's payoff: if this process were not per-monitor aware, a 1920
         # request would read back as 1536 at 125 per cent scaling.
-        $wr = New-Object 'RuneCap+RECT'
-        [void][RuneCap]::GetWindowRect($hwnd, [ref]$wr)
+        $wr = New-Object 'PDFDeskCap+RECT'
+        [void][PDFDeskCap]::GetWindowRect($hwnd, [ref]$wr)
         $winW = $wr.Right - $wr.Left
         $winH = $wr.Bottom - $wr.Top
         if ($winW -ne $WindowWidth -or $winH -ne $WindowHeight) {
@@ -565,10 +565,10 @@ function Invoke-Take([int]$TakeNumber) {
 
         # Trap 4: name the three coordinate spaces and print the offsets between
         # them, rather than discovering a 9 px drift by eye later.
-        $origin = New-Object 'RuneCap+POINT'
+        $origin = New-Object 'PDFDeskCap+POINT'
         $origin.X = 0
         $origin.Y = 0
-        [void][RuneCap]::ClientToScreen($hwnd, [ref]$origin)
+        [void][PDFDeskCap]::ClientToScreen($hwnd, [ref]$origin)
         $offX = $origin.X - $wr.Left
         $offY = $origin.Y - $wr.Top
         if ($offX -lt 0 -or $offX -gt 12 -or $offY -lt 0 -or $offY -gt 48) {
@@ -583,15 +583,15 @@ function Invoke-Take([int]$TakeNumber) {
         # as a side effect. Assert it instead, and if it is not foreground, click
         # the active tab, which is inert but activates the window the way a person
         # would.
-        if ([RuneCap]::GetForegroundWindow() -ne $hwnd) {
+        if ([PDFDeskCap]::GetForegroundWindow() -ne $hwnd) {
             Send-Click 200 30
             Wait-Ms 400
         }
-        if ([RuneCap]::GetForegroundWindow() -ne $hwnd) {
-            throw "Rune is not the foreground window, so synthetic keys would land in whatever is. Close anything that steals focus and try again."
+        if ([PDFDeskCap]::GetForegroundWindow() -ne $hwnd) {
+            throw "PDFDesk is not the foreground window, so synthetic keys would land in whatever is. Close anything that steals focus and try again."
         }
 
-        $dpi = [RuneCap]::GetDpiForWindow($hwnd)
+        $dpi = [PDFDeskCap]::GetDpiForWindow($hwnd)
         if ($dpi -le 0) { $dpi = 96 }
         $scale = $dpi / 96.0
 
@@ -628,11 +628,11 @@ function Invoke-Take([int]$TakeNumber) {
             $ready = $false
             $why = 'never probed'
             for ($attempt = 1; $attempt -le 24; $attempt++) {
-                if (-not [RuneCap]::Grab($hwnd, $gProbe)) { $why = 'PrintWindow returned false'; Wait-Ms 250; continue }
+                if (-not [PDFDeskCap]::Grab($hwnd, $gProbe)) { $why = 'PrintWindow returned false'; Wait-Ms 250; continue }
 
-                $header = [RuneCap]::RectStats($bmpProbe, $headerX0, $headerY0, ($winW - [int](180 * $scale)), $headerY1, 4, 235)
-                $page   = [RuneCap]::RectStats($bmpProbe, $pageX0, $pageY0, $pageX1, $pageY1, 8, 235)
-                $side   = [RuneCap]::RectStats($bmpProbe, $sideX0, $sideY0, $sideX1, $sideY1, 8, 235)
+                $header = [PDFDeskCap]::RectStats($bmpProbe, $headerX0, $headerY0, ($winW - [int](180 * $scale)), $headerY1, 4, 235)
+                $page   = [PDFDeskCap]::RectStats($bmpProbe, $pageX0, $pageY0, $pageX1, $pageY1, 8, 235)
+                $side   = [PDFDeskCap]::RectStats($bmpProbe, $sideX0, $sideY0, $sideX1, $sideY1, 8, 235)
 
                 # Texture, not brightness. This document's cover is nearly
                 # black, so any near-white test calls a perfectly rendered page
@@ -650,7 +650,7 @@ function Invoke-Take([int]$TakeNumber) {
                 Wait-Ms 250
             }
             if (-not $ready -and -not $Probe) {
-                throw "Rune never reached a ready state: $why"
+                throw "PDFDesk never reached a ready state: $why"
             }
 
             if ($Probe) {
@@ -816,7 +816,7 @@ function Invoke-Take([int]$TakeNumber) {
                     if ($now -ge $due) { break }
                     [System.Threading.Thread]::SpinWait(400)
                 }
-                [void][RuneCap]::Grab($hwnd, $gfxs[$i])
+                [void][PDFDeskCap]::Grab($hwnd, $gfxs[$i])
                 $stamps[$i] = $sw.Elapsed.TotalMilliseconds
             }
             # Any cue left unfired means the clip is shorter than its
@@ -876,7 +876,7 @@ function Invoke-Take([int]$TakeNumber) {
             try { $proc.CloseMainWindow() | Out-Null; Start-Sleep -Milliseconds 600 } catch { }
             try { if (-not $proc.HasExited) { $proc.Kill() } } catch { }
         }
-        Remove-Item Env:\RUNE_STATE_DIR -ErrorAction SilentlyContinue
+        Remove-Item Env:\PDFDESK_STATE_DIR -ErrorAction SilentlyContinue
     }
 }
 

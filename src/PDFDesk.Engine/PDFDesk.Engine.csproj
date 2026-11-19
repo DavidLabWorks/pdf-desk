@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PDFDesk.PdfiumInterop\PDFDesk.PdfiumInterop.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Lets tests assert on the page cache, which has no public surface. -->
+    <InternalsVisibleTo Include="PDFDesk.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Clipper2" Version="2.0.0" />
+  </ItemGroup>
+
+</Project>

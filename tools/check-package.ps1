@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Asserts that a built Rune package actually contains a .NET runtime.
+    Asserts that a built PDFDesk package actually contains a .NET runtime.
 
 .DESCRIPTION
     Through v0.7.0 every Store package shipped without one. The project set
@@ -38,7 +38,7 @@
     file. The parse error it produces points at a brace forty lines away.
 
 .EXAMPLE
-    tools/check-package.ps1 artifacts/store/Rune.App_0.8.0.0_x64_arm64_bundle.msixupload
+    tools/check-package.ps1 artifacts/store/PDFDesk.App_0.0.1.0_x64_arm64_bundle.msixupload
 #>
 [CmdletBinding()]
 param(
@@ -158,7 +158,7 @@ try {
         Write-Output ""
         Write-Output "This package has no .NET runtime in it. Installing it from the Store"
         Write-Output "would prompt the user to download .NET on first launch."
-        Write-Output "Check that <SelfContained>true</SelfContained> is still set in Rune.App.csproj."
+        Write-Output "Check that <SelfContained>true</SelfContained> is still set in PDFDesk.App.csproj."
         exit 1
     }
 

@@ -1,10 +1,9 @@
-/* Rune's website. One stylesheet, no build step, no dependencies.
-   Accent colours are the app icon's own gradient (assets/rune.svg). */
+/* PDFDesk's website. One stylesheet, no build step, no dependencies.
+   Accent colours are the app icon's own gradient (assets/pdfdesk.svg). */
 
 :root {
   --accent: #0A84E0;
   --accent-deep: #0057A8;
-  --sponsor: #bf3989;
   --bg: #ffffff;
   --bg-soft: #f5f7fa;
   --bg-card: #ffffff;
@@ -20,7 +19,6 @@
   :root {
     --accent: #4aa8f0;
     --accent-deep: #0A84E0;
-    --sponsor: #db61a2;
     --bg: #16191d;
     --bg-soft: #1c2025;
     --bg-card: #1f242a;
@@ -199,13 +197,6 @@ section.soft { background: var(--bg-soft); border-block: 1px solid var(--line); 
 .card.action p { flex: 1; }
 .card.action .btn { justify-content: center; margin-top: 16px; }
 
-/* The one colour here that is not Rune's own: GitHub's sponsor pink, so the
-   heart reads as the thing people already recognise. It tints the icon and
-   nothing else, because a second button colour would fight the brand gradient. */
-.card .icon.sponsor {
-  background: color-mix(in srgb, var(--sponsor) 14%, transparent);
-  color: var(--sponsor);
-}
 
 /* Alternating screenshot + prose rows */
 .showcase { display: grid; gap: 56px; }

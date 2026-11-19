@@ -1,33 +1,17 @@
-# Rune — Project Reference
+# PDFDesk — Project Reference
 
-> A single-file brain-dump so a fresh session (human or AI) can understand
-> and continue this project without re-deriving context. Last updated for
-> **v0.8.0** (2026-08-18): the Store build finally ships a .NET runtime, text
-> boxes wrap to a width, and the whole app learned to take a finger. Artifacts
-> have NOT been rebuilt since the touch work and nothing is published; §13 has
-> what is left.
->
-> **Start here:** §1 what it is · §4 how rendering works (the load-bearing part)
-> · §7 gotchas (read before debugging) · §10 known bugs · §13 current state.
+PDFDesk is an open-source Windows application for reading and editing PDFs.
+It is developed at [DavidLabWorks/pdf-desk-windows](https://github.com/DavidLabWorks/pdf-desk-windows)
+and builds on [upstream work](README.md#credits-and-license) by Danial Javed and contributors.
+The sections from version history onward contain historical notes inherited from upstream.
 
 ---
 
 ## 1. What this is
 
-**Rune** is a free, open-source (**GPLv3**) PDF reader for Windows. It was
-started 2026-07-12 under the working title *Folio* and renamed to *Rune* at
-v0.1 (English-recognizable, Nordic "writing" connotation, avoids the crowded
-"Folio" trademark space).
-
-**Goal:** the speed of SumatraPDF/Zathura **and** the modern look of macOS
-Preview / GNOME Papers **and** a lightweight footprint — no existing Windows
-viewer is all three at once. Keyboard-first, in the spirit of SumatraPDF and
-Flow Launcher.
-
-- **GitHub:** https://github.com/DanialJaved/rune (public; `gh` CLI is
-  authenticated as `DanialJaved`)
-- **Owner/dev:** Danial Javed — new to C#/.NET, Rust, and web stacks; explain
-  non-obvious .NET concepts (P/Invoke, async, XAML binding) while building.
+PDFDesk combines tabbed reading, document organization, annotation, PDF forms
+and page editing. It uses WinUI 3 for the interface, Win2D for the canvas and
+PDFium for local rendering and document operations. The project uses GPL v3.
 
 ---
 
@@ -42,18 +26,15 @@ Flow Launcher.
 | MVVM helpers | `CommunityToolkit.Mvvm` 8.4.2 | used lightly |
 | Build model | Unpackaged self-contained `.exe` for dev; MSIX at release | |
 
-**Built from scratch, not a fork.** PDFium provides the proven renderer so
-"from scratch" only meant the app shell + interop.
-
 ---
 
 ## 3. Solution layout
 
-`Rune.slnx` (new `.slnx` solution format) with four projects:
+`PDFDesk.slnx` (new `.slnx` solution format) with four projects:
 
 ```
 src/
-  Rune.PdfiumInterop/   Thin P/Invoke bindings over pdfium.dll
+  PDFDesk.PdfiumInterop/   Thin P/Invoke bindings over pdfium.dll
     NativeMethods.cs      Raw [DllImport] signatures (fpdfview/doc/text/annot/edit/save)
     PdfiumNative.cs       Public facade so the engine never touches DllImports
     PdfiumLibrary.cs      Global FPDF_InitLibrary + the serialization lock
@@ -62,7 +43,7 @@ src/
     FileAccessAdapter.cs  FPDF_FILEACCESS bridge → lazy FileStream reads (huge/Unicode paths)
     PdfiumException.cs     Maps FPDF_GetLastError to friendly messages
 
-  Rune.Engine/          Document services (no UI dependency)
+  PDFDesk.Engine/          Document services (no UI dependency)
     PdfDocument.cs        Open/render/page-sizes/outline/links/properties (partial class)
     PdfDocument.Annotations.cs  AddMarkup/AddNote/AddInk/GetAnnotations/RemoveAnnotation/
                           Capture+RestoreAnnotation (undo)/SaveAs/IsDirty
@@ -108,9 +89,9 @@ src/
     BookmarkRemap.cs      Pure page-index remap math (delete/insert/move)
     ErrorLog.cs           Append-only crash log; every method swallows its own failures
     AppState.cs           RecentFile(+Bookmarks)/SessionState/AppSettings/AppState/AppStateStore
-                          (namespace Rune.Services — physically here so it's unit-testable)
+                          (namespace PDFDesk.Services — physically here so it's unit-testable)
 
-  Rune.App/             WinUI 3 shell
+  PDFDesk.App/             WinUI 3 shell
     App.xaml(.cs)         Entry point; command-line file open; AppWindow icon;
                           merges Styles/Tokens.xaml + Styles/Controls.xaml
     MainWindow.xaml(.cs)  Shell: TabView-in-titlebar, SLIM header + hamburger menu,
@@ -124,7 +105,7 @@ src/
                           the lists come from TextBoxFonts alone (v0.7.0)
     ShortcutCatalog.cs    Single source of truth for the F1 shortcuts overlay
     Styles/Tokens.xaml, Styles/Controls.xaml   spacing scale + shared control styles
-    Styles/RuneColors.cs  Every colour Win2D draws (XAML uses {ThemeResource})
+    Styles/PDFDeskColors.cs  Every colour Win2D draws (XAML uses {ThemeResource})
     Controls/
       PdfViewer.xaml(.cs)     The viewport: Win2D canvas, virtualized scroll, zoom,
                               tiles, text selection, search, links, ink, night mode,
@@ -152,17 +133,17 @@ src/
       FilePickerHost.cs       Every file picker in the app: owner window, one retry, honest failure
       PageClipboard.cs        App-wide page clipboard (serialized bytes, cross-tab)
       PrintService.cs         PrintManagerInterop + PrintDocument (live preview, page ranges)
-      SignatureStore.cs       Saved signatures as PNGs under %LOCALAPPDATA%\Rune
+      SignatureStore.cs       Saved signatures as PNGs under %LOCALAPPDATA%\PDFDesk
       ThumbnailCache.cs       Homepage first-page thumbnails (disk-cached PNGs)
     Package.appxmanifest      Store identity + .pdf file-type association (§8b)
-    Assets/                   rune.ico + MSIX visual assets (generated)
+    Assets/                   pdfdesk.ico + MSIX visual assets (generated)
 
 tests/
-  Rune.Tests/           xUnit — 427 tests against a generated corpus (see §6)
+  PDFDesk.Tests/           xUnit — 427 tests against a generated corpus (see §6)
 
 tools/
   gen-corpus.ps1        Hand-authors the test PDFs (no PDF lib needed)
-  gen-icon.ps1          Draws the raido-rune icon + all MSIX assets
+  gen-icon.ps1          Draws the PDFDesk icon + all MSIX assets
   check-package.ps1     Asserts the .NET runtime is actually inside an MSIX
   gen-site-images.ps1   Store screenshots to resized JPEGs in site/img
   gen-site-shortcuts.ps1 Rewrites the shortcut table in site/features.html from
@@ -179,7 +160,7 @@ site/                   The website: three hand-written HTML pages and one
   privacy.html          REQUESTS AT ALL, which is what lets privacy.html say
   style.css             what it says. Keep it that way: no analytics, no CDN
   img/                  fonts, no embedded sponsor widget. Every path must stay
-                        relative, because Pages serves it from a /rune/ subpath.
+                        relative, because Pages serves it from a repository subpath.
                         Published by .github/workflows/pages.yml, but only on a
                         push to main that touches site/**.
 
@@ -191,7 +172,7 @@ docs/
   workflows/ci.yml      Build x64 + ARM64, run tests, permissions: contents: read
   ISSUE_TEMPLATE/       Bug and feature forms + a link to private vuln reporting
 PRIVACY.md              Required by the Store (live URL is checked at cert time)
-SECURITY.md             Where to report a parser bug, and the PDFium/Rune boundary
+SECURITY.md             Where to report a parser bug, and the PDFium/PDFDesk boundary
 THIRD-PARTY-NOTICES.md  Ships inside every binary (PDFium's licence requires it)
 ```
 
@@ -237,9 +218,9 @@ WinUI shell (tabs in title bar, slim header + hamburger, floating zoom pill)
 - **Coordinate spaces:** PDF page space is bottom-left origin; the app works in
   top-left "page points". `FPDF_PageToDevice` / `FPDF_DeviceToPage` convert
   (rotation-safe) — used for links, text, and all annotation geometry.
-- **State/persistence:** JSON at `%LOCALAPPDATA%\Rune\state.json` (recents,
-  session tabs+positions, settings, **per-document bookmarks**). Thumbnails
-  cached at `%LOCALAPPDATA%\Rune\thumbnails\`. Migrates once from legacy `\Folio`.
+- **State/persistence:** `Documents\PDFDesk\PDFDesk.json` holds preferences and reading state.
+  The default bookshelf lives under `Documents\PDFDesk\Library`, and thumbnails,
+  signatures and error logs use `%LOCALAPPDATA%\PDFDesk`.
 - **UI is GNOME-Papers-proportioned** but native Windows (Mica + Fluent):
   one slim header row of flat icon buttons, everything else in a hamburger
   `MenuFlyout`; a floating zoom pill bottom-right. Spacing/typography come from
@@ -256,7 +237,7 @@ WinUI shell (tabs in title bar, slim header + hamburger, floating zoom pill)
   switcher: **thumbnails / chapters (TOC) / bookmarks**; internal & web links;
   back/forward
 - **Full keyboard navigation** (always on): arrows scroll/page, PageUp/Down,
-  Home/End, plus vim keys (Settings toggle)
+  Home/End
 - Text selection & copy; find-in-document with highlight-all + hit stepping
 - **Annotations** (standard PDF annots via `FPDF_annot` + `FPDF_SaveAsCopy`):
   highlight / underline / strikeout from selection, sticky notes, and
@@ -286,7 +267,7 @@ WinUI shell (tabs in title bar, slim header + hamburger, floating zoom pill)
   theme-aware placeholders + empty state (thumbnails a Settings toggle)
 - **Form filling** (AcroForm text/checkbox/radio/combo/list): PDFium's form-fill
   environment drives every edit through `FORM_OnChar` — there is no programmatic
-  setter — with Rune-drawn field borders over the top. Values round-trip through
+  setter — with PDFDesk-drawn field borders over the top. Values round-trip through
   save. **Text colour and size** are settable per field (right-click → "Text
   appearance…"), by rewriting the widget's `/DA` — see §7 for why the repaint is
   the hard half. `Ctrl+Shift+</>` steps the size from the keyboard, and
@@ -314,7 +295,7 @@ WinUI shell (tabs in title bar, slim header + hamburger, floating zoom pill)
     that width; justify emits one text object per word, since PDF cannot stretch
     the gaps inside a single run. An underline is a filled rectangle path per
     line, placed from the baseline and the font's descent.
-  - Underline, alignment and the box width live in a private `/RuneStyle`
+  - Underline, alignment and the box width live in a private `/PDFDeskStyle`
     annotation key, because PDF has nowhere standard to put any of them on a
     stamp and inferring them from the objects guesses wrong on a one-line box.
     Other readers ignore the key; the words in `/Contents` stay interoperable.
@@ -329,13 +310,10 @@ WinUI shell (tabs in title bar, slim header + hamburger, floating zoom pill)
   **`Ctrl`+wheel sizes the ghost; the plain wheel scrolls.** It was the other way
   round through v0.7.0, which meant you could not scroll to the spot you wanted
   to drop the picture on without first putting the tool away.
-- **Share** (menu → Share…, or the palette): hands the PDF to another app
-  through the Windows share sheet, via `DataTransferManagerInterop` for the same
-  reason printing uses `PrintManagerInterop` — there is no CoreWindow in a
-  desktop app. Unsaved edits go out as a copy under the document's own name in
-  `%LOCALAPPDATA%\Rune\share`, swept an hour later; the original is never
-  written to. **The only thing in Rune that hands a document to anything else,
-  and only when asked** — see PRIVACY.md.
+- **Copy PDF File** (Document menu or command palette): puts the PDF on the
+  Windows clipboard as a file. With unsaved edits, it uses a same-named
+  temporary copy under `%LOCALAPPDATA%\PDFDesk\share`. A subsequent copy of an
+  edited PDF sweeps temporary copies older than a day. See PRIVACY.md.
 - **One selection model** (v0.7.0): anything placed is selectable with a plain
   click, then movable, resizable by corner handles, and deletable. A picture is
   resized by rescaling its pixels and is **aspect-locked**. A text box is not:
@@ -396,8 +374,8 @@ WinUI shell (tabs in title bar, slim header + hamburger, floating zoom pill)
 |---|---|
 | Open / close tab | `Ctrl+O` / `Ctrl+W` |
 | Scroll / page up-down | `↑ ↓` / `PgUp PgDn`, `Space` `Shift+Space` |
-| Previous / next page | `← / →` (vim: `p` / `n`) |
-| First / last page | `Home` / `End` (vim: `gg` / `G`) |
+| Previous / next page | `← / →` |
+| First / last page | `Home` / `End` |
 | Back / forward | `Alt+←` / `Alt+→` |
 | Find / next / prev | `Ctrl+F` / `F3` / `Shift+F3` |
 | Command palette / shortcuts | `Ctrl+K` / `F1` (or `Ctrl+?`) |
@@ -427,8 +405,7 @@ text-box and form-field meanings side by side for exactly this reason.
 | Bigger / smaller | `Ctrl+Shift+>` / `Ctrl+Shift+<` |
 | Left / centre / right / justify | `Ctrl+L` / `Ctrl+E` / `Ctrl+R` / `Ctrl+J` |
 
-Vim keys (`j k h l`, `gg`/`G`, `p`/`n`) are a Settings toggle. Page
-copy/cut/paste applies when the thumbnail sidebar has focus; otherwise
+Page copy/cut/paste applies when the thumbnail sidebar has focus; otherwise
 `Ctrl+C` copies selected text.
 
 ### Touch gestures (v0.8.0)
@@ -458,13 +435,13 @@ label on 20-odd icon-only buttons.
 
 ```powershell
 # Build
-dotnet build src/Rune.App/Rune.App.csproj -p:Platform=x64
+dotnet build src/PDFDesk.App/PDFDesk.App.csproj -p:Platform=x64
 
 # Run (accepts an optional PDF path; also --page N --zoom Z for scripted tests)
-src/Rune.App/bin/x64/Debug/net10.0-windows10.0.19041.0/win-x64/Rune.exe [file.pdf]
+src/PDFDesk.App/bin/x64/Debug/net10.0-windows10.0.19041.0/win-x64/PDFDesk.exe [file.pdf]
 
 # Test (427 tests)
-dotnet test tests/Rune.Tests/Rune.Tests.csproj
+dotnet test tests/PDFDesk.Tests/PDFDesk.Tests.csproj
 
 # Regenerate assets when needed
 powershell -File tools/gen-corpus.ps1     # test PDFs → tests/corpus/
@@ -505,9 +482,9 @@ which is worth asserting. Note that PowerShell 5.1's `Add-Type` is a **C# 5**
 compiler: no expression-bodied members.
 
 **Verifying UI features** is scripted, not just tested — drive the running
-`Rune.exe` with `SetForegroundWindow`/`keybd_event` P/Invoke + `CopyFromScreen`,
+`PDFDesk.exe` with `SetForegroundWindow`/`keybd_event` P/Invoke + `CopyFromScreen`,
 then Read the PNG (see §7). The reusable helper used this session lives in the
-session scratchpad (`shot.ps1` / `drive-rune.ps1`).
+session scratchpad (`shot.ps1` / `drive-pdfdesk.ps1`).
 
 ---
 
@@ -550,7 +527,7 @@ session scratchpad (`shot.ps1` / `drive-rune.ps1`).
   mutate one brush instance rather than assigning a new one, because the template
   resolves the resource once when it is applied.
 - **Do not add `Microsoft.WindowsAppSDK` back as a package reference.**
-  `Rune.App.csproj` deliberately references the six sub-packages it needs
+  `PDFDesk.App.csproj` deliberately references the six sub-packages it needs
   (Base, Foundation, InteractiveExperiences, WinUI, DWrite, Runtime) instead.
   The meta-package hard-depends on `.Widgets`, `.AI` and `.ML`, and `.ML` pulls
   in `Microsoft.Windows.AI.MachineLearning` — `onnxruntime.dll` (20.7 MB) plus
@@ -558,7 +535,7 @@ session scratchpad (`shot.ps1` / `drive-rune.ps1`).
   supported opt-out property; the sub-package list is the only route, and none
   of the six depends on AI, ML or Widgets. **Upgrading the SDK means bumping six
   lines and re-reading the meta-package's nuspec** for any newly added
-  dependency Rune actually needs. Verify by *launching* the build, not just
+  dependency PDFDesk actually needs. Verify by *launching* the build, not just
   compiling: a missing WinAppSDK binary fails at first XAML load. Night mode is
   the sharpest single check — it goes through Win2D's `InvertEffect`.
 - **PDFium form-fill landmines** (all cost real time in v0.5.0; see
@@ -611,7 +588,7 @@ session scratchpad (`shot.ps1` / `drive-rune.ps1`).
   theme. Reading a *Style* out of `Application.Current.Resources` is fine.
 - **`ContentDialog` doesn't follow `Window.Content`'s theme either.** It is
   hosted in a popup outside the content tree, so it tracks the OS: choosing
-  Light in Rune on a dark-mode Windows gave a dark dialog over a light app.
+  Light in PDFDesk on a dark-mode Windows gave a dark dialog over a light app.
   `ShowDialogAsync` now sets `dialog.RequestedTheme` centrally — every dialog in
   the window goes through it, so don't call `ShowAsync` directly.
 - **`InfoBar` stretches to its container.** Its template is a full-width bar, so
@@ -674,10 +651,10 @@ session scratchpad (`shot.ps1` / `drive-rune.ps1`).
     mid-drag with panning still switched off. `SignaturePad` had always wired
     both; the viewer had not.
   - `HoldingRoutedEventArgs` carries **no `Pointer`**, so nothing can be
-    captured from the `Holding` event even if you want to. Rune times its own
+    captured from the `Holding` event even if you want to. PDFDesk times its own
     hold from `PointerPressed` instead.
   - **Verifying any of this needs real touch pointers.** Injected mouse events
-    prove nothing here, because DManip treats them differently. See §6.
+    prove nothing here, because DManip treats them differently. See `6.
 - **Win2D controls don't work inside a `ContentDialog`.** A `CanvasControl`
   hosted in the dialog's popup never gets a device and silently renders
   nothing — the signature pad draws with XAML `Polyline`s and uses Win2D only
@@ -709,7 +686,7 @@ session scratchpad (`shot.ps1` / `drive-rune.ps1`).
   (`WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT`) — D2D only draws PREMULTIPLIED (or
   ignored) alpha. This shipped in the signature hover preview and made it draw
   **nothing at all**: the throw escaped `DrawSignatureGhost` and took the dashed
-  outline down with it, so the whole preview vanished instead of degrading. Rune
+  outline down with it, so the whole preview vanished instead of degrading. PDFDesk
   holds signature pixels as straight alpha because that is what PDFium
   composites, so anything handing them to Win2D must go through
   `SignatureMatte.ToPremultiplied` first. A draw path that builds a bitmap
@@ -718,14 +695,14 @@ session scratchpad (`shot.ps1` / `drive-rune.ps1`).
 - **No Visual Studio** — everything is `dotnet` CLI. Don't suggest VS-only flows.
 - **Line endings:** commits warn `LF will be replaced by CRLF` (harmless);
   `.gitattributes` marks PDFs/images binary so autocrlf can't corrupt them.
-- **UI automation for verification** (no computer-use MCP needed): drive Rune
+- **UI automation for verification** (no computer-use MCP needed): drive PDFDesk
   with `SetForegroundWindow` + `SetCursorPos` + `mouse_event`/`keybd_event`
   via `Add-Type` P/Invoke, screenshot with `CopyFromScreen`, then Read the
   PNG. Two rules: (1) drags need **relative `MOUSEEVENTF_MOVE` deltas**
   (SetCursorPos while a button is held delivers no move); (2) `SetProcessDpiAwareness(2)`
   and remember the display is **125% scale**. Caveat: if another app holds the
   foreground (e.g. a browser/video), input lands there and screenshots capture
-  it — verify only when Rune can take focus.
+  it — verify only when PDFDesk can take focus.
 - **Clean screenshots** (no taskbar/desktop bleed): size the window to exactly
   1920×1080 at (0,0) with `SetWindowPos`, then capture with
   `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT=2)` — that grabs the window's own
@@ -767,7 +744,7 @@ session scratchpad (`shot.ps1` / `drive-rune.ps1`).
   **A dev machine cannot reproduce this** — it has the runtime, so the app starts
   either way. The evidence is the artifact: a self-contained package contains
   `hostfxr.dll` / `coreclr.dll` / `System.Private.CoreLib.dll`, and its
-  `Rune.runtimeconfig.json` says `includedFrameworks` rather than `framework`.
+  `PDFDesk.runtimeconfig.json` says `includedFrameworks` rather than `framework`.
 - **`--` cannot appear inside an XML comment**, so a csproj comment cannot spell
   the self-contained flag with its dashes (`MSB4025`, and the message names the
   line but not the reason).
@@ -790,115 +767,29 @@ session scratchpad (`shot.ps1` / `drive-rune.ps1`).
 
 ## 8. Release process
 
-**The Microsoft Store is the install path Rune promotes** (§8b). GitHub Releases
-carry **one artifact — the portable zip** — for people who want Rune without the
-Store. As of v0.5.0 the sideloaded MSIX and its self-signed certificate are no
-longer published: the cert obliged every user to run an admin PowerShell command
-to trust a certificate, which is a worse security ask than the Store's
-Microsoft-signed package solves for free.
+Build a portable distribution from the Windows x64 publish folder:
 
 ```powershell
-# Portable zip — the only GitHub artifact
-dotnet publish src/Rune.App/Rune.App.csproj -c Release -r win-x64 --self-contained `
-  -p:Platform=x64 -p:WindowsPackageType=None
-Compress-Archive <publish>\* artifacts/rune-vX.Y.Z-win-x64.zip
-
-gh release create vX.Y.Z <zip> --title "Rune vX.Y.Z" --notes-file notes.md
+dotnet publish src/PDFDesk.App/PDFDesk.App.csproj -c Release -r win-x64 --self-contained -p:Platform=x64 -p:WindowsPackageType=None -o artifacts/portable/win-x64
+Compress-Archive -Path artifacts/portable/win-x64/* -DestinationPath artifacts/pdfdesk-win-x64.zip
 ```
 
-- The `--self-contained` above is now **belt and braces**: `<SelfContained>` is
-  set in the csproj (§7), which is what actually does the work and what the MSIX
-  path depends on. Leaving it on the command line costs nothing and documents
-  the intent at the point someone reads it.
-- **Version bump:** `<Version>` in `Rune.App.csproj` **and** `Version=` in
-  `Package.appxmanifest`.
-- The portable zip is **unsigned**, so SAC/SmartScreen apply to it — documented
-  honestly in the README. Signing it is still open (§11).
-- **CI:** `.github/workflows/ci.yml` runs build + test on `windows-latest`, with
-  `permissions: contents: read`.
-- **Always confirm with the user before anything goes public** (repo/release).
-- Compliance: `LICENSE` (GPLv3) + `THIRD-PARTY-NOTICES.md` +
-  `third_party/WindowsAppSDK-NOTICE.txt` ship inside every binary (PDFium's
-  BSD/Apache terms require its license to accompany the DLL).
+Build ARM64 with `win-arm64` and `Platform=ARM64`. Keep the version in
+`PDFDesk.App.csproj` and `Package.appxmanifest` in sync. Include `LICENSE`,
+`THIRD-PARTY-NOTICES.md` and `third_party/WindowsAppSDK-NOTICE.txt` in distributions.
+GitHub CI builds x64 and ARM64 and runs the tests on Windows.
+
+## 8b. MSIX and Store preparation
+
+The repository uses `DavidLabWorks.PDFDesk` and `CN=DavidLabWorks` for the local
+package. For Store submission, associate the project with the PDFDesk product
+in Partner Center and use its assigned identity and publisher. Listing copy is
+in [docs/store-listing.md](docs/store-listing.md). Use `tools/check-package.ps1`
+to check that the packaged app includes the .NET runtime.
 
 ---
 
-## 8b. Microsoft Store
-
-Listed as **"Rune PDF Reader"** ("Rune" alone was taken — and is poor Store SEO
-anyway; nobody searching "rune" wants a PDF reader). The package identity, exe,
-repo and icon all stay `Rune`; only the display name differs.
-
-| Field | Value |
-|---|---|
-| Identity/Name | `Danimite.RunePDFReader` |
-| Identity/Publisher | `CN=513DE1BC-C862-44F8-AEAD-F60E359F4BBF` |
-| PublisherDisplayName | `Danimite` |
-| Partner Center | developer name **Danimite** (sign in with the account that reserved the name) |
-
-These must match Partner Center **exactly** or the upload is rejected. The
-bundle is uploaded unsigned — the Store re-signs it, which is why Store installs
-get no SmartScreen/SAC warning.
-
-**Product ID `9NH37840QDM6`** — live at https://apps.microsoft.com/detail/9NH37840QDM6
-
-**winget works, and needed no work.** The listing is mapped into the `msstore`
-source, so `winget install --id 9NH37840QDM6 --source msstore --exact` installs
-the same Microsoft-signed package. Verified with `winget show --id 9NH37840QDM6
---source msstore` (v0.6.0 prep). The community `winget-pkgs` route was never
-viable: it wants a downloadable installer URL, which Store-only distribution
-doesn't provide.
-
-`winget show` also reads back the **live** Store description, which makes it a
-free way to check that what Partner Center actually serves matches
-`docs/store-listing.md`.
-
-```powershell
-# Store upload bundle (unsigned — the Store signs it), x64 + ARM64
-dotnet restore src/Rune.App/Rune.App.csproj
-dotnet build src/Rune.App/Rune.App.csproj -c Release -p:Platform=x64 `
-  -p:WindowsPackageType=MSIX -p:GenerateAppxPackageOnBuild=true `
-  -p:AppxPackageSigningEnabled=false `
-  -p:AppxBundle=Always -p:AppxBundlePlatforms="x64|arm64" `
-  -p:UapAppxPackageBuildMode=StoreUpload `
-  -p:AppxPackageDir="..\..\artifacts\store\"
-# → artifacts/store/Rune.App_X.Y.Z.0_x64_arm64_bundle.msixupload  (~135 MB)
-
-# REQUIRED before uploading: does the package actually contain a .NET runtime?
-tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixupload
-```
-
-- **Run the check every time.** A package with no runtime builds, uploads and
-  certifies without complaint, and only fails on a machine that isn't yours —
-  which is how v0.4.1 through v0.7.0 shipped that way (§7, §10). The check walks
-  the nested zips and fails unless every package carrying an executable also
-  carries `hostfxr.dll`, `coreclr.dll` and `System.Private.CoreLib.dll`. The
-  `scale-*` resource packages hold images and no code, and are skipped.
-  It was verified in both directions when it was written: `FAIL` against the
-  v0.6.0 bundle that actually shipped, `OK` against v0.8.0. `artifacts/` is
-  gitignored, so any pre-v0.8.0 `.msixupload` you still have locally is the
-  known-bad sample to re-test the check against if you change it.
-
-- **Rune contains no networking code, and must not gain any.** `UpdateService`
-  was deleted in v0.5.0. That is what lets the privacy declaration and the
-  `runFullTrust` justification both say "makes no network connections, collects
-  no data" *unconditionally* — previously the claim held only because the
-  updater was gated off for packaged builds. Adding a network call back
-  invalidates both, and pointing a Store user at a download outside the Store is
-  a certification failure on its own.
-- `runFullTrust` is flagged at submission as a restricted capability needing
-  approval. Expected for every WinUI 3 desktop app; justification text is in
-  `docs/store-listing.md`.
-- `PRIVACY.md` must be live on `main` before submitting — certification follows
-  the URL in the listing.
-- Store screenshots must use a **licence-safe** document (they're published
-  commercially). The current set uses the NASA Systems Engineering Handbook —
-  a US Government work, so public domain. **Never** shoot the user's own files;
-  filenames leak in the tab strip and recents list.
-
----
-
-## 9. Version history
+## 9. Upstream version history
 
 - **v0.8.0** (2026-08-18) — the Store build finally ships a runtime, text
   boxes become text boxes.
@@ -926,7 +817,7 @@ tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixup
   with the height falling out of the wrap. That is also what made alignment mean
   anything, so `Ctrl+L/E/R/J` and `Ctrl+U` arrived with it — underline as a
   filled rectangle path per line, justify as one text object per word, and both
-  plus the width stored in a private `/RuneStyle` key because PDF has nowhere
+  plus the width stored in a private annotation key because PDF has nowhere
   standard to put them on a stamp.
   **Fixed: the wheel was backwards while placing a picture.** Plain wheel
   resized the ghost and `Ctrl`+wheel zoomed, so you could not scroll to the spot
@@ -934,7 +825,7 @@ tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixup
   **Added: Share**, to any app on the Windows share sheet, through
   `DataTransferManagerInterop` for the same reason printing uses
   `PrintManagerInterop`. Unsaved edits go out as a copy under the document's own
-  name; the original is never written to. The first thing in Rune that hands a
+  name; the original is never written to. The first thing in PDFDesk that hands a
   document to anything else, and PRIVACY.md says so.
   **Added: document properties worth opening.** Sectioned, with blanks shown as
   blanks — a missing Author row could not be told apart from one nobody looked
@@ -997,7 +888,7 @@ tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixup
   handles did nothing. Both kinds now share select/move/delete, and differ only
   in the resize: a picture is rescaled, **text is re-rendered at a new point
   size**. That is the whole reason for storing text as text, and it is why a text
-  box resizes aspect-locked rather than by width: Rune does no line wrapping, so
+  box resizes aspect-locked rather than by width: PDFDesk does no line wrapping, so
   the words break where the user broke them and the two axes have to move
   together.
   Resizing text needs the style back out of the file, and it is read rather than
@@ -1108,7 +999,7 @@ tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixup
   meta-package hard-depends on `.Widgets`, `.AI` and `.ML`, and `.ML` pulls in
   `Microsoft.Windows.AI.MachineLearning`: `onnxruntime.dll` (20.7 MB) plus
   `DirectML.dll` (17.8 MB) inside a PDF reader that runs no inference. There is no
-  opt-out property, so `Rune.App.csproj` now references the six sub-packages Rune
+  opt-out property, so `PDFDesk.App.csproj` now references the six sub-packages PDFDesk
   actually needs. Size was the smaller half of the reason: an OAuth component and
   an ML runtime sitting in a package whose Store listing and `runFullTrust`
   justification both say "no network connections, collects no data" is a fair
@@ -1117,10 +1008,10 @@ tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixup
   **Security:** PDFium 152.0.7961 → **153.0.7988**, a full Chrome milestone of PDF
   fixes. `SECURITY.md` added, pointing exploitable bugs at private vulnerability
   reporting and drawing the line between a PDFium parser bug (Chromium's tracker)
-  and Rune's own code.
+  and PDFDesk's own code.
   **Added: "Report a problem…"** in the menu — version, Store or portable,
   Windows build, and where the log is. `ErrorLog` had been writing to
-  `%LOCALAPPDATA%\Rune` from eleven call sites since v0.4.1 with nothing in the
+  `%LOCALAPPDATA%\PDFDesk` from eleven call sites since v0.4.1 with nothing in the
   app saying so, and with no telemetry by design that is the only route a crash
   reaches anyone. Issue templates ask for the same details up front.
   **Fixed: the file picker, and everything that reaches one.** A real v0.6.0
@@ -1230,7 +1121,7 @@ tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixup
   and XFA detection with an honest info bar instead of a dead form.
   **Added: flatten** (`FPDFPage_Flatten`) and **signature details** — read-only,
   reporting only what the file claims plus `/ByteRange` coverage, and never
-  asserting validity, because Rune ships no cryptography.
+  asserting validity, because PDFDesk ships no cryptography.
   **New architecture: the page-handle cache** (`PdfDocument.PageCache.cs`) —
   PDFium needs a stable `FPDF_PAGE` across keystrokes, so pages are no longer
   loaded and closed per operation. Every PDFium call site was moved onto it, and
@@ -1238,11 +1129,11 @@ tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixup
   rendered on the *UI* thread) now go through the work queue.
   **Fixed** all three v0.4.1 known bugs (see §10), plus the two
   `Application.Current.Resources` brush reads and caption buttons that ignored
-  the app's theme. Colour now lives in `Styles/RuneColors.cs` (Win2D) and
+  the app's theme. Colour now lives in `Styles/PDFDeskColors.cs` (Win2D) and
   `{ThemeResource}` brushes (XAML); ~20 hardcoded `Opacity` values became real
   secondary/tertiary text brushes.
-  **New logo**: the raido rune set on a document page, authored as
-  `assets/rune.svg` and rasterized by `tools/gen-icon.ps1` through WPF — plus
+  **New logo**: the historical Raido symbol set on a document page, authored as
+  an SVG asset and rasterized by `tools/gen-icon.ps1` through WPF — plus
   the full scale-100..400 asset set the Store recommends, where before there was
   only scale-200.
   **Fixed two long-standing viewer bugs** found by using the build:
@@ -1273,7 +1164,7 @@ tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixup
   submission. **`UpdateService` deleted**: with distribution moving to the Store,
   the self-updater had nothing to update from, and removing it took with it the
   app's only network code *and* a download path that verified neither hash nor
-  signature. Rune now makes no network requests in any build, which is what turns
+  signature. PDFDesk now makes no network requests in any build, which is what turns
   the privacy declaration and the `runFullTrust` justification from conditional
   claims into unconditional ones. Whole-page renders are clamped to a pixel
   budget: `RenderRegion` computed `width × 4 × height` in `int`, and a page may
@@ -1286,7 +1177,7 @@ tools\check-package.ps1 artifacts\store\Rune.App_X.Y.Z.0_x64_arm64_bundle.msixup
 ## 10. Known bugs
 
 **Two open: a combo box that will not drop its list, and a picker failure that is
-not Rune's to fix.** Everything else below is fixed, kept because each cause is
+not PDFDesk's to fix.** Everything else below is fixed, kept because each cause is
 worth remembering. The three v0.4.1 bugs are listed in
 full; the rest have their post-mortems in §9 — the two zoom/blur bugs and the
 invisible hover ghost (v0.5.x), in v0.6.0 the fourteen rotation guards,
@@ -1317,7 +1208,7 @@ thread's *lifetime* before suspecting the render.
 0. **A combo box takes focus but its list never drops down.** Confirmed
    pre-existing, not a regression from the v0.7.0 pointer rework: a build from
    before it behaves identically. Clicking the drop button focuses the widget and
-   draws its focus ring, and no popup appears. Rune hosts no combo UI of its own
+   draws its focus ring, and no popup appears. PDFDesk hosts no combo UI of its own
    (`FormSetIndexSelected` exists in the engine with no caller), so the list is
    PDFium's own, drawn by the form-fill layer. `FFI_SetTimer`/`FFI_KillTimer` are
    deliberately NULL here (§7), which is the first thing to rule out. The value
@@ -1364,7 +1255,7 @@ thread's *lifetime* before suspecting the render.
 - **Form JavaScript** — needs a V8-enabled PDFium build (`bblanchon.PDFium.V8.*`,
   a one-line csproj swap for a much larger binary). Without it, auto-calculating
   fields accept typed values but never recalculate.
-- **Signature validation** — out of reach without a crypto stack. Rune reports
+- **Signature validation** — out of reach without a crypto stack. PDFDesk reports
   only what the file claims plus byte-range coverage, and must never say "valid".
 - **Sharper placed pictures.** An imported image is capped at 1024 px on its
   longest edge, which is `TileMath.MaxSingleTilePx` — the ceiling the on-page
@@ -1434,7 +1325,7 @@ thread's *lifetime* before suspecting the render.
 
 ---
 
-## 13. Current state (2026-08-18)
+## 13. Upstream snapshot (2026-08-18)
 
 - Working branch **`feat/text-and-image`**, one commit ahead of `origin/main`
   (`0ebb5a0`, v0.8.0 plus the touch pass) and one behind it (the merge of
@@ -1442,7 +1333,7 @@ thread's *lifetime* before suspecting the render.
 - **`origin/main` is at `62e8516`, the merge of PR #12**, so everything up to
   and including v0.7.0 is now on `main`. Local `main` is far behind still, at
   PR #3 (`ec0f18a`); it has never been fast-forwarded.
-- **[PR #13](https://github.com/DanialJaved/rune/pull/13) is open** and carries
+- **Upstream PR #13 is open** and carries
   v0.8.0 and the touch work in one commit, because the v0.8.0 changes were still
   uncommitted in the working tree and interleave with the touch changes in the
   same files. CI green, mergeable, no reviewer.
@@ -1457,13 +1348,13 @@ thread's *lifetime* before suspecting the render.
 - **427 tests passing** (414 before the touch pass, 366 at v0.7.0, 326 at
   v0.6.0); x64 Release builds clean and CI is green on x64 and ARM64.
 - **PDFium 153.0.7988**, unchanged this release.
-- **Version is 0.8.0** in both `Rune.App.csproj` and `Package.appxmanifest`.
+- **Version is 0.8.0** in both `PDFDesk.App.csproj` and `Package.appxmanifest`.
 - **Neither artifact is current.** The Store bundle
-  `artifacts/store/Rune.App_0.8.0.0_x64_arm64_bundle.msixupload` (141 MB) was
+  for version 0.8.0.0 (x64 and ARM64) (141 MB) was
   built on 16 Aug, **before** the touch commit, so it is stale and has to be
   rebuilt and re-checked with `tools/check-package.ps1` before it goes anywhere.
   There is **no portable zip for 0.8.0 at all**; `artifacts/` stops at
-  `rune-v0.6.0-win-x64.zip`, and §8 makes that zip the only GitHub artifact.
+  the v0.6.0 portable x64 archive, and §8 makes that zip the only GitHub artifact.
 - **Store screenshots are still the v0.6.0 set**, 10 of 10 at 1920×1080. The
   text tool and a placed picture deserve one, and the set is full, so it would
   have to replace one.
@@ -1525,7 +1416,7 @@ Everything below was checked on screen, not just by test:
 - **Form filling while rotated**, the last path that had only test coverage.
   `form.pdf` at r=1: clicking the text field focuses it, the typed glyphs land
   inside it and read with the rotated content rather than the file's axes, and
-  the checkbox takes its tick. Rune's own field borders sit on PDFium's widgets
+  the checkbox takes its tick. PDFDesk's own field borders sit on PDFium's widgets
   at the turn, so the two drawing paths agree.
 - **The three new Store screenshots**, which is what surfaced the harness trap
   in item 4 below.
@@ -1561,7 +1452,7 @@ Added for **v0.7.0**, all on `hello.pdf` unless noted:
 - **Erase and undo, all three kinds** (signature, picture, text). This is what
   the `CaptureAnnotation` fix bought: before it, Ctrl+Z after erasing a stamp did
   nothing at all.
-- **Save, then reopen in Rune and in Edge.** Both render the picture with its
+- **Save, then reopen in PDFDesk and in Edge.** Both render the picture with its
   alpha and the text as text. Edge additionally draws a small comment marker
   beside the text box, which is Edge showing the annotation's `/Contents` alt
   text (§7).
@@ -1615,7 +1506,7 @@ rather than `PrintWindow`.
    worked, so it read as "clicking a placed signature does not select it" (an
    app bug) rather than "the click is 9 px off" (a harness bug). Probe it with
    `ClientToScreen(hwnd, {0,0})` against `GetWindowRect` instead of assuming
-   zero. Related: `Focus-Rune` maximizes, so calling it after sizing to
+   zero. Related: `Focus-PDFDesk` maximizes, so calling it after sizing to
    1920×1080 silently invalidates every coordinate measured at that size.
 5. **In PowerShell, `$input.mi.dwFlags = X` sets the field on a COPY.**
    `MOUSEINPUT` is a value type, so reading it through the outer struct's

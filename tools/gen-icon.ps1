@@ -1,12 +1,12 @@
-# Rasterizes Rune's app mark from assets/rune.svg (and rune-small.svg below
+# Rasterizes PDFDesk's app mark from assets/pdfdesk.svg (and pdfdesk-small.svg below
 # 32px) into every icon asset the app and the Store need:
-#   src/Rune.App/Assets/rune.ico   (16/24/32/48/64/256, PNG-compressed entries)
-#   src/Rune.App/Assets/*.png      (MSIX visual assets, scale-100..400)
+#   src/PDFDesk.App/Assets/pdfdesk.ico   (16/24/32/48/64/256, PNG-compressed entries)
+#   src/PDFDesk.App/Assets/*.png      (MSIX visual assets, scale-100..400)
 # Run from repo root:  powershell -File tools\gen-icon.ps1
 #
 # The SVG is the design source of truth; edit it, not this script. What follows
 # is NOT a general SVG renderer — it understands only the subset documented at
-# the top of assets/rune.svg. Rendering goes through WPF (Geometry.Parse +
+# the top of assets/pdfdesk.svg. Rendering goes through WPF (Geometry.Parse +
 # RenderTargetBitmap) so the repo keeps its "no external tools" property;
 # PowerShell has no in-box SVG rasterizer, and shelling out to Inkscape or
 # resvg would add a dependency this project deliberately does without.
@@ -15,7 +15,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase, System.Drawing
 
 $root = Join-Path $PSScriptRoot '..'
-$assets = Join-Path $root 'src\Rune.App\Assets'
+$assets = Join-Path $root 'src\PDFDesk.App\Assets'
 New-Item -ItemType Directory -Force $assets | Out-Null
 
 function ConvertTo-Brush {
@@ -93,10 +93,9 @@ function Convert-SvgToBitmap {
     return $rtb
 }
 
-# Below 32px the fold and the thin strokes collapse, so small sizes get their
-# own art rather than a scaled-down version of the large one.
-$svgLarge = Join-Path $root 'assets\rune.svg'
-$svgSmall = Join-Path $root 'assets\rune-small.svg'
+# Below 32px the document uses a simplified drawing with heavier details.
+$svgLarge = Join-Path $root 'assets\pdfdesk.svg'
+$svgSmall = Join-Path $root 'assets\pdfdesk-small.svg'
 function Get-Source([int]$Size) { if ($Size -lt 32) { $svgSmall } else { $svgLarge } }
 
 function Save-Bitmap {
@@ -168,7 +167,7 @@ $pngs = foreach ($s in $sizes) {
     , $ms.ToArray()
 }
 
-$icoPath = Join-Path $assets 'rune.ico'
+$icoPath = Join-Path $assets 'pdfdesk.ico'
 $stream = [System.IO.File]::Create($icoPath)
 $writer = New-Object System.IO.BinaryWriter($stream)
 $writer.Write([uint16]0)               # reserved
@@ -189,4 +188,4 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 }
 foreach ($png in $pngs) { $writer.Write($png) }
 $writer.Dispose(); $stream.Dispose()
-Write-Host "wrote rune.ico ($($sizes -join '/'))"
+Write-Host "wrote pdfdesk.ico ($($sizes -join '/'))"

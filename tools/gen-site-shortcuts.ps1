@@ -2,7 +2,7 @@
 # catalogue, so the website and the F1 overlay cannot disagree.
 #
 # ShortcutCatalog.cs is already declared "the single source of truth for every
-# keyboard shortcut Rune ships". Hand-copying it onto a web page would create a
+# keyboard shortcut PDFDesk ships". Hand-copying it onto a web page would create a
 # fourth copy (app, PROJECT.md, README, site) and they have drifted before.
 #
 # The catalogue's shape is regular and this parser expects exactly it:
@@ -26,7 +26,7 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $repo    = Split-Path -Parent $PSScriptRoot
-$catalog = Join-Path $repo 'src\Rune.App\ShortcutCatalog.cs'
+$catalog = Join-Path $repo 'src\PDFDesk.App\ShortcutCatalog.cs'
 $page    = Join-Path $repo 'site\features.html'
 
 foreach ($p in @($catalog, $page)) {

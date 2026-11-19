@@ -80,7 +80,7 @@ function New-SimplePdf {
 
 # Small two-page smoke-test file.
 New-SimplePdf -Path (Join-Path $corpusDir 'hello.pdf') -Pages @(
-    , @('Hello from Rune!')
+    , @('Hello from PDFDesk!')
     , @('Page two.')
 )
 
@@ -97,7 +97,7 @@ New-SimplePdf -Path (Join-Path $corpusDir 'slides.pdf') -MediaBox '0 0 720 540' 
 $book = for ($p = 1; $p -le 1000; $p++) {
     $pageLines = @("Page $p")
     for ($l = 1; $l -le 20; $l++) {
-        $pageLines += "This is line $l of page $p in the Rune test book, used to benchmark scrolling."
+        $pageLines += "This is line $l of page $p in the PDFDesk test book, used to benchmark scrolling."
     }
     , $pageLines
 }
@@ -135,7 +135,7 @@ function New-LinkedPdf {
 }
 New-LinkedPdf -Path (Join-Path $corpusDir 'linked.pdf')
 
-# An AcroForm with the four widget kinds Rune needs to exercise: text field,
+# An AcroForm with the four widget kinds PDFDesk needs to exercise: text field,
 # combobox, checkbox and pushbutton. Fixture for form-fill round-trips
 # (FORM_OnChar -> value -> save -> reopen), FFLDraw compositing and flatten.
 #

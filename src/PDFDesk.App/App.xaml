@@ -1,0 +1,136 @@
+<Application
+    x:Class="PDFDesk.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:local="using:PDFDesk"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <ResourceDictionary Source="ms-appx:///Styles/Tokens.xaml" />
+                <ResourceDictionary Source="ms-appx:///Styles/Controls.xaml" />
+                <ResourceDictionary Source="ms-appx:///Styles/Home.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <DataTemplate x:Key="StickyNoteGlyph"><PathIcon Width="16" Height="16" Data="F0 M5,1 H16 C18,1 19,2 19,4 V12 L12,19 H5 C2.5,19 1,17.5 1,15 V5 C1,2.5 2.5,1 5,1 Z M5,2.6 C3.5,2.6 2.6,3.5 2.6,5 V15 C2.6,16.5 3.5,17.4 5,17.4 H11 V14 C11,12 12,11 14,11 H17.4 V4 C17.4,3 17,2.6 16,2.6 Z M12.6,16.2 L16.2,12.6 H14 C13,12.6 12.6,13 12.6,14 Z M5,6 H14 V7.5 H5 Z M5,9.5 H10 V11 H5 Z" /></DataTemplate>
+            <local:UiText x:Key="UiText" />
+            <DataTemplate x:Key="ReportProblemContent">
+                <StackPanel Width="418" Spacing="14">
+                    <TextBlock Text="{Binding ReportProblemInstructions, Source={StaticResource UiText}}" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" />
+                    <Border Padding="14,10,14,14" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <Grid>
+                                <TextBlock Text="{Binding EnvironmentDetails, Source={StaticResource UiText}}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <Button x:Name="CopyDetails" Content="{Binding CopyDetails, Source={StaticResource UiText}}" Style="{ThemeResource SubtleButtonStyle}" HorizontalAlignment="Right" />
+                            </Grid>
+                            <StackPanel x:Name="Details" Spacing="6" />
+                        </StackPanel>
+                    </Border>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock x:Name="LogInfo" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" VerticalAlignment="Center" />
+                        <Button x:Name="LogFolder" Grid.Column="1" Content="{Binding OpenLogFolder, Source={StaticResource UiText}}" />
+                    </Grid>
+                </StackPanel>
+            </DataTemplate>
+            <DataTemplate x:Key="DocumentPropertiesHeading">
+                <Grid Width="428" ColumnSpacing="12" Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="36" Height="40" CornerRadius="6" VerticalAlignment="Top"
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                        <FontIcon Glyph="&#xE8A5;" FontSize="19" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="{Binding DocumentProperties, Source={StaticResource UiText}}" FontSize="17" FontWeight="SemiBold" />
+                        <TextBlock x:Name="FileName" FontSize="13" FontWeight="Normal" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="DocumentPropertiesSectionHeading">
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" /><ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="Label" FontSize="14" FontWeight="SemiBold" />
+                    <Border Grid.Column="1" Height="1" VerticalAlignment="Center" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                </Grid>
+            </DataTemplate>
+            <Style x:Key="DocumentPropertiesCloseStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="HorizontalAlignment" Value="Right" />
+                <Setter Property="MinWidth" Value="84" />
+            </Style>
+            <DataTemplate x:Key="SavedSignatureRow">
+                <Grid Height="52" ColumnSpacing="6" Margin="0,0,12,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition /><ColumnDefinition Width="32" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="Pick" Padding="14,7" Background="White" CornerRadius="6"
+                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#F2F2F2" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#E8E8E8" />
+                        </Button.Resources>
+                        <Image x:Name="Sample" Stretch="Uniform" />
+                    </Button>
+                    <Button x:Name="Remove" Grid.Column="1" Style="{ThemeResource SubtleButtonStyle}"
+                            Width="32" Height="32" Padding="0" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE74D;" FontSize="14" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                    </Button>
+                </Grid>
+            </DataTemplate>
+            <DataTemplate x:Key="NoteEditorContent">
+                <StackPanel Width="336" Spacing="14">
+                    <Grid ColumnSpacing="9">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ContentPresenter Content="Note" ContentTemplate="{StaticResource StickyNoteGlyph}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding AddNote, Source={StaticResource UiText}}" FontSize="17" FontWeight="SemiBold" />
+                        <TextBlock x:Name="PageLabel" Grid.Column="2" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                    </Grid>
+                    <TextBox x:Name="Editor" Height="124" Padding="10,8" AcceptsReturn="True" TextWrapping="Wrap"
+                             PlaceholderText="{Binding NoteText, Source={StaticResource UiText}}"
+                             AutomationProperties.Name="{Binding NoteText, Source={StaticResource UiText}}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                        <Button x:Name="Cancel" Content="{Binding Cancel, Source={StaticResource UiText}}" MinWidth="72" />
+                        <Button x:Name="Add" Content="{Binding Add, Source={StaticResource UiText}}" MinWidth="72"
+                                Style="{ThemeResource AccentButtonStyle}" IsEnabled="False" />
+                    </StackPanel>
+                </StackPanel>
+            </DataTemplate>
+            <DataTemplate x:Key="NoteReaderContent">
+                <Grid Width="252" Height="156" RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /><RowDefinition /><RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ContentPresenter Content="Note" ContentTemplate="{StaticResource StickyNoteGlyph}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding StickyNote, Source={StaticResource UiText}}" FontWeight="SemiBold" />
+                        <TextBlock x:Name="PageLabel" Grid.Column="2" Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                    </Grid>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="Body" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="21" />
+                    </ScrollViewer>
+                    <Button x:Name="Delete" Grid.Row="2" Style="{ThemeResource SubtleButtonStyle}" HorizontalAlignment="Right"
+                            AutomationProperties.Name="{Binding DeleteNote, Source={StaticResource UiText}}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE74D;" FontSize="14" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                            <TextBlock Text="{Binding DeleteNote, Source={StaticResource UiText}}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </DataTemplate>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
