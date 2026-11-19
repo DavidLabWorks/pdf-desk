@@ -16,7 +16,8 @@
         Translation="0,0,32"
         PointerEntered="Card_PointerEntered"
         PointerExited="Card_PointerExited"
-        Background="{ThemeResource HomeCardBrush}">
+        Background="{ThemeResource HomeCardBrush}"
+        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
         <Border.RenderTransform>
             <TranslateTransform x:Name="CardOffset" />
         </Border.RenderTransform>
@@ -36,10 +37,12 @@
                           Foreground="{ThemeResource SystemFillColorCriticalBrush}" Visibility="Collapsed" />
             </Grid>
 
-            <TextBlock x:Name="NoticeText" Grid.Column="1" VerticalAlignment="Center"
-                       TextWrapping="Wrap" Foreground="{ThemeResource HomeTextBrush}">
-                <Run x:Name="NoticeTitle" FontWeight="SemiBold" /><Run x:Name="NoticeMessage" />
-            </TextBlock>
+            <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                <TextBlock x:Name="NoticeTitle" FontWeight="SemiBold" TextWrapping="Wrap"
+                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                <TextBlock x:Name="NoticeMessage" TextWrapping="Wrap"
+                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+            </StackPanel>
 
             <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Width="32" Height="32"
                     CornerRadius="8" VerticalAlignment="Top" Click="CloseButton_Click"

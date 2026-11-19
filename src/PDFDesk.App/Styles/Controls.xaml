@@ -42,7 +42,7 @@
                                 <VisualState x:Name="Checked">
                                     <VisualState.Setters>
                                         <Setter Target="Surface.Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
-                                        <Setter Target="PageIcon.Stroke" Value="White" />
+                                        <Setter Target="PageIcon.Stroke" Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>
@@ -86,8 +86,8 @@
                                 <VisualState x:Name="Checked">
                                     <VisualState.Setters>
                                         <Setter Target="Surface.Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
-                                        <Setter Target="PageIcon.Stroke" Value="White" />
-                                        <Setter Target="SegmentLabel.Foreground" Value="White" />
+                                        <Setter Target="PageIcon.Stroke" Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                        <Setter Target="SegmentLabel.Foreground" Value="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
                                     </VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>
@@ -322,15 +322,12 @@
     <Style x:Key="SecondaryTextStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
     </Style>
+    <Style x:Key="ValidationErrorTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+    </Style>
 
     <Style x:Key="TertiaryTextStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="{ThemeResource TextFillColorTertiaryBrush}" />
-    </Style>
-
-    <!-- A limitation or warning the reader must not skim past. -->
-    <Style x:Key="CautionTextStyle" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCautionBrush}" />
-        <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <!-- The box you type into on the page. It sits over the document, so it has

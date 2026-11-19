@@ -918,14 +918,19 @@ public sealed partial class MainWindow : Window
             {
                 Text = LibraryFolder,
                 TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+                Style = (Style)Application.Current.Resources["SecondaryTextStyle"],
             };
             var error = new TextBlock
             {
+                Style = (Style)Application.Current.Resources["ValidationErrorTextStyle"],
                 TextWrapping = TextWrapping.Wrap,
                 Visibility = Visibility.Collapsed,
             };
             AutomationProperties.SetLiveSetting(error, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
-            var content = new StackPanel { Spacing = 10, Children = { name, destination, error } };
+            var location = new StackPanel { Spacing = 4, Children = { new TextBlock { Text = ui.LibraryFolderLabel }, destination } };
+            var input = new StackPanel { Spacing = 4, Children = { name, error } };
+            var content = new StackPanel { Spacing = 16, MinWidth = 280, MaxWidth = 420, Children = { input, location } };
             var dialog = new ContentDialog
             {
                 Title = ui.CreateBlankPdf,
@@ -3022,10 +3027,12 @@ public sealed partial class MainWindow : Window
         // or revocation. Presenting any of the fields below as proof of
         // authenticity would mislead someone about a document they may be
         // relying on, so the limitation goes first and is never softened.
-        panel.Children.Add(new TextBlock
+        panel.Children.Add(new InfoBar
         {
-            Text = UiText.Current.SignatureVerificationExplanation,
-            Style = (Style)Application.Current.Resources["CautionTextStyle"],
+            Severity = InfoBarSeverity.Warning,
+            Message = UiText.Current.SignatureVerificationExplanation,
+            IsClosable = false,
+            IsOpen = true,
         });
 
         foreach (var signature in signatures)
@@ -3062,20 +3069,13 @@ public sealed partial class MainWindow : Window
             Title = signatures.Count == 1 ? UiText.Translate("Signature details") : UiText.Format("Signature details ({0})", signatures.Count),
             Content = new ScrollViewer { Content = panel, MaxHeight = 460 },
             CloseButtonText = UiText.Current.Close,
+            CloseButtonStyle = (Style)Application.Current.Resources["DocumentPropertiesCloseStyle"],
         });
     }
 
     private static void AddSignatureRow(Panel parent, string label, string value)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        row.Children.Add(new TextBlock
-        {
-            Text = UiText.Translate(label),
-            Width = 90,
-            Style = (Style)Application.Current.Resources["SecondaryTextStyle"],
-        });
-        row.Children.Add(new TextBlock { Text = value, TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
-        parent.Children.Add(row);
+        parent.Children.Add(PropertyRow(UiText.Translate(label), value));
     }
 
     /// <summary>
@@ -3111,12 +3111,6 @@ public sealed partial class MainWindow : Window
     private Task<ContentDialogResult> ShowDialogAsync(ContentDialog dialog)
     {
         dialog.XamlRoot ??= Content.XamlRoot;
-        // A ContentDialog is hosted in a popup outside the content tree, so it
-        // does NOT inherit the theme ApplyTheme sets on Window.Content — it
-        // follows the OS instead. Without this, choosing Light in PDFDesk on a
-        // dark-mode Windows gives a dark dialog over a light app. Same class of
-        // bug as the caption buttons.
-        dialog.RequestedTheme = ((FrameworkElement)Content).ActualTheme;
         return DialogHost.ShowAsync(dialog);
     }
 }

@@ -7,7 +7,7 @@
 
 Keep frequently used PDFs on a bookshelf and open them in tabs to read, annotate, fill out forms, or assemble a new document from selected pages. PDF Desk processes documents on your computer and works without an account. The interface is available in English and Simplified Chinese.
 
-![PDF Desk reader in Simplified Chinese, with document tabs, page thumbnails, and annotation tools above the open page](docs/screenshots/reader.png)
+![PDF Desk reader in English, with document tabs, page thumbnails, and annotation tools above the open page](docs/screenshots/en/reader.png)
 
 ## Getting started
 
@@ -17,7 +17,7 @@ Keep frequently used PDFs on a bookshelf and open them in tabs to read, annotate
 
 ## Bookshelf and reading
 
-![Recent PDFs shown as cover cards, with controls for favorites, grid view, and list view](docs/screenshots/bookshelf.png)
+![Recent PDFs shown as cover cards, with controls for favorites, grid view, and list view](docs/screenshots/en/bookshelf.png)
 
 - **Bookshelf.** Recent files and favorites each remember your choice of grid or list view. Cards show the file name, date added, and size. Right-click a file to open its folder or remove it from the list.
 - **Reading.** Open several documents in tabs and arrange pages in one, two, or three columns. Fit a page to the window or its width, rotate it, switch to night mode, or enter full-screen presentation mode. Session restore remembers your open tabs and whether you left the app on Home.
@@ -45,7 +45,7 @@ Keep frequently used PDFs on a bookshelf and open them in tabs to read, annotate
 
 A handwritten signature is a visible annotation that recipients can see when they open the saved PDF. A digital signature serves a different purpose: it can be used to verify the signer’s identity. See the [privacy policy](PRIVACY.md) for details about local data.
 
-![Settings for theme, interface language, library location, and default PDF application status](docs/screenshots/settings.png)
+![Settings for theme, interface language, library location, and default PDF application status](docs/screenshots/en/settings.png)
 
 ## How it works
 

@@ -70,7 +70,7 @@ public sealed partial class NoticeHost : UserControl
         }
 
         bool entering = Card.Visibility != Visibility.Visible || _dismissing;
-        string heading = string.IsNullOrEmpty(title) ? string.Empty : title + "\u2002";
+        string heading = title ?? string.Empty;
         bool announce = entering || _severity != severity
             || NoticeTitle.Text != heading || NoticeMessage.Text != message;
         if (dismissKey is not null && dismissKey == _currentKey && !announce) return true;
@@ -90,13 +90,14 @@ public sealed partial class NoticeHost : UserControl
         };
         _visibleIcon.Visibility = Visibility.Visible;
         NoticeTitle.Text = heading;
+        NoticeTitle.Visibility = heading.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         NoticeMessage.Text = message;
         Card.Visibility = Visibility.Visible;
 
         if (announce)
         {
             string announcement = string.IsNullOrEmpty(title) ? message : $"{title}. {message}";
-            FrameworkElementAutomationPeer.CreatePeerForElement(NoticeText)?.RaiseNotificationEvent(
+            FrameworkElementAutomationPeer.CreatePeerForElement(NoticeMessage)?.RaiseNotificationEvent(
                 AutomationNotificationKind.Other,
                 severity is InfoBarSeverity.Warning or InfoBarSeverity.Error
                     ? AutomationNotificationProcessing.ImportantMostRecent

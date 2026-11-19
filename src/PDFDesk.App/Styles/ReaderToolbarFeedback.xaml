@@ -5,18 +5,26 @@
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="ReaderToolbarHoverBrush" Color="#E3E3E3" />
             <SolidColorBrush x:Key="ReaderToolbarPressedBrush" Color="#D8D8D8" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ReaderToolbarHoverBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="ReaderToolbarPressedBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPointerOver" ResourceKey="ReaderToolbarHoverBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPressed" ResourceKey="ReaderToolbarPressedBrush" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
             <SolidColorBrush x:Key="ReaderToolbarHoverBrush" Color="#45474B" />
             <SolidColorBrush x:Key="ReaderToolbarPressedBrush" Color="#505256" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ReaderToolbarHoverBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="ReaderToolbarPressedBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPointerOver" ResourceKey="ReaderToolbarHoverBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPressed" ResourceKey="ReaderToolbarPressedBrush" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
             <StaticResource x:Key="ReaderToolbarHoverBrush" ResourceKey="SystemColorHighlightTextColorBrush" />
             <StaticResource x:Key="ReaderToolbarPressedBrush" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ReaderToolbarHoverBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="ReaderToolbarPressedBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPointerOver" ResourceKey="ReaderToolbarHoverBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPressed" ResourceKey="ReaderToolbarPressedBrush" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
-    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ReaderToolbarHoverBrush" />
-    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="ReaderToolbarPressedBrush" />
-    <StaticResource x:Key="ToggleButtonBackgroundPointerOver" ResourceKey="ReaderToolbarHoverBrush" />
-    <StaticResource x:Key="ToggleButtonBackgroundPressed" ResourceKey="ReaderToolbarPressedBrush" />
 </ResourceDictionary>

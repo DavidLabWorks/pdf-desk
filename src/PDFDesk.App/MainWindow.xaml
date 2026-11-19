@@ -286,12 +286,12 @@
                                             <Setter Property="FontWeight" Value="SemiBold" />
                                             <Setter Property="Foreground" Value="{ThemeResource HomeSecondaryTextBrush}" />
                                         </Style>
-                                        <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="HomeSectionBrush" />
-                                        <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="HomeSectionBrush" />
-                                        <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="HomeSectionBrush" />
-                                        <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="AccentTextFillColorPrimaryBrush" />
-                                        <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="AccentTextFillColorPrimaryBrush" />
-                                        <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="AccentTextFillColorPrimaryBrush" />
+                                        <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="{ThemeResource ReaderToggleCheckedColor}" />
+                                        <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="{ThemeResource ReaderToggleCheckedHoverColor}" />
+                                        <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="{ThemeResource ReaderToggleCheckedHoverColor}" />
+                                        <SolidColorBrush x:Key="ToggleButtonForegroundChecked" Color="{ThemeResource ReaderToggleTextColor}" />
+                                        <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="{ThemeResource ReaderToggleTextColor}" />
+                                        <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="{ThemeResource ReaderToggleTextColor}" />
                                     </StackPanel.Resources>
                                     <TextBlock Text="{Binding PageLayout, Source={StaticResource UiText}}"
                                                Style="{StaticResource ViewPanelHeadingStyle}" />
@@ -953,12 +953,12 @@
                         <ResourceDictionary.MergedDictionaries>
                             <ResourceDictionary Source="ms-appx:///Styles/ReaderToolbarFeedback.xaml" />
                         </ResourceDictionary.MergedDictionaries>
-                        <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="HomeSectionBrush" />
-                        <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="HomePaperStrokeBrush" />
-                        <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="HomePaperStrokeBrush" />
-                        <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="AccentTextFillColorPrimaryBrush" />
-                        <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="AccentTextFillColorPrimaryBrush" />
-                        <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="AccentTextFillColorPrimaryBrush" />
+                        <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="{ThemeResource ReaderToggleCheckedColor}" />
+                        <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="{ThemeResource ReaderToggleCheckedHoverColor}" />
+                        <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="{ThemeResource ReaderToggleCheckedHoverColor}" />
+                        <SolidColorBrush x:Key="ToggleButtonForegroundChecked" Color="{ThemeResource ReaderToggleTextColor}" />
+                        <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="{ThemeResource ReaderToggleTextColor}" />
+                        <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="{ThemeResource ReaderToggleTextColor}" />
                     </ResourceDictionary>
                 </Border.Resources>
                 <ScrollViewer x:Name="TextFormatScroll" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Hidden"
@@ -1229,8 +1229,13 @@
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" Padding="16,12" MinHeight="52">
                                 <TextBlock x:Name="DefaultPdfHint" Text="{Binding DefaultPdfAppHint, Source={StaticResource UiText}}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            VerticalAlignment="Center" TextWrapping="Wrap" />
-                                <TextBlock x:Name="DefaultPdfStatus" Grid.ColumnSpan="2" Text="{Binding DefaultPdfAppStatus, Source={StaticResource UiText}}"
-                                           Visibility="Collapsed" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <Grid x:Name="DefaultPdfStatus" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*"
+                                      ColumnSpacing="10" Visibility="Collapsed" VerticalAlignment="Center">
+                                    <FontIcon Glyph="&#xE73E;" FontSize="16" Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                              AutomationProperties.AccessibilityView="Raw" />
+                                    <TextBlock Grid.Column="1" Text="{Binding DefaultPdfAppStatus, Source={StaticResource UiText}}"
+                                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </Grid>
                                 <Button x:Name="SetDefaultPdfButton" Grid.Column="1" VerticalAlignment="Center" Content="{Binding SetDefaultPdfApp, Source={StaticResource UiText}}"
                                         Click="SetDefaultPdfApp_Click" />
                             </Grid>

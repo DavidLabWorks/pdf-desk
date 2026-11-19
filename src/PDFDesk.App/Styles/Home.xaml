@@ -25,6 +25,9 @@
             <SolidColorBrush x:Key="HomeLayerBrush" Color="#F0F0F0" />
             <SolidColorBrush x:Key="HomeShortcutDividerBrush" Color="#66FFFFFF" />
             <SolidColorBrush x:Key="HomeCardBrush" Color="#F5F5F5" />
+            <StaticResource x:Key="ReaderToggleTextColor" ResourceKey="SystemBaseHighColor" />
+            <Color x:Key="ReaderToggleCheckedColor">#DBDBDB</Color>
+            <Color x:Key="ReaderToggleCheckedHoverColor">#CBCBCB</Color>
             <Color x:Key="HomeCardHoverColor">#FFFFFF</Color>
             <Color x:Key="HomeCardHoverTextColor">#202020</Color>
         </ResourceDictionary>
@@ -50,8 +53,11 @@
             <SolidColorBrush x:Key="HomeLayerBrush" Color="#2C2C2C" />
             <SolidColorBrush x:Key="HomeShortcutDividerBrush" Color="#66000000" />
             <SolidColorBrush x:Key="HomeCardBrush" Color="#323438" />
-            <Color x:Key="HomeCardHoverColor">#FFFFFF</Color>
-            <Color x:Key="HomeCardHoverTextColor">#202020</Color>
+            <StaticResource x:Key="ReaderToggleTextColor" ResourceKey="SystemBaseHighColor" />
+            <Color x:Key="ReaderToggleCheckedColor">#4C4E52</Color>
+            <Color x:Key="ReaderToggleCheckedHoverColor">#585A5E</Color>
+            <Color x:Key="HomeCardHoverColor">#404247</Color>
+            <Color x:Key="HomeCardHoverTextColor">#F2F2F2</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
             <SolidColorBrush x:Key="ShelfFavoriteBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
@@ -76,6 +82,9 @@
             <SolidColorBrush x:Key="HomeShortcutDividerBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
             <SolidColorBrush x:Key="HomeCardBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <StaticResource x:Key="HomeCardHoverTextColor" ResourceKey="SystemColorWindowTextColor" />
+            <StaticResource x:Key="ReaderToggleTextColor" ResourceKey="SystemColorHighlightTextColor" />
+            <StaticResource x:Key="ReaderToggleCheckedColor" ResourceKey="SystemColorHighlightColor" />
+            <StaticResource x:Key="ReaderToggleCheckedHoverColor" ResourceKey="SystemColorHighlightColor" />
             <StaticResource x:Key="HomeCardHoverColor" ResourceKey="SystemColorWindowColor" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>

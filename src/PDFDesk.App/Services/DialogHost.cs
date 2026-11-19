@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
 namespace PDFDesk.Services;
@@ -34,6 +35,9 @@ public static class DialogHost
         IsOpen = true;
         try
         {
+            // Popups live outside the content tree and otherwise follow the OS theme.
+            if (dialog.XamlRoot?.Content is FrameworkElement root)
+                dialog.RequestedTheme = root.ActualTheme;
             return await dialog.ShowAsync();
         }
         catch (Exception ex)
