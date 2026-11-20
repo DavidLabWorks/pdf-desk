@@ -742,7 +742,7 @@
                             Grid.Column="2" VerticalAlignment="Stretch" Click="OpenButton_Click" Style="{StaticResource HomeBrowseButtonStyle}" />
                 </Grid>
 
-                <Grid x:Name="FolderBar" Grid.Row="2" Width="200" Margin="8,0,4,24" Padding="8,12,2,8" Background="{ThemeResource HomeShelfBrush}" CornerRadius="10" RowDefinitions="Auto,*,Auto" RowSpacing="6" Visibility="Collapsed">
+                <Grid Canvas.ZIndex="1" x:Name="FolderBar" Grid.Row="2" Width="200" Margin="8,0,4,24" Padding="8,12,2,8" Background="{ThemeResource HomeShelfBrush}" CornerRadius="10" RowDefinitions="Auto,*,Auto" RowSpacing="6" Visibility="Collapsed">
                     <TextBlock Text="{Binding FavoriteFoldersLabel, Source={StaticResource UiText}}" Margin="10,0,0,0"
                                Padding="0,6" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -775,7 +775,7 @@
                         </Button>
                     </Grid>
                 </Grid>
-                <controls:ShelfGridView x:Name="RecentThumbs" Grid.Column="1" ContainerContentChanging="RecentCard_ContainerContentChanging" Grid.Row="2" Margin="8,0,8,24" Padding="8,16,8,0"
+                <controls:ShelfGridView x:Name="RecentThumbs" Grid.Column="0" Grid.ColumnSpan="2" ContainerContentChanging="RecentCard_ContainerContentChanging" Grid.Row="2" Margin="8,0,8,24" Padding="8,16,8,0"
                           Background="{ThemeResource HomeShelfBrush}" CornerRadius="12"
                           SelectionMode="None" ShowsScrollingPlaceholders="False" Visibility="Collapsed">
                     <GridView.ItemsPanel>
@@ -802,13 +802,13 @@
                     </GridView.ItemContainerStyle>
                     <GridView.ItemTemplate>
                         <DataTemplate x:DataType="controls:RecentCard">
-                            <Grid Width="{StaticResource ShelfCardWidth}" HorizontalAlignment="Center">
-                            <Grid.ContextFlyout>
+                            <Grid ContextRequested="ShelfItem_ContextRequested" Width="{StaticResource ShelfCardWidth}" HorizontalAlignment="Center">
+                            <FlyoutBase.AttachedFlyout>
                                 <MenuFlyout Opening="RecentMenu_Opening" />
-                            </Grid.ContextFlyout>
+                            </FlyoutBase.AttachedFlyout>
                             <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                                     Padding="0" CornerRadius="10" Background="{ThemeResource HomeCardBrush}"
-                                    Foreground="{ThemeResource HomeTextBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" Tag="ShelfDocument" Click="RecentOpen_Click"
+                                    Foreground="{ThemeResource HomeTextBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" Tag="ShelfDocument" IsHoldingEnabled="False" ManipulationMode="None" Click="RecentOpen_Click"
                                     AutomationProperties.Name="{x:Bind DisplayName}" ToolTipService.ToolTip="{x:Bind Path}">
                                 <Button.Resources>
                                     <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{ThemeResource HomeCardHoverTextColor}" />
@@ -858,7 +858,7 @@
                         </DataTemplate>
                     </GridView.ItemTemplate>
                 </controls:ShelfGridView>
-                <controls:ShelfGridView x:Name="FavoriteThumbs" Grid.Column="1" Grid.Row="2" Visibility="Collapsed"
+                <controls:ShelfGridView Canvas.ZIndex="1" x:Name="FavoriteThumbs" Grid.Column="1" Grid.Row="2" Visibility="Collapsed"
                           Margin="{Binding Margin, ElementName=RecentThumbs}" Padding="{Binding Padding, ElementName=RecentThumbs}"
                           Background="{ThemeResource HomeShelfBrush}" CornerRadius="12"
                           SelectionMode="None" ShowsScrollingPlaceholders="False"
@@ -868,7 +868,7 @@
                           ItemTemplate="{Binding ItemTemplate, ElementName=RecentThumbs}">
                     <GridView.ItemContainerTransitions><TransitionCollection /></GridView.ItemContainerTransitions>
                 </controls:ShelfGridView>
-                <Grid x:Name="ShelfListSurface" Grid.Column="1" Grid.Row="2" Visibility="Collapsed"
+                <Grid x:Name="ShelfListSurface" Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="2" Visibility="Collapsed"
                       Margin="{Binding Margin, ElementName=RecentThumbs}" Background="{ThemeResource HomeShelfBrush}"
                       CornerRadius="12" Padding="16">
                 <ListView x:Name="ShelfList" VerticalAlignment="Top"
@@ -889,16 +889,16 @@
                     </ListView.ItemContainerStyle>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="controls:RecentCard">
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="{StaticResource SpaceM}"
+                            <Grid ContextRequested="ShelfItem_ContextRequested" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="{StaticResource SpaceM}"
                                   MinHeight="84" Padding="16,0,12,0"
                                   BorderBrush="{ThemeResource HomeOutlineBrush}" BorderThickness="0,0,0,1">
-                                <Grid.ContextFlyout>
+                                <FlyoutBase.AttachedFlyout>
                                     <MenuFlyout Opening="RecentMenu_Opening" />
-                                </Grid.ContextFlyout>
+                                </FlyoutBase.AttachedFlyout>
                                 <Button Grid.ColumnSpan="3" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                         BorderThickness="0" Background="Transparent"
                                         CornerRadius="{StaticResource RadiusMedium}"
-                                        Tag="ShelfDocument" Click="RecentOpen_Click" AutomationProperties.Name="{x:Bind DisplayName}"
+                                        Tag="ShelfDocument" IsHoldingEnabled="False" ManipulationMode="None" Click="RecentOpen_Click" AutomationProperties.Name="{x:Bind DisplayName}"
                                         ToolTipService.ToolTip="{x:Bind Path}" />
                                 <Grid Width="48" Height="60" VerticalAlignment="Center"
                                       IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw">
@@ -937,7 +937,18 @@
                     </ListView.ItemTemplate>
                 </ListView>
                 </Grid>
-                <Grid x:Name="NoFavorites" Grid.Column="1" Grid.Row="2" Visibility="Collapsed" Margin="24,0,24,24"
+                <Grid Canvas.ZIndex="1" x:Name="FavoriteListSurface" Grid.Column="1" Grid.Row="2" Visibility="Collapsed"
+                      Margin="{Binding Margin, ElementName=RecentThumbs}" Background="{ThemeResource HomeShelfBrush}"
+                      CornerRadius="12" Padding="16">
+                    <ListView x:Name="FavoriteList" VerticalAlignment="Top" SelectionMode="None"
+                              Background="{ThemeResource HomeCardBrush}" CornerRadius="12" ShowsScrollingPlaceholders="False"
+                              ItemContainerStyle="{Binding ItemContainerStyle, ElementName=ShelfList}"
+                              ItemTemplate="{Binding ItemTemplate, ElementName=ShelfList}"
+                              ContainerContentChanging="RecentCard_ContainerContentChanging" />
+                </Grid>
+                <Border x:Name="ShelfDragBackdrop" Grid.Row="2" Grid.ColumnSpan="2" IsHitTestVisible="False"
+                        Background="{ThemeResource HomeCanvasBrush}" Visibility="Collapsed" />
+                <Grid Canvas.ZIndex="1" x:Name="NoFavorites" Grid.Column="1" Grid.Row="2" Visibility="Collapsed" Margin="24,0,24,24"
                       ColumnDefinitions="Auto,Auto" ColumnSpacing="20"
                       HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Grid Width="56" Height="68" VerticalAlignment="Center"
@@ -1051,7 +1062,7 @@
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>
-                <Canvas x:Name="ShelfDragLayer" Grid.RowSpan="3" Grid.ColumnSpan="2"
+                <Canvas Canvas.ZIndex="2" x:Name="ShelfDragLayer" Grid.RowSpan="3" Grid.ColumnSpan="2"
                         IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw">
                     <Border x:Name="ShelfDragPreview" Visibility="Collapsed" Width="196" Height="52"
                             Padding="10,6" CornerRadius="8" Background="{ThemeResource HomePaperBrush}"

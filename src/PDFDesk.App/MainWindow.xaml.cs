@@ -2485,14 +2485,14 @@ public sealed partial class MainWindow : Window
         (list ? ShelfListMode : ShelfCardMode).IsChecked = true;
         RecentsHeading.Visibility = Visibility.Visible;
         EmptyState.Visibility = !any && !favorites ? Visibility.Visible : Visibility.Collapsed;
-        RecentThumbs.Visibility = !list && !favorites && any ? Visibility.Visible : Visibility.Collapsed;
+        RecentThumbs.Visibility = _retainedRecentView == RecentThumbs || (!list && !favorites && any) ? Visibility.Visible : Visibility.Collapsed;
         FavoriteThumbs.Visibility = !list && favorites ? Visibility.Visible : Visibility.Collapsed;
-        if (list)
-        {
-            var items = favorites ? FavoriteThumbs.ItemsSource : RecentThumbs.ItemsSource;
-            if (!ReferenceEquals(ShelfList.ItemsSource, items)) ShelfList.ItemsSource = items;
-        }
-        ShelfListSurface.Visibility = list && (any || favorites) ? Visibility.Visible : Visibility.Collapsed;
+        bool showRecentList = !favorites && list && any;
+        bool showFavoriteList = favorites && list;
+        ShelfListSurface.Visibility = showRecentList || _retainedRecentView == ShelfListSurface ? Visibility.Visible : Visibility.Collapsed;
+        FavoriteListSurface.Visibility = showFavoriteList ? Visibility.Visible : Visibility.Collapsed;
+        if (showRecentList) ShelfList.ItemsSource = RecentThumbs.ItemsSource;
+        if (showFavoriteList) FavoriteList.ItemsSource = FavoriteThumbs.ItemsSource;
         if (favorites && FavoriteThumbs.Items.Count == 0)
         {
             bool filtered = _folderFilter.HasValue;
@@ -2527,7 +2527,7 @@ public sealed partial class MainWindow : Window
     private void RecentMore_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Parent: FrameworkElement row } button)
-            row.ContextFlyout?.ShowAt(button, new FlyoutShowOptions
+            FlyoutBase.GetAttachedFlyout(row)?.ShowAt(button, new FlyoutShowOptions
             {
                 Placement = FlyoutPlacementMode.BottomEdgeAlignedRight,
             });
@@ -2634,6 +2634,7 @@ public sealed partial class MainWindow : Window
 
     private async void RecentOpen_Click(object sender, RoutedEventArgs e)
     {
+        if (_capturedDrag != null) return;
         if (sender is Button { DataContext: RecentCard card })
         {
             if (File.Exists(card.Path))

@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using PDFDesk.Controls;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -123,6 +124,41 @@ public sealed partial class MainWindow
     private Pointer? _capturedDrag;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _favoritesHoverTimer;
     private bool _hoveringFavorites;
+    private FrameworkElement? _retainedRecentView;
+
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _touchHoldTimer;
+    private Pointer? _pendingTouch;
+
+    private bool _shelfPressWasTouch;
+
+    private void ShelfItem_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
+    {
+        var row = (FrameworkElement)sender;
+        bool hasPosition = args.TryGetPosition(row, out var position);
+        args.Handled = true;
+        if (hasPosition && _shelfPressWasTouch) return;
+        var flyout = FlyoutBase.GetAttachedFlyout(row);
+        if (hasPosition) flyout.ShowAt(row, new FlyoutShowOptions { Position = position });
+        else flyout.ShowAt(row);
+    }
+
+    private void ArmTouchDrag(Pointer pointer)
+    {
+        _pendingTouch = pointer;
+        if (_touchHoldTimer == null)
+        {
+            _touchHoldTimer = DispatcherQueue.CreateTimer();
+            _touchHoldTimer.IsRepeating = false;
+            _touchHoldTimer.Interval = TimeSpan.FromMilliseconds(300);
+            _touchHoldTimer.Tick += (_, _) =>
+            {
+                if (_pendingTouch is not { } touch || _dragSource == null) return;
+                _dragSource.CancelDirectManipulations();
+                BeginShelfDrag(touch, _shelfDragStart);
+            };
+        }
+        _touchHoldTimer.Start();
+    }
 
     private void AttachShelfDragHandlers()
     {
@@ -139,18 +175,23 @@ public sealed partial class MainWindow
         {
             if (_dragCard is not { } card || e.Pointer.PointerId != _dragPointer) return;
             // A button may release capture before the routed release reaches StartPage.
-            bool lostShelfCapture = ReferenceEquals(e.OriginalSource, StartPage);
+            var pointerId = e.Pointer.PointerId;
+            bool lostShelfCapture = ReferenceEquals(e.OriginalSource, StartPage) ||
+                                    ReferenceEquals(e.OriginalSource, _dragSource);
             DispatcherQueue.TryEnqueue(() =>
             {
-                if (ReferenceEquals(_dragCard, card) && (_capturedDrag == null || lostShelfCapture)) EndShelfDrag();
+                if (_dragPointer == pointerId && ReferenceEquals(_dragCard, card) && (_capturedDrag == null || lostShelfCapture)) EndShelfDrag();
             });
         }), true);
     }
 
     private void ShelfPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        bool touch = e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Touch;
+        if (_dragCard != null && e.Pointer.PointerId != _dragPointer) return;
+        _shelfPressWasTouch = touch;
         EndShelfDrag();
-        if (!e.GetCurrentPoint(StartPage).Properties.IsLeftButtonPressed) return;
+        if (!(touch ? e.Pointer.IsInContact : e.GetCurrentPoint(StartPage).Properties.IsLeftButtonPressed)) return;
         for (var node = e.OriginalSource as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
         {
             if (node is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase button)
@@ -161,45 +202,77 @@ public sealed partial class MainWindow
                     _dragPointer = e.Pointer.PointerId;
                     _shelfDragStart = e.GetCurrentPoint(ShelfDragLayer).Position;
                     _dragCard = card;
+                    if (touch)
+                    {
+                        ToolTipService.SetToolTip(source, null);
+                        ArmTouchDrag(e.Pointer);
+                    }
                 }
                 break;
             }
         }
     }
 
-    private Border? FolderAt(PointerRoutedEventArgs e)
+    private Border? FolderAt(Windows.Foundation.Point point)
     {
-        var point = e.GetCurrentPoint(RootGrid).Position;
         return VisualTreeHelper.FindElementsInHostCoordinates(point, FolderLocations)
             .OfType<Border>().FirstOrDefault(border => border.AllowDrop && border.DataContext is FavoriteLocation);
+    }
+
+    private bool BeginShelfDrag(Pointer pointer, Windows.Foundation.Point position)
+    {
+        if (_dragCard == null) return false;
+        _pendingTouch = null;
+        // Keep the pressed button alive and captured until the drop completes.
+        var owner = _dragSource;
+        if (owner == null) return false;
+        if (owner.PointerCaptures?.Any(p => p.PointerId == pointer.PointerId) != true && !owner.CapturePointer(pointer))
+        {
+            EndShelfDrag();
+            return false;
+        }
+        _capturedDrag = pointer;
+        ShelfDragName.Text = _dragCard.DisplayName;
+        ShelfDragCover.Source = _dragCard.Thumbnail;
+        ShelfDragFileIcon.Visibility = _dragCard.HasThumbnail ? Visibility.Collapsed : Visibility.Visible;
+        ShelfDragOffset.X = PreviewPosition(position.X, ShelfDragPreview.Width, ShelfDragLayer.ActualWidth);
+        ShelfDragOffset.Y = PreviewPosition(position.Y, ShelfDragPreview.Height, ShelfDragLayer.ActualHeight);
+        ShelfDragPreview.Visibility = Visibility.Visible;
+        return true;
     }
 
     private void ShelfPointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (_dragCard == null || e.Pointer.PointerId != _dragPointer) return;
         var point = e.GetCurrentPoint(ShelfDragLayer);
-        if (!point.Properties.IsLeftButtonPressed) { EndShelfDrag(); return; }
+        if (!(e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Touch ? point.IsInContact : point.Properties.IsLeftButtonPressed)) { EndShelfDrag(); return; }
         var position = point.Position;
         if (ShelfDragPreview.Visibility != Visibility.Visible)
         {
             if (Math.Abs(position.X - _shelfDragStart.X) < 5 && Math.Abs(position.Y - _shelfDragStart.Y) < 5) return;
-            // The card disappears when the tab switches. Keep capture on the shelf across both views.
-            _dragSource?.ReleasePointerCapture(e.Pointer);
-            if (!StartPage.CapturePointer(e.Pointer)) { EndShelfDrag(); return; }
-            _capturedDrag = e.Pointer;
-            ShelfDragName.Text = _dragCard.DisplayName;
-            ShelfDragCover.Source = _dragCard.Thumbnail;
-            ShelfDragFileIcon.Visibility = _dragCard.HasThumbnail ? Visibility.Collapsed : Visibility.Visible;
-            ShelfDragPreview.Visibility = Visibility.Visible;
+            // Moving before the hold completes leaves touch scrolling with the list.
+            if (_pendingTouch != null)
+            {
+                UIElement.TryStartDirectManipulation(e.Pointer);
+                EndShelfDrag();
+                return;
+            }
+            if (!BeginShelfDrag(e.Pointer, position)) return;
         }
+        UpdateShelfDrag(position);
+    }
+
+    private void UpdateShelfDrag(Windows.Foundation.Point position)
+    {
+        if (_dragCard == null) return;
         ShelfDragOffset.X = PreviewPosition(position.X, ShelfDragPreview.Width, ShelfDragLayer.ActualWidth);
         ShelfDragOffset.Y = PreviewPosition(position.Y, ShelfDragPreview.Height, ShelfDragLayer.ActualHeight);
-        var tabPoint = e.GetCurrentPoint(FavoritesTab).Position;
+        var tabPoint = ShelfDragLayer.TransformToVisual(FavoritesTab).TransformPoint(position);
         bool overTab = FavoritesTab.IsChecked != true && tabPoint.X >= 0 && tabPoint.X < FavoritesTab.ActualWidth &&
                        tabPoint.Y >= 0 && tabPoint.Y < FavoritesTab.ActualHeight;
         if (overTab) ArmFavoritesTab();
         else CancelFavoritesHover();
-        var target = FolderBar.Visibility == Visibility.Visible ? FolderAt(e) : null;
+        var target = FolderBar.Visibility == Visibility.Visible ? FolderAt(ShelfDragLayer.TransformToVisual(RootGrid).TransformPoint(position)) : null;
         if (target == _hoverFolder) return;
         _hoverFolder?.ClearValue(Border.BorderBrushProperty);
         _hoverFolder = target;
@@ -244,7 +317,10 @@ public sealed partial class MainWindow
     {
         if (!_hoveringFavorites) return;
         CancelFavoritesHover();
-        if (_capturedDrag != null && StartPage.IsLoaded) FavoritesTab.IsChecked = true;
+        if (_capturedDrag == null || !StartPage.IsLoaded) return;
+        _retainedRecentView = ShelfListSurface.Visibility == Visibility.Visible ? ShelfListSurface : RecentThumbs;
+        ShelfDragBackdrop.Visibility = Visibility.Visible;
+        FavoritesTab.IsChecked = true;
     }
 
     private void CancelFavoritesHover()
@@ -259,11 +335,22 @@ public sealed partial class MainWindow
     private void EndShelfDrag()
     {
         CancelFavoritesHover();
+        if (_retainedRecentView != null)
+        {
+            _retainedRecentView = null;
+            UpdateShelfSection();
+            ShelfDragBackdrop.Visibility = Visibility.Collapsed;
+        }
+        _touchHoldTimer?.Stop();
+        _pendingTouch = null;
         var pointer = _capturedDrag;
         _capturedDrag = null;
+        if (pointer != null) _dragSource?.ReleasePointerCapture(pointer);
+        if (_shelfPressWasTouch && _dragSource is { DataContext: RecentCard sourceCard } source)
+            ToolTipService.SetToolTip(source, sourceCard.Path);
         _dragSource = null;
         _dragCard = null;
-        if (pointer != null) StartPage.ReleasePointerCapture(pointer);
+
         ShelfDragBlocked.Visibility = Visibility.Collapsed;
         ShelfDragPreview.Visibility = Visibility.Collapsed;
         ShelfDragCover.Source = null;
@@ -276,7 +363,7 @@ public sealed partial class MainWindow
         if (_dragCard == null || e.Pointer.PointerId != _dragPointer) return;
         var card = _dragCard;
         bool dragging = _capturedDrag != null;
-        var target = dragging && FolderBar.Visibility == Visibility.Visible ? FolderAt(e) : null;
+        var target = dragging && FolderBar.Visibility == Visibility.Visible ? FolderAt(e.GetCurrentPoint(RootGrid).Position) : null;
         EndShelfDrag();
         if (dragging) e.Handled = true;
         if (target?.DataContext is not FavoriteLocation location) return;
@@ -306,6 +393,7 @@ public sealed partial class MainWindow
         e.Handled = true;
         e.AcceptedOperation = DataPackageOperation.None;
         var target = (Border)sender;
+
         if (target.DataContext is not FavoriteLocation location ||
             !e.DataView.Contains(StandardDataFormats.StorageItems)) return;
         var deferral = e.GetDeferral();
@@ -338,6 +426,7 @@ public sealed partial class MainWindow
         target.Tag = null;
         target.ClearValue(Border.BorderBrushProperty);
         if (target.DataContext is not FavoriteLocation location) return;
+
         var deferral = e.GetDeferral();
         try
         {
