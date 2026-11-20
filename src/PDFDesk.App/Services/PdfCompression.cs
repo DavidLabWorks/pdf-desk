@@ -61,7 +61,7 @@ internal static class PdfCompression
         args.Add(output);
         await RunAsync(args.ToArray(), token);
         progress?.Report(92);
-        await RunAsync(["--check", output], token);
+        await RunAsync(["--check", output], token, allowWarnings: false);
     }
 
     // Sample up to three byte-weighted quantiles. Repeated quantiles represent a dominant image.
@@ -209,7 +209,7 @@ internal static class PdfCompression
             objects["obj:" + icc[1]]?["stream"]?["dict"]?["/N"]?.ToString() == "3";
     }
 
-    private static async Task RunAsync(string[] arguments, CancellationToken token)
+    private static async Task RunAsync(string[] arguments, CancellationToken token, bool allowWarnings = true)
     {
         token.ThrowIfCancellationRequested();
         var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "Tools", "qpdf", "qpdf.exe"))
@@ -227,6 +227,9 @@ internal static class PdfCompression
         var stdout = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
         await Task.WhenAll(process.WaitForExitAsync(), errors, stdout);
         token.ThrowIfCancellationRequested();
-        if (process.ExitCode != 0) throw new InvalidDataException((await errors).Trim());
+        // qpdf returns 3 when it completes with recoverable input warnings.
+        // The final output check still requires a clean exit.
+        if (process.ExitCode != 0 && !(allowWarnings && process.ExitCode == 3))
+            throw new InvalidDataException((await errors).Trim());
     }
 }
