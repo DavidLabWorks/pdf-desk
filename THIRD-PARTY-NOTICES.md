@@ -131,3 +131,10 @@ FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
+
+## qpdf
+
+PDF compression uses qpdf 12.4.2 under the Apache License 2.0. The Windows
+binaries are from the official msvc64 and msvc-arm64 release archives at
+https://github.com/qpdf/qpdf/releases/tag/v12.4.2. The license and upstream
+notices ship alongside the executable in Tools/qpdf.

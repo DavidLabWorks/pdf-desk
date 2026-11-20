@@ -69,6 +69,7 @@ public sealed class UiText : INotifyPropertyChanged
     public string CloseTab => Chinese ? "关闭标签页" : "Close tab";
     public string Colour => Chinese ? "颜色" : "Colour";
     public string CopyFilePath => Chinese ? "复制文件路径" : "Copy file path";
+    public string FilePathCopied => Chinese ? "已复制文件路径" : "File path copied";
     public string CopyToLibrary => Chinese ? "复制到书架" : "Copy to library";
     public string CopyingToLibrary => Chinese ? "正在复制到书架…" : "Copying to library…";
     public string CreateBlankPdf => Chinese ? "创建空白 PDF" : "Create blank PDF";
@@ -79,6 +80,7 @@ public sealed class UiText : INotifyPropertyChanged
     public string BlankPdfCreationFailed(string message) => Chinese ? $"创建失败。{message}" : $"Could not create the PDF. {message}";
     public string Dark => Chinese ? "深色" : "Dark";
     public string Delete => Chinese ? "删除" : "Delete";
+    public string CompressExport => Chinese ? "压缩导出" : "Export compressed PDF";
     public string DocumentProperties => Chinese ? "文档属性" : "Document properties";
     public string DiscardChanges => Chinese ? "放弃修改" : "Discard";
     public string SaveAllChanges => Chinese ? "全部保存" : "Save all";

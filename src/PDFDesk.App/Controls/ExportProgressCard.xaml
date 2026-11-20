@@ -1,0 +1,11 @@
+<UserControl x:Class="PDFDesk.Controls.ExportProgressCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Padding="10,9" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+        <TextBlock x:Name="ExportFileName" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+        <TextBlock x:Name="ExportStage" Grid.Row="1" FontSize="12" Foreground="{ThemeResource HomeSecondaryTextBrush}" />
+        <Button x:Name="CancelTask" Grid.Column="1" Grid.RowSpan="2" VerticalAlignment="Center"
+                Content="{Binding Cancel, Source={StaticResource UiText}}" Click="CancelTask_Click" Padding="8,3" />
+        <ProgressBar x:Name="ExportProgress" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,3,0,0" />
+    </Grid>
+</UserControl>

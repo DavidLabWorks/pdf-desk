@@ -1454,6 +1454,8 @@ public sealed partial class PdfViewer : UserControl
         UpdateDesiredTiles();
     }
 
+    internal event Action? CompressionRequested;
+
     private async void Canvas_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
         if (_document is null || _layout is null)
@@ -1533,8 +1535,10 @@ public sealed partial class PdfViewer : UserControl
 
         if (menu.Items.Count > 0)
         {
-            menu.ShowAt(DocumentExtent, position);
+            menu.Items.Add(new MenuFlyoutSeparator());
         }
+        AddMenuItem(menu, UiText.Current.CompressExport, Symbol.Download, () => CompressionRequested?.Invoke());
+        menu.ShowAt(DocumentExtent, position);
     }
 
     private static void AddMenuItem(MenuFlyout menu, string text, Symbol icon, Action action)

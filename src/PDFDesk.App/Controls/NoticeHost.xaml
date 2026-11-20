@@ -14,6 +14,7 @@
         Margin="8,8,8,0"
         CornerRadius="12"
         Translation="0,0,32"
+        GotFocus="Card_GotFocus" LostFocus="Card_LostFocus"
         PointerEntered="Card_PointerEntered"
         PointerExited="Card_PointerExited"
         Background="{ThemeResource HomeCardBrush}"
@@ -25,7 +26,7 @@
             <ThemeShadow />
         </Border.Shadow>
 
-        <Grid ColumnDefinitions="32,*,Auto" ColumnSpacing="12" Padding="16,14,12,14">
+        <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="32,*,Auto" ColumnSpacing="12" Padding="16,14,12,14">
             <Grid VerticalAlignment="Center" AutomationProperties.AccessibilityView="Raw">
                 <FontIcon x:Name="InformationIcon" Glyph="&#xE946;" FontSize="20"
                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" Visibility="Collapsed" />
@@ -44,6 +45,8 @@
                            Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
             </StackPanel>
 
+            <StackPanel x:Name="NoticeActions" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                        Orientation="Horizontal" Spacing="6" Margin="0,10,0,0" Visibility="Collapsed" />
             <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Width="32" Height="32"
                     CornerRadius="8" VerticalAlignment="Top" Click="CloseButton_Click"
                     AutomationProperties.Name="{Binding Close, Source={StaticResource UiText}}"

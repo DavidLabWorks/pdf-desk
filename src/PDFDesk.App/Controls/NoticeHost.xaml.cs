@@ -8,6 +8,8 @@ using Windows.UI.ViewManagement;
 
 namespace PDFDesk.Controls;
 
+public sealed record NoticeAction(string Label, Action Invoke);
+
 /// <summary>
 /// The app's one notice surface: a compact floating card over whatever it is
 /// placed on top of.
@@ -51,6 +53,7 @@ public sealed partial class NoticeHost : UserControl
     {
         double availableWidth = e.NewSize.Width - Card.Margin.Left - Card.Margin.Right;
         Card.Width = Math.Clamp(availableWidth, 0, Card.MaxWidth);
+        NoticeActions.Orientation = Card.Width < 360 ? Orientation.Vertical : Orientation.Horizontal;
     }
 
     /// <summary>
@@ -62,7 +65,7 @@ public sealed partial class NoticeHost : UserControl
     /// Identity for "don't show me this again". Null means transient — always
     /// shown, and never remembered.
     /// </param>
-    public bool Show(string? title, string message, InfoBarSeverity severity, string? dismissKey = null)
+    public bool Show(string? title, string message, InfoBarSeverity severity, string? dismissKey = null, params NoticeAction[] actions)
     {
         if (dismissKey is not null && _dismissed.Contains(dismissKey))
         {
@@ -92,6 +95,18 @@ public sealed partial class NoticeHost : UserControl
         NoticeTitle.Text = heading;
         NoticeTitle.Visibility = heading.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         NoticeMessage.Text = message;
+        NoticeActions.Children.Clear();
+        foreach (var action in actions)
+        {
+            var button = new Button
+            {
+                Content = action.Label, MinHeight = 30, FontSize = 13,
+                Padding = new Thickness(10, 3, 10, 3), CornerRadius = new CornerRadius(6)
+            };
+            button.Click += (_, _) => { Clear(); action.Invoke(); };
+            NoticeActions.Children.Add(button);
+        }
+        NoticeActions.Visibility = actions.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         Card.Visibility = Visibility.Visible;
 
         if (announce)
@@ -131,6 +146,7 @@ public sealed partial class NoticeHost : UserControl
         _pointerOverCard = false;
         _currentKey = null;
         Card.Visibility = Visibility.Collapsed;
+        NoticeActions.Children.Clear();
     }
 
     private void DismissTimer_Tick(object sender, object args) => Dismiss();
@@ -144,13 +160,28 @@ public sealed partial class NoticeHost : UserControl
     private void RestartDismissTimer()
     {
         _dismissTimer.Stop();
-        if (_pointerOverCard || _dismissing || Card.Visibility != Visibility.Visible)
+        if (_pointerOverCard || CardHasFocus() || _dismissing || Card.Visibility != Visibility.Visible)
         {
             return;
         }
 
         _dismissTimer.Start();
     }
+
+    private bool CardHasFocus()
+    {
+        if (XamlRoot is null) return false;
+        var element = FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        while (element != null)
+        {
+            if (element == Card) return true;
+            element = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(element);
+        }
+        return false;
+    }
+
+    private void Card_GotFocus(object sender, RoutedEventArgs e) => _dismissTimer.Stop();
+    private void Card_LostFocus(object sender, RoutedEventArgs e) => DispatcherQueue.TryEnqueue(RestartDismissTimer);
 
     private void Card_PointerEntered(object sender, PointerRoutedEventArgs e)
     {

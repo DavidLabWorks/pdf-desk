@@ -66,6 +66,13 @@ public sealed partial class PdfDocument : IDisposable
         }
     }
 
+    public bool IsEncrypted
+    {
+        get { lock (PdfiumLibrary.Lock) return PdfiumNative.GetSecurityRevision(_handle) >= 0; }
+    }
+
+    public bool MatchesFileOnDisk() => ReadFileVersion(FilePath) == _savedDiskVersion;
+
     /// <summary>Page size in PDF points (1 pt = 1/72 inch).</summary>
     public (float Width, float Height) GetPageSize(int pageIndex)
     {

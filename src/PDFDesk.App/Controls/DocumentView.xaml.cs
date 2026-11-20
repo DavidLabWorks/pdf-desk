@@ -70,8 +70,8 @@ public sealed partial class DocumentView : UserControl
     /// Shows a notice floating over this document's pages. Returns false when
     /// the user has already dismissed a notice with the same key.
     /// </summary>
-    public bool ShowNotice(string? title, string message, InfoBarSeverity severity, string? dismissKey = null)
-        => Notice.Show(title, message, severity, dismissKey);
+    public bool ShowNotice(string? title, string message, InfoBarSeverity severity, string? dismissKey = null, params NoticeAction[] actions)
+        => Notice.Show(title, message, severity, dismissKey, actions);
 
     public void ClearNotice() => Notice.Clear();
 

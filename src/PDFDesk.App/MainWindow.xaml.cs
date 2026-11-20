@@ -381,13 +381,14 @@ public sealed partial class MainWindow : Window
 
     // ---------------------------------------------------------------- tabs
 
-    private void AddTab(string path, RecentFile? restore, bool select)
+    private void AddTab(string path, RecentFile? restore, bool select, int? index = null)
     {
         var view = new DocumentView(path);
         _pendingRestore[view] = restore;
         view.Viewer.LinkActivated += Viewer_LinkActivated;
         view.Viewer.NightMode = _state.Settings.NightMode;
         SeedToolStyles(view.Viewer);
+        view.Viewer.CompressionRequested += () => _ = CompressExportAsync(view.FilePath);
         view.Viewer.DocumentEdited += (_, _) => UpdateDirtyIndicator(view);
         view.Viewer.ActiveToolChanged += (_, tool) =>
         {
@@ -439,7 +440,8 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(2, 0, 2, 0),
             Padding = new Thickness(8, 0, 4, 0),
         };
-        Tabs.TabItems.Add(tab);
+        if (index is int slot) Tabs.TabItems.Insert(slot, tab);
+        else Tabs.TabItems.Add(tab);
         if (select)
         {
             Tabs.SelectedItem = tab;
@@ -739,7 +741,7 @@ public sealed partial class MainWindow : Window
             control.IsEnabled = ready;
         }
         foreach (var item in new MenuFlyoutItem[]
-                 { ReaderSaveAsItem, PrintItem, FindItem, DocumentInfoItem, FlattenItem })
+                 { ReaderSaveAsItem, CompressExportItem, PrintItem, FindItem, DocumentInfoItem, FlattenItem, CopyFilePathItem })
         {
             item.IsEnabled = ready;
         }
@@ -1048,7 +1050,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateQuickToolsLayout(double width)
     {
-        bool wrapQuickTools = width < (_quickToolsExpanded ? 400 : 290);
+        bool wrapQuickTools = width < (_quickToolsExpanded ? 400 : 230);
         Grid.SetRow(QuickZoomTools, wrapQuickTools ? 1 : 0);
         Grid.SetColumn(QuickZoomTools, wrapQuickTools ? 0 : 1);
         QuickZoomSeparator.Visibility = wrapQuickTools ? Visibility.Collapsed : Visibility.Visible;
@@ -1059,6 +1061,8 @@ public sealed partial class MainWindow : Window
         _quickToolsExpanded = !_quickToolsExpanded;
         var visibility = _quickToolsExpanded ? Visibility.Visible : Visibility.Collapsed;
         PreviousPageButton.Visibility = NextPageButton.Visibility = PresentButton.Visibility = visibility;
+        ZoomOutButton.Visibility = ZoomInButton.Visibility = visibility;
+        ReaderQuickTools.Width = _quickToolsExpanded ? ExpandedReaderPanelWidth : CompactReaderPanelWidth;
         UpdateQuickToolsToggleLabel();
         UpdateQuickToolsLayout(Toolbar.ActualWidth);
     }
@@ -1581,6 +1585,43 @@ public sealed partial class MainWindow : Window
     }
 
     private void CopyPdfFileItem_Click(object sender, RoutedEventArgs e) => _ = CopyPdfFileAsync();
+
+    private async Task OpenFileLocationAsync(string path)
+    {
+        try
+        {
+            var file = await StorageFile.GetFileFromPathAsync(path);
+            var folder = await StorageFolder.GetFolderFromPathAsync(Path.GetDirectoryName(path)!);
+            var options = new FolderLauncherOptions();
+            options.ItemsToSelect.Add(file);
+            if (!await Launcher.LaunchFolderAsync(folder, options))
+                ShowError(UiText.Translate("File Explorer could not open this folder."));
+        }
+        catch (Exception ex)
+        {
+            ShowError(UiText.Format("Could not open the file location: {0}", ex.Message));
+        }
+    }
+
+    private void CopyFilePathItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentView is { } view) _ = CopyFilePathAsync(view.FilePath);
+    }
+
+    private async Task CopyFilePathAsync(string path)
+    {
+        try
+        {
+            string fullPath = Path.GetFullPath(path);
+            await ClipboardText.WriteAsync(WinRT.Interop.WindowNative.GetWindowHandle(this), fullPath);
+            ShowNotice(fullPath, InfoBarSeverity.Success, UiText.Current.FilePathCopied);
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Default.Write(nameof(CopyFilePathAsync), ex);
+            ShowError(UiText.Format("Could not copy the file path: {0}", ex.GetBaseException().Message));
+        }
+    }
 
     private async Task CopyPdfFileAsync()
     {
@@ -2371,38 +2412,10 @@ public sealed partial class MainWindow : Window
         }
         bool managed = _library.Contains(card.Path) || _state.FindRecent(card.Path)?.IsLibraryCopy == true;
         var location = new MenuFlyoutItem { Text = managed ? UiText.Current.OpenCopyLocation : UiText.Current.OpenFileLocation, Icon = new FontIcon { Glyph = "\uE838" } }; // FolderOpen
-        location.Click += async (_, _) =>
-        {
-            try
-            {
-                var file = await StorageFile.GetFileFromPathAsync(card.Path);
-                var folder = await StorageFolder.GetFolderFromPathAsync(Path.GetDirectoryName(card.Path)!);
-                var options = new FolderLauncherOptions();
-                options.ItemsToSelect.Add(file);
-                if (!await Launcher.LaunchFolderAsync(folder, options))
-                    ShowError(UiText.Translate("File Explorer could not open this folder."));
-            }
-            catch (Exception ex)
-            {
-                ShowError(UiText.Format("Could not open the file location: {0}", ex.Message));
-            }
-        };
+        location.Click += (_, _) => _ = OpenFileLocationAsync(card.Path);
 
         var copy = new MenuFlyoutItem { Text = UiText.Current.CopyFilePath, Icon = new SymbolIcon(Symbol.Copy) };
-        copy.Click += (_, _) =>
-        {
-            try
-            {
-                var package = new DataPackage();
-                package.SetText(card.Path);
-                Clipboard.SetContent(package);
-                Clipboard.Flush();
-            }
-            catch (Exception ex)
-            {
-                ShowError(UiText.Format("Could not copy the file path: {0}", ex.Message));
-            }
-        };
+        copy.Click += (_, _) => _ = CopyFilePathAsync(card.Path);
 
         var forget = new MenuFlyoutItem { Text = UiText.Current.RemoveFromList, Icon = new FontIcon { Glyph = "\uECC9" } }; // RemoveFrom
         // Bookmarks hang off the recent entry, so forgetting the file forgets
@@ -2431,6 +2444,9 @@ public sealed partial class MainWindow : Window
             import.Click += async (_, _) => await OpenLibraryCopyAsync(card.Path);
             flyout.Items.Add(import);
         }
+        var compress = new MenuFlyoutItem { Text = UiText.Current.CompressExport, Icon = new SymbolIcon(Symbol.Download) };
+        compress.Click += (_, _) => _ = CompressExportAsync(card.Path);
+        flyout.Items.Add(compress);
         flyout.Items.Add(location);
         flyout.Items.Add(copy);
         flyout.Items.Add(new MenuFlyoutSeparator());
@@ -3094,15 +3110,15 @@ public sealed partial class MainWindow : Window
     /// host for messages that arrive with no document open (startup problems,
     /// a missing recent file, background failures).
     /// </summary>
-    private void ShowNotice(string message, InfoBarSeverity severity, string? title = null, string? dismissKey = null)
+    private void ShowNotice(string message, InfoBarSeverity severity, string? title = null, string? dismissKey = null, params NoticeAction[] actions)
     {
         if (CurrentView is { IsDocumentLoaded: true, LoadError: null } view)
         {
             WindowNotice.Clear();
-            view.ShowNotice(title, message, severity, dismissKey);
+            view.ShowNotice(title, message, severity, dismissKey, actions);
             return;
         }
-        WindowNotice.Show(title, message, severity, dismissKey);
+        WindowNotice.Show(title, message, severity, dismissKey, actions);
     }
 
     private void ShowError(string message) => ShowNotice(message, InfoBarSeverity.Error);
