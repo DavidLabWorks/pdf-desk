@@ -1,11 +1,13 @@
 ; Pass /DArch=x64 or /DArch=arm64 and /DPayload=<self-contained publish directory>.
-#define AppVersion GetVersionNumbersString(Payload + "\PDFDesk.exe")
+#define AppFileVersion GetVersionNumbersString(Payload + "\PDFDesk.exe")
+#define AppVersion Copy(AppFileVersion, 1, RPos(".", AppFileVersion) - 1)
 [Setup]
 AppId=DavidLabWorks.PDFDesk
 AppName=PDF Desk
 AppVersion={#AppVersion}
 AppPublisher=DavidLabWorks
-VersionInfoVersion={#AppVersion}
+VersionInfoVersion={#AppFileVersion}
+VersionInfoProductTextVersion={#AppVersion}
 DefaultDirName={autopf}\PDF Desk
 PrivilegesRequired=admin
 #if Arch == "arm64"
@@ -18,7 +20,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 UninstallDisplayIcon={app}\PDFDesk.exe
 SetupIconFile={#Payload}\Assets\pdfdesk.ico
-OutputDir=..\artifacts\installers\{#Copy(AppVersion, 1, RPos(".", AppVersion) - 1)}
+OutputDir=..\artifacts\installers\{#AppVersion}
 OutputBaseFilename=PDFDesk-Setup-{#Arch}
 Compression=lzma2/fast
 SolidCompression=yes

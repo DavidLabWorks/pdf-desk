@@ -146,6 +146,8 @@ public sealed class UiText : INotifyPropertyChanged
     public string LastOpened => Chinese ? "最近打开时间" : "Last opened";
     public string MoreFileActions => Chinese ? "更多文件操作" : "More file actions";
     public string Startup => Chinese ? "启动和关闭" : "Startup and closing";
+    public string About => Chinese ? "关于" : "About";
+    public string AppVersionLabel => Chinese ? "版本" : "Version";
     public string CloseBehavior => Chinese ? "关闭窗口时" : "When closing the window";
     public string CloseToTray => Chinese ? "关闭到系统托盘" : "Close to system tray";
     public string ExitPdfDesk => Chinese ? "退出 PDF Desk" : "Exit PDF Desk";
@@ -191,6 +193,7 @@ public sealed class UiText : INotifyPropertyChanged
     public string OpenFileLocation => Chinese ? "打开文件位置" : "Open file location";
     public string OpenInBrowser => Chinese ? "在浏览器中打开" : "Open in browser";
     public string OpenIssueTracker => Chinese ? "前往 GitHub 反馈" : "Report on GitHub";
+    public string Feedback => Chinese ? "问题反馈" : "Feedback";
     public string OpenLink => Chinese ? "打开链接？" : "Open link?";
     public string OpenOriginal => Chinese ? "打开原文件" : "Open original";
     public string OpenOrCreatePdf => Chinese ? "打开或新建 PDF" : "Open or create PDF";
@@ -218,6 +221,7 @@ public sealed class UiText : INotifyPropertyChanged
     public string Redo => Chinese ? "重做" : "Redo";
     public string RemoveBackground => Chinese ? "移除背景" : "Remove background";
     public string RemoveFromFavorites => Chinese ? "取消收藏" : "Remove from favorites";
+    public string Unfavorite => Chinese ? "取消收藏" : "Unfavorite";
     public string RemoveFromList => Chinese ? "从列表中移除" : "Remove from list";
     public string RemoveThePaperBackground => Chinese ? "移除纸张背景" : "Remove the paper background";
     public string Rename => Chinese ? "重命名" : "Rename";

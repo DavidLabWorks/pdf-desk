@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Controls;
 using PDFDesk.Controls;
 using Windows.ApplicationModel.DataTransfer;
@@ -118,6 +119,10 @@ public sealed partial class MainWindow
     private uint _dragPointer;
     private Windows.Foundation.Point _shelfDragStart;
     private Border? _hoverFolder;
+    private Button? _dragSource;
+    private Pointer? _capturedDrag;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _favoritesHoverTimer;
+    private bool _hoveringFavorites;
 
     private void AttachShelfDragHandlers()
     {
@@ -126,25 +131,33 @@ public sealed partial class MainWindow
         StartPage.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(ShelfPointerPressed), true);
         StartPage.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(ShelfPointerMoved), true);
         StartPage.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(ShelfPointerReleased), true);
-        StartPage.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler((_, _) => EndShelfDrag()), true);
+        StartPage.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler((_, e) =>
+        {
+            if (e.Pointer.PointerId == _dragPointer) EndShelfDrag();
+        }), true);
         StartPage.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, e) =>
         {
             if (_dragCard is not { } card || e.Pointer.PointerId != _dragPointer) return;
             // A button may release capture before the routed release reaches StartPage.
-            DispatcherQueue.TryEnqueue(() => { if (ReferenceEquals(_dragCard, card)) EndShelfDrag(); });
+            bool lostShelfCapture = ReferenceEquals(e.OriginalSource, StartPage);
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (ReferenceEquals(_dragCard, card) && (_capturedDrag == null || lostShelfCapture)) EndShelfDrag();
+            });
         }), true);
     }
 
     private void ShelfPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         EndShelfDrag();
-        if (FolderBar.Visibility != Visibility.Visible || !e.GetCurrentPoint(StartPage).Properties.IsLeftButtonPressed) return;
+        if (!e.GetCurrentPoint(StartPage).Properties.IsLeftButtonPressed) return;
         for (var node = e.OriginalSource as DependencyObject; node != null; node = VisualTreeHelper.GetParent(node))
         {
             if (node is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase button)
             {
-                if (button is Button && button.DataContext is RecentCard card && button.Tag as string == "ShelfDocument")
+                if (button is Button source && button.DataContext is RecentCard card && button.Tag as string == "ShelfDocument")
                 {
+                    _dragSource = source;
                     _dragPointer = e.Pointer.PointerId;
                     _shelfDragStart = e.GetCurrentPoint(ShelfDragLayer).Position;
                     _dragCard = card;
@@ -170,6 +183,10 @@ public sealed partial class MainWindow
         if (ShelfDragPreview.Visibility != Visibility.Visible)
         {
             if (Math.Abs(position.X - _shelfDragStart.X) < 5 && Math.Abs(position.Y - _shelfDragStart.Y) < 5) return;
+            // The card disappears when the tab switches. Keep capture on the shelf across both views.
+            _dragSource?.ReleasePointerCapture(e.Pointer);
+            if (!StartPage.CapturePointer(e.Pointer)) { EndShelfDrag(); return; }
+            _capturedDrag = e.Pointer;
             ShelfDragName.Text = _dragCard.DisplayName;
             ShelfDragCover.Source = _dragCard.Thumbnail;
             ShelfDragFileIcon.Visibility = _dragCard.HasThumbnail ? Visibility.Collapsed : Visibility.Visible;
@@ -177,7 +194,12 @@ public sealed partial class MainWindow
         }
         ShelfDragOffset.X = PreviewPosition(position.X, ShelfDragPreview.Width, ShelfDragLayer.ActualWidth);
         ShelfDragOffset.Y = PreviewPosition(position.Y, ShelfDragPreview.Height, ShelfDragLayer.ActualHeight);
-        var target = FolderAt(e);
+        var tabPoint = e.GetCurrentPoint(FavoritesTab).Position;
+        bool overTab = FavoritesTab.IsChecked != true && tabPoint.X >= 0 && tabPoint.X < FavoritesTab.ActualWidth &&
+                       tabPoint.Y >= 0 && tabPoint.Y < FavoritesTab.ActualHeight;
+        if (overTab) ArmFavoritesTab();
+        else CancelFavoritesHover();
+        var target = FolderBar.Visibility == Visibility.Visible ? FolderAt(e) : null;
         if (target == _hoverFolder) return;
         _hoverFolder?.ClearValue(Border.BorderBrushProperty);
         _hoverFolder = target;
@@ -189,24 +211,75 @@ public sealed partial class MainWindow
     private static double PreviewPosition(double pointer, double size, double available) =>
         Math.Clamp(pointer + size + 14 <= available ? pointer + 14 : pointer - size - 14, 0, Math.Max(0, available - size));
 
+    private void ArmFavoritesTab()
+    {
+        if (_hoveringFavorites) return;
+        _hoveringFavorites = true;
+        if (_favoritesHoverTimer == null)
+        {
+            _favoritesHoverTimer = DispatcherQueue.CreateTimer();
+            _favoritesHoverTimer.Interval = TimeSpan.FromMilliseconds(350);
+            _favoritesHoverTimer.IsRepeating = false;
+            _favoritesHoverTimer.Tick += (_, _) =>
+            {
+                if (!_hoveringFavorites) return;
+                if (new Windows.UI.ViewManagement.UISettings().AnimationsEnabled &&
+                    VisualTreeHelper.GetChildrenCount(FavoritesTab) > 0 &&
+                    VisualTreeHelper.GetChild(FavoritesTab, 0) is FrameworkElement template &&
+                    template.FindName("DragTint") is Border tint)
+                {
+                    Storyboard.SetTarget(FavoritesTabPulse.Children[0], tint);
+                    FavoritesTabPulse.Begin();
+                }
+                else ActivateHoveredFavorites();
+            };
+        }
+        VisualStateManager.GoToState(FavoritesTab, "DragHover", false);
+        _favoritesHoverTimer.Start();
+    }
+
+    private void FavoritesTabPulse_Completed(object sender, object e) => ActivateHoveredFavorites();
+
+    private void ActivateHoveredFavorites()
+    {
+        if (!_hoveringFavorites) return;
+        CancelFavoritesHover();
+        if (_capturedDrag != null && StartPage.IsLoaded) FavoritesTab.IsChecked = true;
+    }
+
+    private void CancelFavoritesHover()
+    {
+        if (!_hoveringFavorites) return;
+        _hoveringFavorites = false;
+        _favoritesHoverTimer?.Stop();
+        FavoritesTabPulse.Stop();
+        VisualStateManager.GoToState(FavoritesTab, "DragIdle", false);
+    }
+
     private void EndShelfDrag()
     {
+        CancelFavoritesHover();
+        var pointer = _capturedDrag;
+        _capturedDrag = null;
+        _dragSource = null;
+        _dragCard = null;
+        if (pointer != null) StartPage.ReleasePointerCapture(pointer);
         ShelfDragBlocked.Visibility = Visibility.Collapsed;
         ShelfDragPreview.Visibility = Visibility.Collapsed;
         ShelfDragCover.Source = null;
         _hoverFolder?.ClearValue(Border.BorderBrushProperty);
         _hoverFolder = null;
-        _dragCard = null;
     }
 
     private void ShelfPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (_dragCard == null || e.Pointer.PointerId != _dragPointer) return;
         var card = _dragCard;
-        var target = FolderAt(e);
+        bool dragging = _capturedDrag != null;
+        var target = dragging && FolderBar.Visibility == Visibility.Visible ? FolderAt(e) : null;
         EndShelfDrag();
+        if (dragging) e.Handled = true;
         if (target?.DataContext is not FavoriteLocation location) return;
-        e.Handled = true;
         FileDroppedFavorites([card.Path], location);
     }
 
@@ -344,7 +417,7 @@ public sealed partial class MainWindow
     {
         var ui = UiText.Current;
         var dialog = FavoriteDialog(card.IsFavorite ? ui.MoveFavorite : ui.AddToFavorites, "\uE734", ui.Save);
-        if (card.IsFavorite) dialog.SecondaryButtonText = ui.RemoveFromFavorites;
+        if (card.IsFavorite) dialog.SecondaryButtonText = ui.Unfavorite;
         var current = _state.FindRecent(card.Path)?.FavoriteFolderId ?? Guid.Empty;
         var rows = Locations(false);
         var create = new FavoriteLocation(null, ui.NewFavoriteFolder, "\uE710", "");

@@ -52,6 +52,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        AboutVersion.Text = CurrentVersion;
         AttachShelfDragHandlers();
         ViewActionsFlyout.OverlayInputPassThroughElement = Toolbar;
         DocumentActionsFlyout.OverlayInputPassThroughElement = Toolbar;
@@ -2207,9 +2208,8 @@ public sealed partial class MainWindow : Window
         bool any = RecentThumbs.Items.Count > 0;
         bool favorites = FavoritesTab.IsChecked == true;
         bool list = favorites ? _state.Settings.FavoritesUseList : _state.Settings.RecentUsesList;
-        bool showFolders = favorites || _state.FavoriteFolders.Count > 0;
-        FolderBar.Visibility = showFolders ? Visibility.Visible : Visibility.Collapsed;
-        if (showFolders) RefreshFolderLocations();
+        FolderBar.Visibility = favorites ? Visibility.Visible : Visibility.Collapsed;
+        if (favorites) RefreshFolderLocations();
         (list ? ShelfListMode : ShelfCardMode).IsChecked = true;
         RecentsHeading.Visibility = Visibility.Visible;
         EmptyState.Visibility = !any && !favorites ? Visibility.Visible : Visibility.Collapsed;

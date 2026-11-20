@@ -177,8 +177,15 @@
                                     <VisualState.Setters><Setter Target="Fill.Opacity" Value="1" /></VisualState.Setters>
                                 </VisualState>
                             </VisualStateGroup>
+                            <VisualStateGroup x:Name="DragStates">
+                                <VisualState x:Name="DragIdle" />
+                                <VisualState x:Name="DragHover">
+                                    <VisualState.Setters><Setter Target="DragTint.Opacity" Value="0.16" /></VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
                         <Border x:Name="Fill" CornerRadius="11" Background="{ThemeResource HomeSectionBrush}" Opacity="0" />
+                        <Border x:Name="DragTint" CornerRadius="11" Background="{ThemeResource AccentFillColorDefaultBrush}" Opacity="0" />
                         <ContentPresenter Padding="18,0" Content="{TemplateBinding Content}"
                                           HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
                     </Grid>

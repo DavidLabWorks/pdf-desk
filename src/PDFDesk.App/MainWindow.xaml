@@ -12,6 +12,16 @@
         DragOver="RootGrid_DragOver"
         Drop="RootGrid_Drop">
         <Grid.Resources>
+            <Storyboard x:Name="FavoritesTabPulse" Completed="FavoritesTabPulse_Completed">
+                <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity">
+                    <LinearDoubleKeyFrame KeyTime="0" Value="0.16" />
+                    <SplineDoubleKeyFrame KeyTime="0:0:0.09" Value="0.04" KeySpline="0.42,0 0.58,1" />
+                    <SplineDoubleKeyFrame KeyTime="0:0:0.18" Value="0.14" KeySpline="0.42,0 0.58,1" />
+                    <SplineDoubleKeyFrame KeyTime="0:0:0.27" Value="0.03" KeySpline="0.42,0 0.58,1" />
+                    <SplineDoubleKeyFrame KeyTime="0:0:0.36" Value="0.12" KeySpline="0.42,0 0.58,1" />
+                    <SplineDoubleKeyFrame KeyTime="0:0:0.47" Value="0" KeySpline="0.42,0 0.58,1" />
+                </DoubleAnimationUsingKeyFrames>
+            </Storyboard>
             <x:Double x:Key="CompactReaderPanelWidth">180</x:Double>
             <x:Double x:Key="ExpandedReaderPanelWidth">318</x:Double>
             <DataTemplate x:Key="FavoriteLocationTemplate">
@@ -33,7 +43,7 @@
                 <Setter Property="Padding" Value="8,0" />
             </Style>
             <Style x:Key="FolderNavigationItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource FavoriteLocationStyle}">
-                <Setter Property="Padding" Value="6,0" />
+                <Setter Property="Padding" Value="0" />
                 <Setter Property="Margin" Value="0,1,12,1" />
                 <Setter Property="UseSystemFocusVisuals" Value="True" />
                 <Setter Property="Template">
@@ -72,7 +82,7 @@
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
-                                <Border x:Name="RowFill" Height="42" VerticalAlignment="Top" CornerRadius="7" />
+                                <Border x:Name="RowFill" Height="44" VerticalAlignment="Top" CornerRadius="7" />
                                 <ContentPresenter x:Name="RowContent" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
                                                   Padding="{TemplateBinding Padding}" HorizontalContentAlignment="Stretch" />
                             </Grid>
@@ -680,7 +690,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
                         <RadioButton Content="{Binding Recent, Source={StaticResource UiText}}" GroupName="ShelfSection" Style="{StaticResource ShelfSectionStyle}"
                                      IsChecked="True" Checked="ShelfSection_Checked" />
                         <RadioButton x:Name="FavoritesTab" Content="{Binding Favorites, Source={StaticResource UiText}}" GroupName="ShelfSection"
@@ -727,7 +737,7 @@
                         <ListView.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel>
-                                    <Border MinHeight="42" Padding="0" CornerRadius="6" BorderThickness="2"
+                                    <Border MinHeight="44" Padding="10,0" CornerRadius="7" BorderThickness="1.5"
                                             Background="Transparent" AllowDrop="True"
                                             DragOver="Folder_DragOver" DragLeave="Folder_DragLeave" Drop="Folder_Drop">
                                         <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FavoriteLocationTemplate}"
@@ -1386,6 +1396,32 @@
                                         <ComboBoxItem Content="{Binding CloseToTray, Source={StaticResource UiText}}" />
                                         <ComboBoxItem Content="{Binding ExitPdfDesk, Source={StaticResource UiText}}" />
                                     </ComboBox>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding About, Source={StaticResource UiText}}" FontSize="14" FontWeight="SemiBold" />
+                        <Border Background="{ThemeResource HomeCardBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}" BorderThickness="1" CornerRadius="8">
+                            <StackPanel>
+                                <Grid ColumnDefinitions="*,Auto" Padding="16,8" MinHeight="52">
+                                    <TextBlock Text="{Binding AppVersionLabel, Source={StaticResource UiText}}" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="AboutVersion" Grid.Column="1" VerticalAlignment="Center" IsTextSelectionEnabled="True" />
+                                </Grid>
+                                <Border Height="1" Margin="16,0" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" Padding="16,8" MinHeight="52">
+                                    <TextBlock Text="GitHub" VerticalAlignment="Center" />
+                                    <HyperlinkButton Grid.Column="1" HorizontalAlignment="Right" Padding="0,4"
+                                                     NavigateUri="https://github.com/DavidLabWorks/pdf-desk-windows">
+                                        <TextBlock Text="github.com/DavidLabWorks/pdf-desk-windows" TextWrapping="Wrap" />
+                                    </HyperlinkButton>
+                                </Grid>
+                                <Border Height="1" Margin="16,0" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" Padding="16,8" MinHeight="52">
+                                    <TextBlock Text="{Binding Feedback, Source={StaticResource UiText}}" VerticalAlignment="Center" />
+                                    <HyperlinkButton Grid.Column="1" HorizontalAlignment="Right" Padding="0,4"
+                                                     Content="{Binding OpenIssueTracker, Source={StaticResource UiText}}"
+                                                     NavigateUri="https://github.com/DavidLabWorks/pdf-desk-windows/issues/new" />
                                 </Grid>
                             </StackPanel>
                         </Border>
