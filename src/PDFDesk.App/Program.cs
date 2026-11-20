@@ -11,18 +11,16 @@ internal static class Program
     {
         WinRT.ComWrappersSupport.InitializeComWrappers();
         var request = LaunchRequest.FromCurrentProcess(args);
-        using var first = new SingleInstance();
-        if (!first.IsOwner && first.TryForward(request))
+        using var instance = new SingleInstance();
+        if (!instance.TryAcquire())
         {
-            return;
-        }
-        // Resolve the owner again if the previous process exited during handoff.
-        using var retry = first.IsOwner ? null : new SingleInstance();
-        var instance = retry ?? first;
-        if (!instance.IsOwner)
-        {
-            instance.TryForward(request);
-            return;
+            if (instance.TryForward(request)) return;
+            // The owner may have exited during handoff. Only a lock holder starts the UI.
+            if (!instance.TryAcquire())
+            {
+                instance.TryForward(request);
+                return;
+            }
         }
 
         Application.Start(_args =>

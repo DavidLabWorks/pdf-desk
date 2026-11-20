@@ -2,7 +2,7 @@ using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text.Json;
-using Microsoft.Windows.AppLifecycle;
+using System.Diagnostics;
 
 namespace PDFDesk.Services;
 
@@ -13,17 +13,31 @@ internal sealed class SingleInstance : IDisposable
     private const int MaxRequestBytes = 1024 * 1024;
     private const PipeOptions Options = PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly;
     private readonly string _pipeName;
-    private readonly AppInstance _owner;
+    private readonly Mutex _mutex;
+    private bool _ownsMutex;
     private readonly CancellationTokenSource _shutdown = new();
 
     public SingleInstance()
     {
         using var identity = WindowsIdentity.GetCurrent();
-        _owner = AppInstance.FindOrRegisterForKey($"DavidLabWorks.PDFDesk.{identity.User!.Value}");
-        _pipeName = $"DavidLabWorks.PDFDesk.{identity.User.Value}.{_owner.ProcessId}";
+        using var process = Process.GetCurrentProcess();
+        _pipeName = $"DavidLabWorks.PDFDesk.{identity.User!.Value}.{process.SessionId}";
+        _mutex = new Mutex(false, @"Local\" + _pipeName);
     }
 
-    public bool IsOwner => _owner.IsCurrent;
+    // Acquisition and disposal both run on the entry thread.
+    public bool TryAcquire()
+    {
+        try
+        {
+            _ownsMutex = _mutex.WaitOne(0);
+        }
+        catch (AbandonedMutexException)
+        {
+            _ownsMutex = true;
+        }
+        return _ownsMutex;
+    }
 
     public bool TryForward(LaunchRequest request)
     {
@@ -114,6 +128,8 @@ internal sealed class SingleInstance : IDisposable
     {
         _shutdown.Cancel();
         _shutdown.Dispose();
+        if (_ownsMutex) _mutex.ReleaseMutex();
+        _mutex.Dispose();
     }
 
     [DllImport("user32.dll")]
