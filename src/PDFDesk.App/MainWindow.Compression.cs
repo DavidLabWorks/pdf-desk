@@ -11,12 +11,12 @@ namespace PDFDesk;
 public sealed partial class MainWindow
 {
     private readonly Dictionary<string, ExportProgressCard?> _compressionTasks = new(StringComparer.OrdinalIgnoreCase);
-    private readonly SemaphoreSlim _copySlots = new(2);
+    private static readonly SemaphoreSlim _copySlots = new(2);
     private bool _queueExpanded = true;
     private Storyboard? _queueTransition;
     private double CompactReaderPanelWidth => (double)RootGrid.Resources["CompactReaderPanelWidth"];
     private double ExpandedReaderPanelWidth => (double)RootGrid.Resources["ExpandedReaderPanelWidth"];
-    private readonly HashSet<string> _exportDestinations = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> _exportDestinations = new(StringComparer.OrdinalIgnoreCase);
 
     private void CompressExport_Click(object sender, RoutedEventArgs args)
     {
@@ -36,13 +36,16 @@ public sealed partial class MainWindow
     {
         if (DialogHost.IsOpen) return;
         path = Path.GetFullPath(path);
-        if (_compressionTasks.TryGetValue(path, out var active))
+        var owner = App.Readers.FirstOrDefault(w => w._compressionTasks.ContainsKey(path));
+        if (owner != null)
         {
-            _queueExpanded = true;
-            UpdateExportQueue();
+            var active = owner._compressionTasks[path];
+            owner._queueExpanded = true;
+            owner.UpdateExportQueue();
+            if (owner != this) owner.RestoreWindow();
             active?.StartBringIntoView();
             string status = active?.StatusText ?? Local("Export in progress", "正在导出");
-            ShowNotice($"{Path.GetFileName(path)} · {status}", InfoBarSeverity.Informational,
+            owner.ShowNotice($"{Path.GetFileName(path)} · {status}", InfoBarSeverity.Informational,
                 Local("An export is already in progress", "此文件已有压缩任务"));
             return;
         }
@@ -233,10 +236,24 @@ public sealed partial class MainWindow
         _queueTransition = null;
         int count = ExportTasks.Children.Count;
         if (count == 0) _queueExpanded = true;
-        ExportQueue.Visibility = count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ExportQueue.Visibility = count == 0 || (_focusReading && CurrentView != null) ? Visibility.Collapsed : Visibility.Visible;
         ExportTasksScroll.Visibility = _queueExpanded ? Visibility.Visible : Visibility.Collapsed;
         ExportQueue.Width = _queueExpanded ? ExpandedReaderPanelWidth : CompactReaderPanelWidth;
+        var details = _queueExpanded ? Visibility.Visible : Visibility.Collapsed;
+        QueueLabel.Visibility = QueueChevron.Visibility = details;
+        bool dockedInReader = ExportQueue.Parent != RootGrid;
+        double frame = dockedInReader ? 0 : 4;
+        ExportQueue.Margin = new Thickness(0, 0, (_queueExpanded ? 16 : 0) + frame, 60 + frame);
+        ExportQueue.Padding = _queueExpanded ? new Thickness(5) : new Thickness(0);
+        ExportQueue.BorderThickness = _queueExpanded ? new Thickness(1) : new Thickness(0);
+        ExportQueue.CornerRadius = _queueExpanded ? (CornerRadius)Application.Current.Resources["ReaderToolbarRadius"] : DockRadius;
+        QueueHeading.ColumnSpacing = _queueExpanded ? 10 : 0;
+        QueueToggle.Height = (double)Application.Current.Resources["TouchTargetMin"];
+        QueueToggle.Padding = _queueExpanded ? new Thickness(8, 5, 8, 5) : new Thickness(0);
+        QueueToggle.HorizontalContentAlignment = _queueExpanded ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
         QueueLabel.Text = Local("Export queue", "导出队列") + $" · {count}";
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(QueueToggle, QueueLabel.Text);
+        ToolTipService.SetToolTip(QueueToggle, _queueExpanded ? null : QueueLabel.Text);
         QueueChevron.Glyph = _queueExpanded ? "\uE70D" : "\uE70E";
     }
 }

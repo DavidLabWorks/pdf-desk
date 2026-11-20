@@ -14,7 +14,7 @@ public sealed partial class MainWindow
 
     private void ShowTrayMenu(int x, int y)
     {
-        if (AppWindow.IsVisible || _trayMenuWindow is not null)
+        if (_trayMenuWindow is not null)
         {
             return;
         }
@@ -38,8 +38,32 @@ public sealed partial class MainWindow
         SetWindowLongW(hwnd, extendedStyle, GetWindowLongW(hwnd, extendedStyle) | layered);
         SetLayeredWindowAttributes(hwnd, 0, 0, 2);
 
-        var menu = new MenuFlyout { ShouldConstrainToRootBounds = false };
-        AddItem(UiText.Current.TrayOpenWindow, "\uE8A7", RestoreWindow);
+        const double maxMenuWidth = 300;
+        var menuStyle = new Style(typeof(MenuFlyoutPresenter));
+        menuStyle.Setters.Add(new Setter(FrameworkElement.MaxWidthProperty, maxMenuWidth));
+        var menu = new MenuFlyout { ShouldConstrainToRootBounds = false, MenuFlyoutPresenterStyle = menuStyle };
+        foreach (var window in App.Readers.ToArray())
+        {
+            string title = window.CurrentView?.DisplayName ?? UiText.Current.Home;
+            string prefix = $"{App.Readers.IndexOf(window) + 1}   ";
+            var item = AddItem(prefix + title, "\uE8A7", window.RestoreWindow);
+            var probe = new TextBlock { FontSize = item.FontSize, FontFamily = item.FontFamily, FontWeight = item.FontWeight };
+            string display = FitDocumentName(title, candidate =>
+            {
+                probe.Text = prefix + candidate;
+                probe.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+                // Reserve space for the menu icon, presenter insets and item padding.
+                return probe.DesiredSize.Width <= maxMenuWidth - 64;
+            });
+            if (display != title)
+            {
+                item.Text = prefix + display;
+                ToolTipService.SetToolTip(item, title);
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, prefix + title);
+            }
+        }
+        menu.Items.Add(new MenuFlyoutSeparator());
+        AddItem(UiText.Current.NewWindow, "\uE78B", () => App.CreateReaderWindow());
         AddItem(UiText.Current.TrayOpenPdf, "\uE8E5", OpenPdfFromTray);
         menu.Items.Add(new MenuFlyoutSeparator());
         AddItem(UiText.Current.TrayExit, "\uE7E8", ExitApplication);
@@ -66,11 +90,12 @@ public sealed partial class MainWindow
         host.Activate();
         TrayIcon.SetForegroundWindow(hwnd);
 
-        void AddItem(string text, string glyph, Action action)
+        MenuFlyoutItem AddItem(string text, string glyph, Action action)
         {
             var item = new MenuFlyoutItem { MinWidth = 180, Text = text, Icon = new FontIcon { Glyph = glyph } };
             item.Click += (_, _) => DispatcherQueue.TryEnqueue(action.Invoke);
             menu.Items.Add(item);
+            return item;
         }
     }
 

@@ -5,6 +5,55 @@ namespace PDFDesk.Tests;
 public class AppStateTests
 {
     [Fact]
+    public void WindowSessionsRestoreSeparatePositionsForTheSameFile()
+    {
+        const string path = "sample.pdf";
+        var state = System.Text.Json.JsonSerializer.Deserialize<AppState>(
+            """{"Session":{"OpenPaths":["sample.pdf"],"ActiveIndex":0}}""")!;
+        state.Remember(path, path, 4, 1, 0, 0.2);
+        Assert.Empty(state.AdditionalWindows);
+        Assert.Equal(4, state.Session.RestorePosition(path, state.FindRecent(path))!.PageIndex);
+        state.Session.Positions[path] = new(12, 1.5, 90, 0.3, false, 2);
+        state.AdditionalWindows.Add(new() { OpenPaths = [path], Positions = { [path] = new(75, 2, 0, 0.8, true, 1) } });
+        var copy = System.Text.Json.JsonSerializer.Deserialize<AppState>(System.Text.Json.JsonSerializer.Serialize(state))!;
+        Assert.Equal(12, copy.Session.RestorePosition(path, null)!.PageIndex);
+        Assert.Equal(75, copy.AdditionalWindows.Single().RestorePosition(path, null)!.PageIndex);
+        Assert.Single(copy.Recents);
+    }
+
+    [Fact]
+    public void RelocatingAndForgettingFilesUpdatesEveryWindowIndependently()
+    {
+        var state = new AppState();
+        state.AdditionalWindows.Add(new());
+        int page = 4;
+        foreach (var window in state.AdditionalWindows.Prepend(state.Session))
+        {
+            window.OpenPaths.AddRange(["first.pdf", "book.pdf"]);
+            window.ActiveIndex = 1;
+            window.Positions["book.pdf"] = new(page++, 1, 0, 0.2, true, 1);
+        }
+        state = System.Text.Json.JsonSerializer.Deserialize<AppState>(System.Text.Json.JsonSerializer.Serialize(state))!;
+        state.RelocateSessionPath("BOOK.pdf", "new.pdf");
+        state.ForgetRecent("FIRST.pdf");
+        Assert.Equal(4, state.Session.RestorePosition("NEW.pdf", null)!.PageIndex);
+        Assert.Equal(5, state.AdditionalWindows.Single().RestorePosition("NEW.pdf", null)!.PageIndex);
+        foreach (var window in state.AdditionalWindows.Prepend(state.Session))
+        {
+            Assert.Equal("new.pdf", Assert.Single(window.OpenPaths));
+            Assert.Equal(0, window.ActiveIndex);
+            Assert.False(window.Positions.ContainsKey("book.pdf"));
+        }
+        state.ForgetAllRecents();
+        foreach (var window in state.AdditionalWindows.Prepend(state.Session))
+        {
+            Assert.Empty(window.Positions);
+            Assert.Empty(window.OpenPaths);
+            Assert.Equal(-1, window.ActiveIndex);
+        }
+    }
+
+    [Fact]
     public void DropIntoFavoriteFolder_FilesReferencesOnceAndPreservesReadingState()
     {
         var state = new AppState();

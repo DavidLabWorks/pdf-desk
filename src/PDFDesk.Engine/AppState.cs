@@ -36,8 +36,36 @@ public sealed class RecentFile
 }
 
 /// <summary>What was open last time, so a restart can reopen it.</summary>
+public sealed record TabPosition(int PageIndex, double Zoom, int Rotation, double ScrollFraction, bool SidebarOpen, int PageColumns)
+{
+    public RecentFile ForPath(string path) => new()
+    {
+        Path = path, PageIndex = PageIndex, Zoom = Zoom, Rotation = Rotation,
+        ScrollFraction = ScrollFraction, SidebarOpen = SidebarOpen, PageColumns = PageColumns
+    };
+
+    public static TabPosition From(RecentFile entry) => new(entry.PageIndex, entry.Zoom, entry.Rotation,
+        entry.ScrollFraction, entry.SidebarOpen, entry.LayoutColumns);
+}
+
 public sealed class SessionState
 {
+    private Dictionary<string, TabPosition> _positions = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, TabPosition> Positions
+    {
+        get => _positions;
+        set
+        {
+            _positions = new(StringComparer.OrdinalIgnoreCase);
+            if (value != null)
+                foreach (var pair in value) _positions[pair.Key] = pair.Value;
+        }
+    }
+    public RecentFile? RestorePosition(string path, RecentFile? recent) =>
+        Positions.TryGetValue(path, out var position) ? position.ForPath(path) : recent;
+
+    public bool? FavoritesSelected { get; set; }
+    public Guid? FolderFilter { get; set; }
     public List<string> OpenPaths { get; set; } = [];
     public int ActiveIndex { get; set; }
 }
@@ -218,6 +246,7 @@ public sealed class AppState
             row.FavoriteFolderId = null;
         if (Settings.FavoriteFolderFilter == id) Settings.FavoriteFolderFilter = null;
     }
+    public List<SessionState> AdditionalWindows { get; set; } = [];
     public SessionState Session { get; set; } = new();
     public AppSettings Settings { get; set; } = new();
 
@@ -261,15 +290,38 @@ public sealed class AppState
     public bool ForgetRecent(string path)
     {
         int removed = Recents.RemoveAll(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase));
-        Session.OpenPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        foreach (var session in AdditionalWindows.Prepend(Session))
+        {
+            string? active = session.OpenPaths.ElementAtOrDefault(session.ActiveIndex);
+            session.OpenPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            session.Positions.Remove(path);
+            session.ActiveIndex = session.OpenPaths.FindIndex(p => string.Equals(p, active, StringComparison.OrdinalIgnoreCase));
+        }
         return removed > 0;
+    }
+
+    public void RelocateSessionPath(string oldPath, string newPath)
+    {
+        foreach (var session in AdditionalWindows.Prepend(Session))
+        {
+            for (int i = 0; i < session.OpenPaths.Count; i++)
+                if (string.Equals(session.OpenPaths[i], oldPath, StringComparison.OrdinalIgnoreCase))
+                    session.OpenPaths[i] = newPath;
+            if (session.Positions.Remove(oldPath, out var position))
+                session.Positions[newPath] = position;
+        }
     }
 
     /// <summary>Forgets every recent file, and the session that referenced them.</summary>
     public void ForgetAllRecents()
     {
         Recents.Clear();
-        Session.OpenPaths.Clear();
+        foreach (var session in AdditionalWindows.Prepend(Session))
+        {
+            session.OpenPaths.Clear();
+            session.Positions.Clear();
+            session.ActiveIndex = -1;
+        }
     }
 
 

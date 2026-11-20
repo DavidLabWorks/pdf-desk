@@ -137,7 +137,15 @@ public sealed class UiText : INotifyPropertyChanged
     public string Highlighter => Chinese ? "荧光笔" : "Highlighter";
     public string HighlighterDragOverTextCtrlH => Chinese ? "荧光笔（Ctrl+H）：拖选要标记的文字" : "Highlighter (Ctrl+H): Drag across the text you want to mark.";
     public string HighlighterTool => Chinese ? "荧光笔工具" : "Highlighter tool";
+    public string NewWindow => Chinese ? "新建窗口" : "New window";
+    public string FinishExportBeforeClosing => Chinese ? "请等待导出完成或取消任务后再关闭窗口。" : "Finish or cancel the export before closing this window.";
+    public string SourceChangedDuringMove => Chinese ? "移动期间原标签发生了编辑，请重试。" : "The source changed during the move. Please try again.";
+    public string OpenInNewWindow => Chinese ? "在新窗口中打开" : "Open in new window";
+    public string MoveTabToWindow => Chinese ? "移至新窗口" : "Move to new window";
+    public string ExitPresentation => Chinese ? "退出演示" : "Exit presentation";
     public string Home => Chinese ? "主页" : "Home";
+    public string EnterFocusReading => Chinese ? "进入专注阅读" : "Enter focus reading";
+    public string ExitFocusReading => Chinese ? "退出专注阅读 (Esc)" : "Exit focus reading (Esc)";
     public string ImportImage => Chinese ? "导入图片…" : "Import image…";
     public string KeepASeparateCopy => Chinese ? "在书架中保留独立副本" : "Keep a separate copy";
     public string KeyboardShortcuts => Chinese ? "键盘快捷键" : "Keyboard shortcuts";

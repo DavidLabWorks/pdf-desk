@@ -385,7 +385,7 @@ public sealed partial class SignaturePad : UserControl
     {
         LastFailure = null;
         ApplyImport(await PickImportAsync(
-            WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow!)));
+            App.OwnerHandle(this)));
     }
 
     /// <summary>

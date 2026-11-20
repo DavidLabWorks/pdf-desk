@@ -60,10 +60,24 @@ public sealed partial class DocumentView : UserControl
         });
     }
 
+    private bool _paneRequested;
+    private bool _paneHiddenForFocus;
+
+    // Persist the document preference even while focus reading temporarily hides the pane.
     public bool IsPaneOpen
     {
-        get => Split.IsPaneOpen;
-        set => Split.IsPaneOpen = value;
+        get => _paneRequested;
+        set
+        {
+            _paneRequested = value;
+            Split.IsPaneOpen = value && !_paneHiddenForFocus;
+        }
+    }
+
+    internal void SetPaneHiddenForFocus(bool hidden)
+    {
+        _paneHiddenForFocus = hidden;
+        Split.IsPaneOpen = _paneRequested && !hidden;
     }
 
     /// <summary>
@@ -1117,7 +1131,7 @@ public sealed partial class DocumentView : UserControl
     private async Task PickAndInsertPdfAsync(int atIndex)
     {
         var picked = await PDFDesk.Services.FilePickerHost.PickOpenAsync(
-            WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow!), ".pdf");
+            App.OwnerHandle(this), ".pdf");
         if (picked.Failed)
         {
             PageOpFailed?.Invoke(this, PDFDesk.Services.FilePickerHost.FailureMessage);
@@ -1142,13 +1156,14 @@ public sealed partial class DocumentView : UserControl
     public event EventHandler? BookmarksChanged;
 
     /// <summary>Fills the pane from persisted state. First call wins (idempotent across tab switches).</summary>
-    public void LoadBookmarks(IEnumerable<PDFDesk.Services.BookmarkEntry> entries)
+    public void LoadBookmarks(IEnumerable<PDFDesk.Services.BookmarkEntry> entries, bool refresh = false)
     {
-        if (_bookmarksLoaded)
+        if (_bookmarksLoaded && !refresh)
         {
             return;
         }
         _bookmarksLoaded = true;
+        _bookmarks.Clear();
         foreach (var entry in entries.OrderBy(b => b.PageIndex))
         {
             _bookmarks.Add(new BookmarkItem(entry.PageIndex, entry.Name));

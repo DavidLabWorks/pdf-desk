@@ -217,7 +217,11 @@
               Background="{ThemeResource HomeCanvasBrush}"
               CornerRadius="{StaticResource RadiusMedium}">
             <Grid Grid.Row="1">
-            <controls:PdfViewer x:Name="ViewerControl" />
+            <controls:PdfViewer x:Name="ViewerControl">
+                <controls:PdfViewer.RenderTransform>
+                    <TranslateTransform />
+                </controls:PdfViewer.RenderTransform>
+            </controls:PdfViewer>
             <Grid x:Name="LoadingOverlay" Visibility="Collapsed" Background="{ThemeResource HomeCanvasBrush}">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
                     <ProgressRing x:Name="LoadingRing" IsActive="False" Width="24" Height="24"

@@ -10,5 +10,11 @@
             x:Name="Canvas"
             Draw="Canvas_Draw"
             CreateResources="Canvas_CreateResources" />
+        <Button x:Name="LeaveButton" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16" MinHeight="40" RequestedTheme="Dark" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" Click="LeaveButton_Click">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <FontIcon Glyph="&#xE73F;" FontSize="14" />
+                <TextBlock Text="{Binding ExitPresentation, Source={StaticResource UiText}}" />
+            </StackPanel>
+        </Button>
     </Grid>
 </UserControl>

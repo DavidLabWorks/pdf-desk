@@ -93,7 +93,7 @@ public sealed partial class MainWindow
         {
             BuildTextFormatBar();
         }
-        TextFormatBar.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
+        TextFormatBar.Visibility = editing && !_focusReading ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>

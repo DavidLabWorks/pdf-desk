@@ -9,6 +9,8 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.System;
@@ -29,11 +31,16 @@ public sealed partial class MainWindow : Window
     private static readonly string? StateDirOverride =
         Environment.GetEnvironmentVariable("PDFDESK_STATE_DIR") is { Length: > 0 } dir ? dir : null;
 
-    private readonly AppStateStore _store = new(StateDirOverride);
-    private readonly AppState _state;
+    private static readonly AppStateStore _store = new(StateDirOverride);
+    internal static readonly AppState SharedState = _store.Load();
+    private readonly AppState _state = SharedState;
+    private Guid? _folderFilter;
+    private readonly SessionState _initialSession;
+    private readonly bool _startupWindow;
     private PdfLibrary _library;
     private string LibraryFolder => _state.Settings.LibraryFolder ?? _store.LibraryDirectory;
     private readonly Dictionary<DocumentView, RecentFile?> _pendingRestore = [];
+    private readonly Dictionary<DocumentView, TabPosition> _detachedPositions = [];
     private readonly HashSet<DocumentView> _savingViews = [];
 
     private PdfViewer? _activeViewer;
@@ -49,8 +56,10 @@ public sealed partial class MainWindow : Window
     private PrintService? _printService;
     private bool _copyingPdfFile;
 
-    public MainWindow()
+    internal MainWindow(SessionState session, bool startupWindow)
     {
+        _initialSession = session;
+        _startupWindow = startupWindow;
         InitializeComponent();
         AboutVersion.Text = CurrentVersion;
         AttachShelfDragHandlers();
@@ -62,8 +71,13 @@ public sealed partial class MainWindow : Window
         RootGrid.Loaded += RootGrid_Loaded;
         AppWindow.Changed += (_, _) => UpdateCaptionState();
 
-        _state = _store.Load();
-        if (_state.Settings.FavoritesTabSelected) FavoritesTab.IsChecked = true;
+        var newWindow = new MenuFlyoutItem();
+        newWindow.Click += (_, _) => App.CreateReaderWindow();
+        var homeMenu = new MenuFlyout { Items = { newWindow } };
+        homeMenu.Opening += (_, _) => newWindow.Text = UiText.Current.NewWindow;
+        HomeButton.ContextFlyout = homeMenu;
+        _folderFilter = session.FavoritesSelected.HasValue ? session.FolderFilter : _state.Settings.FavoriteFolderFilter;
+        if (session.FavoritesSelected ?? _state.Settings.FavoritesTabSelected) FavoritesTab.IsChecked = true;
         _library = new PdfLibrary(LibraryFolder);
         ApplyLanguage();
         ApplyTheme(_state.Settings.Theme);
@@ -86,10 +100,14 @@ public sealed partial class MainWindow : Window
         Closed += MainWindow_Closed;
         Activated += (_, args) =>
         {
+            if (!App.Exiting && args.WindowActivationState == WindowActivationState.Deactivated && CurrentView is { } leaving) CaptureState(leaving);
             if (args.WindowActivationState == WindowActivationState.Deactivated && _dragCard != null)
                 EndShelfDrag();
-            if (args.WindowActivationState != WindowActivationState.Deactivated && SettingsPage.Visibility == Visibility.Visible)
-                RefreshDefaultPdfStatus();
+            if (args.WindowActivationState != WindowActivationState.Deactivated)
+            {
+                if (SettingsPage.Visibility == Visibility.Visible) RefreshDefaultPdfStatus();
+                else if (CurrentView == null && App.Readers.Count > 1) PopulateRecents();
+            }
         };
         AppWindow.Closing += AppWindow_Closing;
     }
@@ -108,17 +126,18 @@ public sealed partial class MainWindow : Window
     private void RequestWindowClose()
     {
         if (_exitInProgress) return;
+        if (App.Readers.Count > 1)
+        {
+            CloseReader();
+            return;
+        }
         if (!_state.Settings.CloseToTray)
         {
             ExitApplication();
             return;
         }
 
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        _trayIcon ??= new TrayIcon(hwnd,
-            () => DispatcherQueue.TryEnqueue(RestoreWindow),
-            (x, y) => DispatcherQueue.TryEnqueue(() => ShowTrayMenu(x, y)));
-        if (_trayIcon.Show())
+        if (ShowSharedTray())
         {
             AppWindow.Hide();
         }
@@ -138,7 +157,30 @@ public sealed partial class MainWindow : Window
         }
         Activate();
         TrayIcon.SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
-        _trayIcon?.Hide();
+
+    }
+
+    internal bool ShowSharedTray()
+    {
+        _trayIcon ??= new TrayIcon(WinRT.Interop.WindowNative.GetWindowHandle(this),
+            () => DispatcherQueue.TryEnqueue(() => ((MainWindow?)App.MainWindow ?? this).RestoreWindow()),
+            (x, y) => DispatcherQueue.TryEnqueue(() => ShowTrayMenu(x, y)));
+        return _trayIcon.Show();
+    }
+
+    private async void CloseReader()
+    {
+        if (_exitInProgress) return;
+        _exitInProgress = true;
+        try
+        {
+            if (await EnsureSafeToCloseAsync())
+            {
+                _closeApproved = true;
+                Close();
+            }
+        }
+        finally { _exitInProgress = false; }
     }
 
     private async void ExitApplication()
@@ -148,10 +190,16 @@ public sealed partial class MainWindow : Window
         try
         {
             CloseTrayMenu();
-            if (await EnsureSafeToCloseAsync())
+            var windows = App.Readers.ToArray();
+            foreach (var window in windows)
+                if (!await window.EnsureSafeToCloseAsync()) return;
+            if (App.MainWindow is MainWindow active && active.CurrentView is { } view) active.CaptureState(view);
+            App.Exiting = true;
+            SaveWindowSessions();
+            foreach (var window in windows)
             {
-                _closeApproved = true;
-                Close();
+                window._closeApproved = true;
+                window.Close();
             }
         }
         catch (Exception ex)
@@ -172,6 +220,12 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task<bool> EnsureSafeToCloseAsync()
     {
+        if (_compressionTasks.Count != 0)
+        {
+            RestoreWindow();
+            ShowNotice(UiText.Current.FinishExportBeforeClosing, InfoBarSeverity.Informational);
+            return false;
+        }
         var dirty = AllDocumentViews().Where(v => v.IsDirty).ToList();
         if (dirty.Count == 0)
         {
@@ -296,7 +350,7 @@ public sealed partial class MainWindow : Window
         try
         {
             await RestoreSessionAsync();
-            await RemindAboutDefaultPdfAppAsync();
+            if (_startupWindow) await RemindAboutDefaultPdfAppAsync();
         }
         catch (Exception ex)
         {
@@ -316,13 +370,13 @@ public sealed partial class MainWindow : Window
         }
 
         _restoringSession = true;
-        var session = _state.Session;
+        var session = _initialSession;
         var requestedTab = Tabs.SelectedItem;
         var savedPath = session.OpenPaths.ElementAtOrDefault(session.ActiveIndex);
         var existing = AllDocumentViews().Select(v => v.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var path in session.OpenPaths.Where(File.Exists))
         {
-            if (existing.Add(path)) AddTab(path, _state.FindRecent(path), select: false);
+            if (existing.Add(path)) AddTab(path, session.RestorePosition(path, _state.FindRecent(path)), select: false);
         }
 
         Tabs.SelectedItem = requestedTab ?? Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(
@@ -338,28 +392,53 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_Closed(object sender, WindowEventArgs e)
     {
+        ExitPresentation();
         CloseTrayMenu();
         _trayIcon?.Dispose();
         RootGrid.LayoutUpdated -= UpdateDragRegion;
         _captionHitTest?.Dispose();
-        // Persist each open document's position, then the session itself.
-        var openPaths = new List<string>();
         foreach (var obj in Tabs.TabItems)
         {
             if (obj is TabViewItem { Tag: DocumentView view })
             {
-                openPaths.Add(view.FilePath);
-                CaptureState(view);
                 view.Close();
             }
         }
-        _state.Session = new SessionState
-        {
-            OpenPaths = openPaths,
-            ActiveIndex = _settingsReturnTab is { } tab ? Tabs.TabItems.IndexOf(tab) : Tabs.SelectedIndex,
-        };
-        _store.Save(_state);
+        App.RemoveReader(this);
+        if (!App.Exiting && App.Readers.Count > 0) SaveWindowSessions();
+        else _store.Save(_state);
         _thumbnails.Dispose(); // stops the homepage cache's PDFium thread
+    }
+
+    internal static void SaveWindowSessions()
+    {
+        if (App.Readers.Count == 0) return;
+        var windows = App.Readers.OrderByDescending(w => ReferenceEquals(w, App.MainWindow)).ToList();
+        SessionState Snapshot(MainWindow w) => new()
+        {
+            Positions = w.AllDocumentViews().Select(v => (v.FilePath, Value: w.PositionOf(v)))
+                .Where(p => p.Value != null).ToDictionary(p => p.FilePath, p => p.Value!, StringComparer.OrdinalIgnoreCase),
+            FavoritesSelected = w.FavoritesTab.IsChecked == true,
+            FolderFilter = w._folderFilter,
+            OpenPaths = w.AllDocumentViews().Select(v => v.FilePath).ToList(),
+            ActiveIndex = w._settingsReturnTab is { } tab ? w.Tabs.TabItems.IndexOf(tab) : w.Tabs.SelectedIndex
+        };
+        SharedState.Session = Snapshot(windows[0]);
+        SharedState.AdditionalWindows = windows.Skip(1).Select(Snapshot).ToList();
+        _store.Save(SharedState);
+    }
+
+    private TabPosition? PositionOf(DocumentView view)
+    {
+        if (!ReferenceEquals(view, DocHost.Content) && _detachedPositions.TryGetValue(view, out var detached)) return detached;
+        if (view.IsDocumentLoaded && view.LoadError == null)
+        {
+            var viewer = view.Viewer;
+            return new(viewer.CurrentPage, viewer.Zoom, viewer.ViewRotation, viewer.ScrollFraction, view.IsPaneOpen, viewer.PageColumns);
+        }
+        var restore = _pendingRestore.GetValueOrDefault(view) ??
+            _initialSession.RestorePosition(view.FilePath, _state.FindRecent(view.FilePath));
+        return restore == null ? null : TabPosition.From(restore);
     }
 
     private void CaptureState(DocumentView view)
@@ -368,15 +447,13 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
-        var viewer = view.Viewer;
+        var position = PositionOf(view)!;
         _state.Remember(view.FilePath, view.DisplayName,
-            viewer.CurrentPage, viewer.Zoom, viewer.ViewRotation, viewer.ScrollFraction,
-            sidebarOpen: view.IsPaneOpen, pageColumns: viewer.PageColumns);
-        // The open view owns the truth about bookmarks while it lives.
+            position.PageIndex, position.Zoom, position.Rotation, position.ScrollFraction,
+            sidebarOpen: position.SidebarOpen, pageColumns: position.PageColumns);
         if (_state.FindRecent(view.FilePath) is { } entry)
         {
             entry.IsLibraryCopy |= _library.Contains(view.FilePath);
-            entry.Bookmarks = view.GetBookmarks();
         }
     }
 
@@ -441,6 +518,13 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(2, 0, 2, 0),
             Padding = new Thickness(8, 0, 4, 0),
         };
+        var move = new MenuFlyoutItem();
+        var open = new MenuFlyoutItem();
+        var menu = new MenuFlyout { Items = { open, move } };
+        menu.Opening += (_, _) => { open.Text = UiText.Current.OpenInNewWindow; move.Text = UiText.Current.MoveTabToWindow; };
+        open.Click += async (_, _) => await OpenTabInWindowAsync(tab, view, move: false);
+        move.Click += async (_, _) => await OpenTabInWindowAsync(tab, view, move: true);
+        tab.ContextFlyout = menu;
         if (index is int slot) Tabs.TabItems.Insert(slot, tab);
         else Tabs.TabItems.Add(tab);
         if (select)
@@ -465,9 +549,70 @@ public sealed partial class MainWindow : Window
         AddTab(path, _state.FindRecent(path), select: true);
     }
 
+    private async Task OpenTabInWindowAsync(TabViewItem tab, DocumentView view, bool move)
+    {
+        if (!_savingViews.Add(view)) return;
+        MainWindow? destination = null;
+        TabViewItem? createdTab = null;
+        bool editedDuringTransfer = false;
+        void OnEdit(object? sender, EventArgs args) => editedDuringTransfer = true;
+        try
+        {
+            if (move && view.IsDocumentLoaded)
+            {
+                await view.Viewer.FinishEraserAsync();
+                await view.Viewer.CommitTextAsync();
+                if (view.Viewer.IsEditingText) throw new IOException(UiText.Current.TextCommitFailed);
+                if (view.Viewer.IsFormFieldFocused) view.Viewer.KillFormFocus();
+            }
+            if (move && view.IsDirty)
+            {
+                var choice = await PromptSaveChangesAsync([view.DisplayName]);
+                if (choice is null) return;
+                if (choice.Value) await view.SaveInPlaceAsync();
+            }
+            CaptureState(view);
+            view.Viewer.DocumentEdited += OnEdit;
+            destination = App.CreateReaderWindow();
+            destination.AddTab(view.FilePath, PositionOf(view)?.ForPath(view.FilePath), select: true);
+            createdTab = (TabViewItem)destination.Tabs.SelectedItem;
+            var copy = (DocumentView)createdTab.Tag;
+            await copy.EnsureLoadedAsync(null);
+            if (!App.Readers.Contains(destination) || !destination.Tabs.TabItems.Contains(createdTab)) return;
+            if (!copy.IsDocumentLoaded || copy.LoadError is not null)
+                throw new IOException(copy.LoadError ?? view.FilePath);
+            if (move && App.Readers.Contains(this) && Tabs.TabItems.Contains(tab))
+            {
+                if (editedDuringTransfer || view.Viewer.IsEditingText || view.Viewer.IsFormFieldFocused)
+                    throw new IOException(UiText.Current.SourceChangedDuringMove);
+                CloseTab(tab);
+            }
+            SaveWindowSessions();
+        }
+        catch (Exception ex)
+        {
+            if (destination != null && App.Readers.Contains(destination))
+            {
+                if (createdTab != null && destination.Tabs.TabItems.Contains(createdTab)) destination.CloseTab(createdTab);
+                if (destination.Tabs.TabItems.Count == 0) { destination._closeApproved = true; destination.Close(); }
+            }
+            if (!App.Readers.Contains(this)) return;
+            RestoreWindow();
+            ShowError(ex.Message);
+        }
+        finally { view.Viewer.DocumentEdited -= OnEdit; _savingViews.Remove(view); }
+    }
+
     private async void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         var selected = CurrentView;
+        if (_presentationWindow != null) ExitPresentation();
+        if (!_restoringSession && !App.Exiting && DocHost.Content is DocumentView previous && previous != selected &&
+            previous.IsDocumentLoaded && PositionOf(previous) is { } position)
+        {
+            _detachedPositions[previous] = position;
+            CaptureState(previous);
+        }
         ViewActionsFlyout?.Hide();
         DocumentActionsFlyout?.Hide();
         HideToolOptions();
@@ -485,8 +630,20 @@ public sealed partial class MainWindow : Window
             Grid.SetRow(control, row);
             selected?.ReaderLayout.Children.Add(control);
         }
+        // Both docked surfaces need the same coordinate system for pixel rounding at fractional DPI.
+        if (ExportQueue != null)
+        {
+            if (ExportQueue.Parent is Panel oldParent) oldParent.Children.Remove(ExportQueue);
+            var target = selected?.ReaderLayout ?? RootGrid;
+            Grid.SetRow(ExportQueue, selected == null ? 2 : 1);
+            target.Children.Add(ExportQueue);
+            Canvas.SetZIndex(ExportQueue, 1);
+            UpdateExportQueue();
+        }
         DocHost.Content = selected;
         HookActiveViewer();
+        if (_focusReading && _activeViewer?.ActiveTool is not (null or AnnotationTool.None))
+            SetActiveTool(AnnotationTool.None);
         UpdateStartPageVisibility();
 
         if (!_restoringSession && CurrentView is { } view)
@@ -498,15 +655,16 @@ public sealed partial class MainWindow : Window
 
     private async Task LoadTabAsync(DocumentView view)
     {
-        bool firstLoad = _pendingRestore.Remove(view, out var restore);
-        await view.EnsureLoadedAsync(restore);
+        await view.EnsureLoadedAsync(_pendingRestore.GetValueOrDefault(view));
+        if (!App.Readers.Contains(this) || !AllDocumentViews().Contains(view)) return;
+        bool firstLoad = _pendingRestore.Remove(view);
 
         if (view.LoadError is null)
         {
             view.LoadBookmarks(_state.FindRecent(view.FilePath)?.Bookmarks ?? []);
             if (firstLoad && view.IsDocumentLoaded)
             {
-                CaptureState(view);
+                if (CurrentView == view || _state.FindRecent(view.FilePath) == null) CaptureState(view);
                 _store.Save(_state);
                 if (CurrentView is null) PopulateRecents();
             }
@@ -533,6 +691,9 @@ public sealed partial class MainWindow : Window
         if (entry is not null)
         {
             entry.Bookmarks = view.GetBookmarks();
+            foreach (var other in App.Readers.SelectMany(w => w.AllDocumentViews()))
+                if (other != view && other.IsDocumentLoaded && string.Equals(other.FilePath, view.FilePath, StringComparison.OrdinalIgnoreCase))
+                    other.LoadBookmarks(entry.Bookmarks, refresh: true);
             _store.Save(_state);
         }
     }
@@ -612,6 +773,7 @@ public sealed partial class MainWindow : Window
             DetachTextTool(view.Viewer);
             view.Close();
             _pendingRestore.Remove(view);
+            _detachedPositions.Remove(view);
         }
         Tabs.TabItems.Remove(tab);
         tab.Tag = null;
@@ -658,11 +820,89 @@ public sealed partial class MainWindow : Window
         SizeDocumentStrip();
 
         Title = showDocument && CurrentView is { } view ? $"{view.DisplayName} — {AppTitle}" : AppTitle;
-        Toolbar.Visibility = ReaderQuickTools.Visibility = showDocument ? Visibility.Visible : Visibility.Collapsed;
+        UpdateFocusReadingControls();
         if (!showDocument)
         {
             PopulateRecents();
         }
+    }
+
+    private bool _focusReading;
+    private Storyboard? _focusTransition;
+
+    private async void FocusReadingButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_focusReading && _activeViewer is { IsEditingText: true } viewer)
+        {
+            await viewer.CommitTextAsync();
+            if (viewer.IsEditingText || viewer != _activeViewer) return;
+        }
+        SetFocusReading(!_focusReading);
+    }
+
+    private void SetFocusReading(bool enabled)
+    {
+        _focusReading = enabled;
+        if (enabled)
+        {
+            SetActiveTool(AnnotationTool.None);
+            HideToolOptions();
+            ViewActionsFlyout.Hide();
+            DocumentActionsFlyout.Hide();
+        }
+        UpdateFocusReadingControls();
+        UpdateExportQueue();
+        AnimateFocusReading(enabled);
+    }
+
+    private void AnimateFocusReading(bool entering)
+    {
+        _focusTransition?.Stop();
+        _focusTransition = null;
+        if (CurrentView is not { } view || !new Windows.UI.ViewManagement.UISettings().AnimationsEnabled) return;
+
+        var transition = new Storyboard();
+        var offset = (TranslateTransform)view.Viewer.RenderTransform;
+        double direction = entering ? 1 : -1;
+        if (view.IsPaneOpen) Add(offset, "X", direction * 8, 0);
+        Add(offset, "Y", direction * 6, 0);
+        if (!entering)
+        {
+            Add(Toolbar, "Opacity", 0.35, 1);
+            Add(ReaderQuickTools, "Opacity", 0.35, 1);
+        }
+        _focusTransition = transition;
+        transition.Completed += (_, _) =>
+        {
+            if (ReferenceEquals(_focusTransition, transition)) _focusTransition = null;
+        };
+        transition.Begin();
+
+        void Add(DependencyObject target, string property, double from, double to)
+        {
+            var animation = new DoubleAnimation
+            {
+                From = from, To = to, Duration = TimeSpan.FromMilliseconds(160),
+                FillBehavior = FillBehavior.Stop,
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(animation, target);
+            Storyboard.SetTargetProperty(animation, property);
+            transition.Children.Add(animation);
+        }
+    }
+
+    private void UpdateFocusReadingControls()
+    {
+        CurrentView?.SetPaneHiddenForFocus(_focusReading);
+        bool reading = CurrentView != null;
+        FocusReadingButton.Visibility = reading ? Visibility.Visible : Visibility.Collapsed;
+        FocusReadingHighlight.Visibility = _focusReading ? Visibility.Visible : Visibility.Collapsed;
+        Toolbar.Visibility = ReaderQuickTools.Visibility = reading && !_focusReading ? Visibility.Visible : Visibility.Collapsed;
+        TextFormatBar.Visibility = !_focusReading && _activeViewer?.IsEditingText == true ? Visibility.Visible : Visibility.Collapsed;
+        string label = _focusReading ? UiText.Current.ExitFocusReading : UiText.Current.EnterFocusReading;
+        AutomationProperties.SetName(FocusReadingButton, label);
+        ToolTipService.SetToolTip(FocusReadingButton, label);
     }
 
     private void EmptyState_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -794,6 +1034,7 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+        if (_focusReading && tool != AnnotationTool.None) SetFocusReading(false);
         if (tool != _activeViewer.ActiveTool && _activeViewer.ActiveTool is AnnotationTool.Image or AnnotationTool.Signature)
             _activeViewer.ClearPendingStamp();
         _activeViewer.ActiveTool = tool;
@@ -884,6 +1125,8 @@ public sealed partial class MainWindow : Window
 
     private bool _pickingPdf;
     private MenuFlyout OpenChoices => (MenuFlyout)RootGrid.Resources["OpenChoices"];
+
+    private void NewWindow_Click(object sender, RoutedEventArgs e) => App.CreateReaderWindow();
 
     private void OpenButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1021,8 +1264,6 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void Toolbar_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateQuickToolsLayout(e.NewSize.Width);
-
     private void EditTools_PointerWheelChanged(object sender, PointerRoutedEventArgs e) =>
         ScrollToolbarWithWheel(EditToolbarScroll, e);
 
@@ -1049,23 +1290,18 @@ public sealed partial class MainWindow : Window
         icon.Glyph = expanded ? "\uE70E" : "\uE70D";
     }
 
-    private void UpdateQuickToolsLayout(double width)
-    {
-        bool wrapQuickTools = width < (_quickToolsExpanded ? 400 : 230);
-        Grid.SetRow(QuickZoomTools, wrapQuickTools ? 1 : 0);
-        Grid.SetColumn(QuickZoomTools, wrapQuickTools ? 0 : 1);
-        QuickZoomSeparator.Visibility = wrapQuickTools ? Visibility.Collapsed : Visibility.Visible;
-    }
+    private static CornerRadius DockRadius => new(8, 0, 0, 8);
 
     private void QuickToolsToggle_Click(object sender, RoutedEventArgs e)
     {
         _quickToolsExpanded = !_quickToolsExpanded;
-        var visibility = _quickToolsExpanded ? Visibility.Visible : Visibility.Collapsed;
-        PreviousPageButton.Visibility = NextPageButton.Visibility = PresentButton.Visibility = visibility;
-        ZoomOutButton.Visibility = ZoomInButton.Visibility = visibility;
+        ExpandedQuickTools.Visibility = _quickToolsExpanded ? Visibility.Visible : Visibility.Collapsed;
+        DockedReaderToggle.Visibility = _quickToolsExpanded ? Visibility.Collapsed : Visibility.Visible;
         ReaderQuickTools.Width = _quickToolsExpanded ? ExpandedReaderPanelWidth : CompactReaderPanelWidth;
+        ReaderQuickTools.Padding = _quickToolsExpanded ? new Thickness(3, 0, 3, 0) : new Thickness(0);
+        ReaderQuickTools.Margin = new Thickness(8, 4, _quickToolsExpanded ? 16 : 0, 16);
+        ReaderQuickTools.CornerRadius = _quickToolsExpanded ? (CornerRadius)Application.Current.Resources["ReaderToolbarRadius"] : DockRadius;
         UpdateQuickToolsToggleLabel();
-        UpdateQuickToolsLayout(Toolbar.ActualWidth);
     }
 
     private void UpdateQuickToolsToggleLabel()
@@ -1078,6 +1314,11 @@ public sealed partial class MainWindow : Window
 
     private void SidebarButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_focusReading && CurrentView != null)
+        {
+            SetFocusReading(false);
+            if (CurrentView.IsPaneOpen) return;
+        }
         if (CurrentView is { IsDocumentLoaded: true } view)
         {
             view.IsPaneOpen = !view.IsPaneOpen;
@@ -1095,6 +1336,8 @@ public sealed partial class MainWindow : Window
 
     private void FocusPageJump()
     {
+        if (_focusReading && CurrentView != null) SetFocusReading(false);
+        if (!_quickToolsExpanded) QuickToolsToggle_Click(QuickToolsToggle, new RoutedEventArgs());
         if (SettingsPage.Visibility != Visibility.Visible && PageBox.IsEnabled)
             PageBox.Focus(FocusState.Keyboard);
     }
@@ -1167,40 +1410,66 @@ public sealed partial class MainWindow : Window
 
     // ---------------------------------------------------------------- presentation
 
+    private Window? _presentationWindow;
+    private PresentationView? _presentation;
+
     private void TogglePresentation()
     {
-        if (Presentation.IsActive)
+        if (_presentationWindow != null)
         {
             ExitPresentation();
             return;
         }
-        if (_activeViewer is not { } viewer ||
-            CurrentView is not { IsDocumentLoaded: true, LoadError: null })
-        {
+        if (_activeViewer is not { } viewer || CurrentView is not { IsDocumentLoaded: true, LoadError: null })
             return;
-        }
 
-        Presentation.ExitRequested -= Presentation_ExitRequested;
-        Presentation.ExitRequested += Presentation_ExitRequested;
-        Presentation.Show(viewer, _state.Settings.NightMode);
-        AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
+        // Keep the shell HWND in its Windows snap group. Fullscreen belongs to a transient owner-linked HWND.
+        var screen = new PresentationView { IsTabStop = true };
+        var host = new Window { Title = Title, Content = screen };
+        _presentationWindow = host;
+        _presentation = screen;
+        host.AppWindow.IsShownInSwitchers = false;
+        SetWindowLongPtrW(WinRT.Interop.WindowNative.GetWindowHandle(host), -8, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest).WorkArea;
+        host.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(area.X + area.Width / 2, area.Y + area.Height / 2, 64, 64));
+        host.AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+        screen.ExitRequested += (_, _) => host.Close();
+        screen.PreviewKeyDown += (_, args) =>
+        {
+            switch (args.Key)
+            {
+                case VirtualKey.Escape:
+                case VirtualKey.F5: args.Handled = true; host.Close(); break;
+                case VirtualKey.Right:
+                case VirtualKey.Down:
+                case VirtualKey.Space:
+                case VirtualKey.PageDown: args.Handled = true; screen.Next(); break;
+                case VirtualKey.Left:
+                case VirtualKey.Up:
+                case VirtualKey.PageUp: args.Handled = true; screen.Prev(); break;
+            }
+        };
+        host.Closed += (_, _) =>
+        {
+            _presentationWindow = null;
+            _presentation = null;
+            int page = screen.CurrentPage;
+            screen.EndPresentation();
+            if (!_closeApproved && !App.Exiting && ReferenceEquals(_activeViewer, viewer))
+            {
+                viewer.GoToPage(page);
+                Activate();
+            }
+        };
+        host.Activate();
+        screen.Show(viewer, _state.Settings.NightMode);
+        screen.Focus(FocusState.Programmatic);
     }
 
-    private void Presentation_ExitRequested(object? sender, EventArgs e) => ExitPresentation();
+    [System.Runtime.InteropServices.DllImport("user32.dll", ExactSpelling = true)]
+    private static extern nint SetWindowLongPtrW(nint hwnd, int index, nint value);
 
-    private void ExitPresentation()
-    {
-        if (!Presentation.IsActive)
-        {
-            return;
-        }
-        int page = Presentation.CurrentPage;
-        Presentation.Hide();
-        AppWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.Default);
-        UpdateMinimumWindowSize();
-        // Land the reading view on the page the show ended on.
-        _activeViewer?.GoToPage(page);
-    }
+    private void ExitPresentation() => _presentationWindow?.Close();
 
     private void ZoomPreset_Click(object sender, RoutedEventArgs e)
     {
@@ -1909,15 +2178,17 @@ public sealed partial class MainWindow : Window
         if (ReferenceEquals(sender, ThemeChoice))
         {
             _state.Settings.Theme = ThemeChoice.SelectedIndex switch { 1 => "Light", 2 => "Dark", _ => "System" };
-            ApplyTheme(_state.Settings.Theme);
+            foreach (var window in App.Readers) window.ApplyTheme(_state.Settings.Theme);
         }
         else
         {
             _state.Settings.Language = LanguageChoice.SelectedIndex switch { 1 => "en", 2 => "zh-CN", _ => "System" };
-            ApplyLanguage();
-            _toolPanels.Clear();
-            UpdateCaptionState();
-            PopulateRecents();
+            foreach (var window in App.Readers)
+            {
+                window.ApplyLanguage();
+                window.UpdateCaptionState();
+                window.PopulateRecents();
+            }
         }
         _store.Save(_state);
     }
@@ -1931,7 +2202,7 @@ public sealed partial class MainWindow : Window
     private void SetLibraryFolder(string? folder)
     {
         _state.Settings.LibraryFolder = folder;
-        _library = new PdfLibrary(LibraryFolder);
+        foreach (var window in App.Readers) window._library = new PdfLibrary(LibraryFolder);
         _store.Save(_state);
         RefreshLibraryLocation();
     }
@@ -1980,7 +2251,7 @@ public sealed partial class MainWindow : Window
 
     private void ApplyLanguage()
     {
-        string previousLanguage = UiText.Current.LanguageTag;
+        string previousLanguage = RootGrid.Language;
         UiText.Current.SetLanguage(_state.Settings.Language);
         RootGrid.Language = UiText.Current.LanguageTag;
         if (previousLanguage != UiText.Current.LanguageTag)
@@ -1991,6 +2262,7 @@ public sealed partial class MainWindow : Window
             _signatureList = null;
         }
         UpdateQuickToolsToggleLabel();
+        UpdateFocusReadingControls();
     }
 
     private static string CurrentVersion
@@ -2223,7 +2495,7 @@ public sealed partial class MainWindow : Window
         ShelfListSurface.Visibility = list && (any || favorites) ? Visibility.Visible : Visibility.Collapsed;
         if (favorites && FavoriteThumbs.Items.Count == 0)
         {
-            bool filtered = _state.Settings.FavoriteFolderFilter.HasValue;
+            bool filtered = _folderFilter.HasValue;
             FavoriteEmptyTitle.Text = filtered ? UiText.Current.EmptyFavoriteFolder : UiText.Current.NoFavoritesYet;
             FavoritesHint.Text = filtered ? UiText.Current.EmptyFolderHint :
                 any ? UiText.Current.SelectTheStarOnAPDFInRecent : UiText.Current.OpenAPDFThenStarItInRecent;
@@ -2330,11 +2602,12 @@ public sealed partial class MainWindow : Window
             return probe.DesiredSize.Height <= twoLines;
         }
 
-        if (Fits(name))
-        {
-            label.Text = name;
-            return;
-        }
+        label.Text = FitDocumentName(name, Fits);
+    }
+
+    private static string FitDocumentName(string name, Func<string, bool> fits)
+    {
+        if (fits(name)) return name;
 
         // Slice at grapheme boundaries so an ellipsis cannot split a visible character.
         int[] starts = System.Globalization.StringInfo.ParseCombiningCharacters(name);
@@ -2346,7 +2619,7 @@ public sealed partial class MainWindow : Window
             int suffix = keep / 2;
             string tail = suffix == 0 ? "" : name[starts[^suffix]..];
             string candidate = name[..starts[keep - suffix]] + "…" + tail;
-            if (Fits(candidate))
+            if (fits(candidate))
             {
                 best = candidate;
                 low = keep + 1;
@@ -2356,7 +2629,7 @@ public sealed partial class MainWindow : Window
                 high = keep - 1;
             }
         }
-        label.Text = best;
+        return best;
     }
 
     private async void RecentOpen_Click(object sender, RoutedEventArgs e)
@@ -2387,9 +2660,7 @@ public sealed partial class MainWindow : Window
                 entry.Path = file.Path;
                 entry.DisplayName = file.Name;
                 entry.IsLibraryCopy = _library.Contains(file.Path);
-                for (int i = 0; i < _state.Session.OpenPaths.Count; i++)
-                    if (string.Equals(_state.Session.OpenPaths[i], card.Path, StringComparison.OrdinalIgnoreCase))
-                        _state.Session.OpenPaths[i] = file.Path;
+                _state.RelocateSessionPath(card.Path, file.Path);
                 _store.Save(_state);
                 PopulateRecents();
                 OpenOrActivate(file.Path);
@@ -2500,11 +2771,12 @@ public sealed partial class MainWindow : Window
         // Ctrl+? — GNOME's other shortcuts-window binding (Shift+/ = ? on US layouts).
         AddAccelerator((VirtualKey)0xBF, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift,
             () => _ = ShowShortcutsAsync(), requiresDocument: false);
+        AddAccelerator(VirtualKey.N, VirtualKeyModifiers.Control, () => App.CreateReaderWindow(), requiresDocument: false);
         AddAccelerator(VirtualKey.F5, VirtualKeyModifiers.None, TogglePresentation);
         // Escape peels off one layer at a time, outermost first.
         AddAccelerator(VirtualKey.Escape, VirtualKeyModifiers.None, () =>
         {
-            if (Presentation.IsActive)
+            if (_presentationWindow != null)
             {
                 ExitPresentation();
             }
@@ -2519,6 +2791,10 @@ public sealed partial class MainWindow : Window
             else if (FindBar.Visibility == Visibility.Visible)
             {
                 HideFindBar();
+            }
+            else if (_focusReading && CurrentView != null)
+            {
+                SetFocusReading(false);
             }
             else if (_activeViewer?.CancelStampPlacement() == true)
             {
@@ -2674,7 +2950,7 @@ public sealed partial class MainWindow : Window
 
         // Presentation mode owns the keyboard while active (Esc/F5 exit via
         // their accelerators).
-        if (Presentation.IsActive)
+        if (_presentationWindow != null)
         {
             switch (e.Key)
             {
@@ -2682,13 +2958,13 @@ public sealed partial class MainWindow : Window
                 case VirtualKey.Down:
                 case VirtualKey.Space:
                 case VirtualKey.PageDown:
-                    Presentation.Next();
+                    _presentation?.Next();
                     e.Handled = true;
                     break;
                 case VirtualKey.Left:
                 case VirtualKey.Up:
                 case VirtualKey.PageUp:
-                    Presentation.Prev();
+                    _presentation?.Prev();
                     e.Handled = true;
                     break;
             }

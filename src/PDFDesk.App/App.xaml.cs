@@ -54,22 +54,46 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        var window = new MainWindow();
-        MainWindow = window;
-
-        // Window/taskbar icon (the exe icon comes from ApplicationIcon in the csproj).
-        string icon = Path.Combine(AppContext.BaseDirectory, "Assets", "pdfdesk.ico");
-        if (File.Exists(icon))
-        {
-            window.AppWindow.SetIcon(icon);
-        }
-
+        var state = PDFDesk.MainWindow.SharedState;
+        var window = CreateReaderWindow(state.Session, startupWindow: true);
+        if (state.Settings.RestoreSession)
+            foreach (var session in state.AdditionalWindows.ToArray()) CreateReaderWindow(session);
         window.Activate();
         _ = OpenFilesAsync(window, _initialLaunch);
         while (_pendingLaunches.TryDequeue(out var request))
         {
             Activate(request);
         }
+    }
+
+    internal static List<MainWindow> Readers { get; } = [];
+    internal static nint OwnerHandle(FrameworkElement element) =>
+        Microsoft.UI.Win32Interop.GetWindowFromWindowId(element.XamlRoot.ContentIslandEnvironment.AppWindowId);
+
+    internal static bool Exiting { get; set; }
+
+    internal static MainWindow CreateReaderWindow(SessionState? session = null, bool startupWindow = false)
+    {
+        var window = new MainWindow(session ?? new SessionState { ActiveIndex = -1 }, startupWindow);
+        Readers.Add(window);
+        var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "pdfdesk.ico");
+        if (File.Exists(icon)) window.AppWindow.SetIcon(icon);
+        window.Activated += (_, args) =>
+        {
+            if (args.WindowActivationState != WindowActivationState.Deactivated) MainWindow = window;
+        };
+        MainWindow = window;
+        window.Activate();
+        if (Readers.Count == 1) window.ShowSharedTray();
+        return window;
+    }
+
+    internal static void RemoveReader(MainWindow window)
+    {
+        bool ownedTray = Readers.FirstOrDefault() == window;
+        Readers.Remove(window);
+        if (MainWindow == window) MainWindow = Readers.LastOrDefault();
+        if (ownedTray && !Exiting) Readers.FirstOrDefault()?.ShowSharedTray();
     }
 
     internal void Activate(LaunchRequest request)

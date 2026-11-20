@@ -33,9 +33,9 @@ public sealed partial class MainWindow
 
     private void FilterFavorites()
     {
-        var filter = _state.Settings.FavoriteFolderFilter;
+        var filter = _folderFilter;
         if (filter.HasValue && filter != Guid.Empty && !_state.FavoriteFolders.ContainsKey(filter.Value))
-            filter = _state.Settings.FavoriteFolderFilter = null;
+            filter = _folderFilter = null;
 
         var paths = _state.Recents.Where(entry => entry.IsFavorite &&
                 (filter == null || (entry.FavoriteFolderId ?? Guid.Empty) == filter))
@@ -102,7 +102,7 @@ public sealed partial class MainWindow
             if (FolderLocations.ItemsSource is not List<FavoriteLocation> existing || !rows.SequenceEqual(existing))
                 FolderLocations.ItemsSource = rows;
             FolderLocations.SelectedItem = FolderLocations.Items.Cast<FavoriteLocation>()
-                .FirstOrDefault(row => favorites && row.Id == _state.Settings.FavoriteFolderFilter);
+                .FirstOrDefault(row => favorites && row.Id == _folderFilter);
         }
         finally { _refreshingLocations = false; }
     }
@@ -110,7 +110,7 @@ public sealed partial class MainWindow
     private void FolderLocation_Changed(object sender, SelectionChangedEventArgs args)
     {
         if (_refreshingLocations || FolderLocations.SelectedItem is not FavoriteLocation location) return;
-        _state.Settings.FavoriteFolderFilter = location.Id;
+        _folderFilter = location.Id;
         FavoritesTab.IsChecked = true;
         SaveFolderChanges();
     }
@@ -289,7 +289,7 @@ public sealed partial class MainWindow
     private void FileDroppedFavorites(IEnumerable<string> paths, FavoriteLocation location)
     {
         if (!_state.AddDroppedFavorites(paths, location.Id)) return;
-        _state.Settings.FavoriteFolderFilter = location.Id;
+        _folderFilter = location.Id;
         FavoritesTab.IsChecked = true;
         _store.Save(_state);
         PopulateRecents();
@@ -408,7 +408,7 @@ public sealed partial class MainWindow
         if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary) return;
         Guid folder = id ?? Guid.NewGuid();
         _state.FavoriteFolders[folder] = box.Text.Trim();
-        _state.Settings.FavoriteFolderFilter = folder;
+        _folderFilter = folder;
         FavoritesTab.IsChecked = true;
         SaveFolderChanges();
     }

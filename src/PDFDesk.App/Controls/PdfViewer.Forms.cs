@@ -235,7 +235,7 @@ public sealed partial class PdfViewer
         }
         try
         {
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow!);
+            var hwnd = App.OwnerHandle(this);
             _inputPane = Windows.UI.ViewManagement.InputPaneInterop.GetForWindow(hwnd);
         }
         catch

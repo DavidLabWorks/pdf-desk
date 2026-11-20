@@ -38,7 +38,7 @@ public sealed partial class PresentationView : UserControl
     public PresentationView()
     {
         InitializeComponent();
-        PointerPressed += OnPointerPressed;
+        Canvas.PointerPressed += OnPointerPressed;
         SizeChanged += (_, _) =>
         {
             if (IsActive)
@@ -50,6 +50,8 @@ public sealed partial class PresentationView : UserControl
             }
         };
     }
+
+    private void LeaveButton_Click(object sender, RoutedEventArgs e) => ExitRequested?.Invoke(this, EventArgs.Empty);
 
     public void Show(PdfViewer viewer, bool nightMode)
     {
@@ -65,12 +67,13 @@ public sealed partial class PresentationView : UserControl
         PrefetchNeighbors();
     }
 
-    public void Hide()
+    public void EndPresentation()
     {
         Visibility = Visibility.Collapsed;
         _viewer = null;
         _document = null;
         ClearTiles();
+        Canvas.RemoveFromVisualTree();
     }
 
     public void Next()
