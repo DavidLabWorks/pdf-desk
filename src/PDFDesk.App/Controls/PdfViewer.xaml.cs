@@ -389,6 +389,7 @@ public sealed partial class PdfViewer : UserControl
         // page and thumbnails both blank, permanently.
         Unloaded += Viewer_UnloadedHandler;
         Loaded += Viewer_LoadedHandler;
+        Scroller.EffectiveViewportChanged += Scroller_EffectiveViewportChanged;
     }
 
     private void DesiredTimer_Tick(object sender, object e)
@@ -428,6 +429,7 @@ public sealed partial class PdfViewer : UserControl
 
     private void Viewer_UnloadedHandler(object sender, RoutedEventArgs e)
     {
+        _hadVisibleViewport = false;
         _mouseViewportPoint = null;
         CancelEraser();
         CancelStampDrag();
@@ -438,16 +440,37 @@ public sealed partial class PdfViewer : UserControl
 
     private void Viewer_LoadedHandler(object sender, RoutedEventArgs e)
     {
-        if (!_schedulerStopped)
+        if (_schedulerStopped)
         {
-            return;
+            _schedulerStopped = false;
+            _scheduler = new RenderScheduler(OnTileRendered);
+            _scheduler.SetDocument(_document);
         }
-        _schedulerStopped = false;
-        _scheduler = new RenderScheduler(OnTileRendered);
-        // A returning tab keeps its document, but the new render thread starts empty.
-        _scheduler.SetDocument(_document);
-        Canvas.Invalidate();
-        RequestDesiredUpdate();
+        RefreshVisibleCanvas();
+    }
+
+    private bool _hadVisibleViewport;
+
+    private void Scroller_EffectiveViewportChanged(FrameworkElement sender, EffectiveViewportChangedEventArgs args)
+    {
+        bool visible = args.EffectiveViewport.Width > 0 && args.EffectiveViewport.Height > 0;
+        bool becameVisible = visible && !_hadVisibleViewport;
+        _hadVisibleViewport = visible;
+        if (becameVisible) RefreshVisibleCanvas();
+    }
+
+    private void RefreshVisibleCanvas()
+    {
+        // Loaded can precede the scroll host's arrange, and showing a tab at
+        // the same size need not produce another SizeChanged or ViewChanged.
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (!IsLoaded || _schedulerStopped || _document == null || !ViewportReady) return;
+            ApplyPendingViewportLayout();
+            UpdateDrawingBand();
+            Canvas.Invalidate();
+            RequestDesiredUpdate();
+        });
     }
 
     private void DocumentExtent_PointerMoved(object sender, PointerRoutedEventArgs e) => TrackMouse(e);
@@ -490,6 +513,7 @@ public sealed partial class PdfViewer : UserControl
         ActualThemeChanged -= Viewer_ActualThemeChangedHandler;
         Unloaded -= Viewer_UnloadedHandler;
         Loaded -= Viewer_LoadedHandler;
+        Scroller.EffectiveViewportChanged -= Scroller_EffectiveViewportChanged;
         DocumentExtent.RemoveHandler(PointerMovedEvent, _documentExtentPointerMoved);
         Canvas.RemoveHandler(TappedEvent, _canvasNoteTapped);
         Canvas.RemoveHandler(DoubleTappedEvent, _canvasDoubleTapped);
@@ -1000,27 +1024,10 @@ public sealed partial class PdfViewer : UserControl
                 return;
             }
 
-            if (_pendingRestore is { } restore)
+            if (!ApplyPendingViewportLayout())
             {
-                // A session position arrived before the first measure; replay it
-                // now that the viewport is real (zoom → layout → scroll ordering).
-                _pendingRestore = null;
-                _pendingFit = false;
-                RestoreView(restore.Zoom, restore.Rotation, restore.Fraction);
-            }
-            else if (_pendingFit)
-            {
-                _pendingFit = false;
-                ApplyFitMode();
-            }
-            else if (_fitMode != FitMode.None)
-            {
-                ApplyFitMode();
-            }
-            else
-            {
-                // Free zoom: keep the zoom, but re-centre for the new width.
-                RebuildLayout();
+                if (_fitMode != FitMode.None) ApplyFitMode();
+                else RebuildLayout();
             }
             UpdateDesiredTiles();
             PrefetchVisiblePageData();
@@ -1030,6 +1037,22 @@ public sealed partial class PdfViewer : UserControl
             // Later calls must read the live (by then correct) viewport.
             _sizeChangedViewport = default;
         }
+    }
+
+    private bool ApplyPendingViewportLayout()
+    {
+        if (_pendingRestore is { } restore)
+        {
+            _pendingRestore = null;
+            _pendingFit = false;
+            RestoreView(restore.Zoom, restore.Rotation, restore.Fraction);
+            return true;
+        }
+        if (!_pendingFit && _layout != null) return false;
+        _pendingFit = false;
+        if (_fitMode == FitMode.None) RebuildLayout();
+        else ApplyFitMode();
+        return true;
     }
 
     private bool _rebasingZoom;
@@ -1552,9 +1575,7 @@ public sealed partial class PdfViewer : UserControl
     {
         if (HasSelection)
         {
-            var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
-            package.SetText(SelectedText);
-            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+            PDFDesk.Services.ClipboardText.SetText(SelectedText);
         }
     }
 

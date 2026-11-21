@@ -23,15 +23,19 @@ public sealed class PrintService
     private const float PrintDpi = 150f;
 
     private const string ScaleOption = "PDFDesk.PageScaling";
-    // PrintTaskRequested and OptionChanged can run off the XAML thread.
-    private sealed class ScalingOptions
+    private const string ColorOption = "PDFDesk.ColorMode";
+    private sealed class JobPreferences
     {
-        internal readonly string Label = UiText.Translate("Page scaling");
-        internal readonly string Fit = UiText.Translate("Fit oversized pages");
-        internal readonly string Actual = UiText.Translate("Actual size");
+        internal readonly string ScaleLabel = UiText.Translate("Page scaling");
+        internal readonly string FitLabel = UiText.Translate("Fit oversized pages");
+        internal readonly string ActualLabel = UiText.Translate("Actual size");
+        internal readonly string ColorLabel = UiText.Translate("Color mode");
+        internal readonly string MonochromeLabel = UiText.Translate("Black and white");
+        internal readonly string FullColorLabel = UiText.Translate("Full color");
         internal volatile bool FitOversized = true;
+        internal volatile bool Grayscale = true;
     }
-    private ScalingOptions _scaling = null!;
+    private JobPreferences _preferences = null!;
     private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcher =
         Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
     private PrintTaskOptions? _previewOptions;
@@ -56,7 +60,7 @@ public sealed class PrintService
     /// </summary>
     public async Task ShowAsync(PdfDocument document, string jobName, IPdfWorkQueue workQueue)
     {
-        _scaling = new ScalingOptions();
+        _preferences = new();
         _previewOptions = null;
         _layoutVersion++;
         _document = document;
@@ -86,30 +90,60 @@ public sealed class PrintService
         {
             sourceArgs.SetSource(_printSource);
         });
-        var job = _printDocument!;
-        var scaling = _scaling;
         var details = PrintTaskOptionDetails.GetFromPrintTaskOptions(task.Options);
-        var scale = details.CreateItemListOption(ScaleOption, scaling.Label);
-        scale.AddItem("fit", scaling.Fit);
-        scale.AddItem("actual", scaling.Actual);
+        var job = _printDocument!;
+        var preferences = _preferences;
+        var color = details.CreateItemListOption(ColorOption, preferences.ColorLabel);
+        color.AddItem("grayscale", preferences.MonochromeLabel);
+        color.AddItem("color", preferences.FullColorLabel);
+        color.TrySetValue("grayscale");
+        var scale = details.CreateItemListOption(ScaleOption, preferences.ScaleLabel);
+        scale.AddItem("fit", preferences.FitLabel);
+        scale.AddItem("actual", preferences.ActualLabel);
         scale.TrySetValue("fit");
-        details.DisplayedOptions.Add(ScaleOption);
-        details.OptionChanged += (_, change) =>
+
+        void SetDriverColor(bool inColor)
         {
-            if (change.OptionId as string == ScaleOption)
-            {
-                scaling.FitOversized = scale.Value as string != "actual";
-                _dispatcher.TryEnqueue(() =>
-                {
-                    if (_printDocument != job) return;
-                    _layoutVersion++;
-                    job.InvalidatePreview();
-                });
-            }
-        };
-        // Let the dialog offer "All pages" vs a custom range.
+            if (details.Options.TryGetValue(StandardPrintTaskOptions.ColorMode, out var option))
+                option.TrySetValue(inColor ? PrintColorMode.Color : PrintColorMode.Grayscale);
+        }
+        SetDriverColor(false);
         task.Options.PageRangeOptions.AllowAllPages = true;
         task.Options.PageRangeOptions.AllowCustomSetOfPages = true;
+        var displayed = details.DisplayedOptions;
+        displayed.Clear();
+        displayed.Add(StandardPrintTaskOptions.CustomPageRanges);
+        displayed.Add(StandardPrintTaskOptions.Copies);
+        displayed.Add(StandardPrintTaskOptions.Orientation);
+        displayed.Add(StandardPrintTaskOptions.MediaSize);
+        displayed.Add(ColorOption);
+        displayed.Add(ScaleOption);
+        displayed.Add(StandardPrintTaskOptions.Duplex);
+        displayed.Add(StandardPrintTaskOptions.Collation);
+
+        details.OptionChanged += (_, change) =>
+        {
+            switch (change.OptionId as string)
+            {
+                case ColorOption:
+                    bool inColor = color.Value as string == "color";
+                    preferences.Grayscale = !inColor;
+                    SetDriverColor(inColor);
+                    break;
+                case ScaleOption:
+                    preferences.FitOversized = scale.Value as string != "actual";
+                    break;
+                default:
+                    return;
+            }
+            _dispatcher.TryEnqueue(() =>
+            {
+                if (_printDocument != job) return;
+                _layoutVersion++;
+                job.InvalidatePreview();
+            });
+        };
+
     }
 
     private void PrintDocument_Paginate(object sender, PaginateEventArgs e)
@@ -135,7 +169,7 @@ public sealed class PrintService
             // Preview at screen-ish resolution; cheap and rendered on demand.
             int version = _layoutVersion;
             var paper = options.GetPageDescription((uint)(pageNumber - 1));
-            var raster = await RenderAsync(doc, pageNumber - 1, 96f, paper, _scaling.FitOversized);
+            var raster = await RenderAsync(doc, pageNumber - 1, 96f, paper, _preferences.FitOversized, _preferences.Grayscale);
             if (version == _layoutVersion) _printDocument?.SetPreviewPage(pageNumber, BuildPageElement(raster, paper));
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or PdfiumException)
@@ -156,7 +190,8 @@ public sealed class PrintService
         // for the synchronous part of the callback.
         var job = _printDocument;
         var options = e.PrintTaskOptions;
-        var fit = _scaling.FitOversized;
+        var fit = _preferences.FitOversized;
+        var grayscale = _preferences.Grayscale;
         var ranges = options.CustomPageRanges;
         List<int> pageNumbers = ranges.Count > 0
             ? [.. ranges.SelectMany(r => Enumerable.Range(r.FirstPageNumber, r.LastPageNumber - r.FirstPageNumber + 1))
@@ -170,7 +205,7 @@ public sealed class PrintService
             foreach (int pageNumber in pageNumbers)
             {
                 var paper = options.GetPageDescription((uint)(pageNumber - 1));
-                var raster = await RenderAsync(doc, pageNumber - 1, PrintDpi, paper, fit);
+                var raster = await RenderAsync(doc, pageNumber - 1, PrintDpi, paper, fit, grayscale);
                 job.AddPage(BuildPageElement(raster, paper));
             }
         }
@@ -188,7 +223,7 @@ public sealed class PrintService
     private readonly record struct RasterPage(byte[] Pixels, int Width, int Height, double WidthDip, double HeightDip);
 
     /// <summary>Rasterizes one page on the render thread and copies it out of the pooled buffer.</summary>
-    private async Task<RasterPage> RenderAsync(PdfDocument doc, int pageIndex, float dpi, PrintPageDescription paper, bool fit)
+    private async Task<RasterPage> RenderAsync(PdfDocument doc, int pageIndex, float dpi, PrintPageDescription paper, bool fit, bool grayscale)
     {
         if (_workQueue is not { } queue)
         {
@@ -208,6 +243,15 @@ public sealed class PrintService
             {
                 var pixels = new byte[page.Stride * page.Height];
                 Array.Copy(page.Pixels, pixels, pixels.Length);
+                if (grayscale)
+                {
+                    // PDFium provides BGRA. Preserve alpha and use luminance weights.
+                    for (int i = 0; i < pixels.Length; i += 4)
+                    {
+                        byte gray = (byte)((19 * pixels[i] + 183 * pixels[i + 1] + 54 * pixels[i + 2] + 128) >> 8);
+                        pixels[i] = pixels[i + 1] = pixels[i + 2] = gray;
+                    }
+                }
                 return new RasterPage(pixels, page.Width, page.Height, width * ratio, height * ratio);
             }
             finally

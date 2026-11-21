@@ -34,7 +34,7 @@ public sealed partial class MainWindow
 
     private async Task CompressExportAsync(string path)
     {
-        if (DialogHost.IsOpen) return;
+        if (DialogHost.IsOpen(RootGrid)) return;
         path = Path.GetFullPath(path);
         var owner = App.Readers.FirstOrDefault(w => w._compressionTasks.ContainsKey(path));
         if (owner != null)

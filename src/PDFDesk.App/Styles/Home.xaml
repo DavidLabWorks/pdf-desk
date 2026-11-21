@@ -22,6 +22,8 @@
             <SolidColorBrush x:Key="HomeShelfBrush" Color="#DDDDDD" />
             <SolidColorBrush x:Key="HomeSectionBrush" Color="#DBDBDB" />
             <SolidColorBrush x:Key="HomePaperBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="DocumentTabSelectedFill" Color="#DCEBF5" />
+            <SolidColorBrush x:Key="DocumentTabSelectedStroke" Color="#7795AA" />
             <SolidColorBrush x:Key="HomeTextBrush" Color="#202020" />
             <SolidColorBrush x:Key="HomeSecondaryTextBrush" Color="#626262" />
             <SolidColorBrush x:Key="HomeOutlineBrush" Color="#E3E3E3" />
@@ -54,6 +56,8 @@
             <SolidColorBrush x:Key="HomeShelfBrush" Color="#292B2D" />
             <SolidColorBrush x:Key="HomeSectionBrush" Color="#323438" />
             <SolidColorBrush x:Key="HomePaperBrush" Color="#343434" />
+            <SolidColorBrush x:Key="DocumentTabSelectedFill" Color="#33495A" />
+            <SolidColorBrush x:Key="DocumentTabSelectedStroke" Color="#779BB5" />
             <SolidColorBrush x:Key="HomeTextBrush" Color="#F2F2F2" />
             <SolidColorBrush x:Key="HomeSecondaryTextBrush" Color="#B7B7B7" />
             <SolidColorBrush x:Key="HomeOutlineBrush" Color="#353535" />
@@ -86,6 +90,8 @@
             <SolidColorBrush x:Key="HomeShelfBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="HomeSectionBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="HomePaperBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="DocumentTabSelectedFill" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="DocumentTabSelectedStroke" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="HomeTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="HomeSecondaryTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="HomeOutlineBrush" Color="{ThemeResource SystemColorWindowTextColor}" />

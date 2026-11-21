@@ -48,6 +48,14 @@ public static class FilePickerHost
     /// </summary>
     private const int RetryDelayMs = 250;
 
+    public static async Task<StorageFolder?> PickFolderAsync(nint owner)
+    {
+        var picker = new FolderPicker();
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, owner);
+        return await picker.PickSingleFolderAsync();
+    }
+
     /// <summary>Asks for one existing file, e.g. <c>".pdf"</c>.</summary>
     public static Task<PickedFile> PickOpenAsync(nint owner, params string[] fileTypes) =>
         RunAsync(() =>

@@ -7,7 +7,9 @@ namespace PDFDesk;
 
 public sealed partial class MainWindow
 {
-    private static string? DefaultPdfAppId => IsPackaged ? AppInfo.Current.AppUserModelId : null;
+    // "App" is the Application Id declared in Package.appxmanifest.
+    private static string? DefaultPdfAppId =>
+        AppBuildInfo.IsPackaged ? $"{Package.Current.Id.FamilyName}!App" : null;
 
     private void RefreshDefaultPdfStatus()
     {

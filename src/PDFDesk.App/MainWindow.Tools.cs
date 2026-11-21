@@ -117,7 +117,7 @@ public sealed partial class MainWindow
         var tool = button == PenToolButton ? AnnotationTool.Pen
             : button == HighlighterToolButton ? AnnotationTool.Highlighter : AnnotationTool.Eraser;
         _hoveredButton = tool;
-        if (_activeViewer?.ActiveTool != tool || !button.IsEnabled || DialogHost.IsOpen
+        if (_activeViewer?.ActiveTool != tool || !button.IsEnabled || DialogHost.IsOpen(RootGrid)
             || e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) return;
         _toolDismissTimer?.Stop();
         if (_toolPanels.TryGetValue(tool, out var panel) && panel.Flyout.IsOpen) return;
@@ -128,7 +128,7 @@ public sealed partial class MainWindow
             _toolHoverTimer.IsRepeating = false;
             _toolHoverTimer.Tick += (_, _) =>
             {
-                if (_hoveredButton != AnnotationTool.None && _activeViewer?.ActiveTool == _hoveredButton && !DialogHost.IsOpen)
+                if (_hoveredButton != AnnotationTool.None && _activeViewer?.ActiveTool == _hoveredButton && !DialogHost.IsOpen(RootGrid))
                 {
                     ShowToolOptions(_hoveredButton, hover: true);
                 }

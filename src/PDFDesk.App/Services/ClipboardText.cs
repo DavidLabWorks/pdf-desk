@@ -5,6 +5,13 @@ namespace PDFDesk.Services;
 
 internal static class ClipboardText
 {
+    public static void SetText(string text)
+    {
+        var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        package.SetText(text);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+    }
+
     public static async Task WriteAsync(nint owner, string text)
     {
         const uint movable = 2, unicodeText = 13;

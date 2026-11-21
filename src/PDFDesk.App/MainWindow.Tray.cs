@@ -48,7 +48,7 @@ public sealed partial class MainWindow
             string prefix = $"{App.Readers.IndexOf(window) + 1}   ";
             var item = AddItem(prefix + title, "\uE8A7", window.RestoreWindow);
             var probe = new TextBlock { FontSize = item.FontSize, FontFamily = item.FontFamily, FontWeight = item.FontWeight };
-            string display = FitDocumentName(title, candidate =>
+            string display = Controls.DocumentNameFormatter.Fit(title, candidate =>
             {
                 probe.Text = prefix + candidate;
                 probe.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));

@@ -124,10 +124,7 @@ public sealed partial class CompressionDialog : ContentDialog
     {
         try
         {
-            var picker = new Windows.Storage.Pickers.FolderPicker();
-            picker.FileTypeFilter.Add("*");
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, _owner);
-            if (await picker.PickSingleFolderAsync() is { } folder)
+            if (await FilePickerHost.PickFolderAsync(_owner) is { } folder)
             {
                 DirectoryText.Text = folder.Path;
                 UpdateCopyPath();

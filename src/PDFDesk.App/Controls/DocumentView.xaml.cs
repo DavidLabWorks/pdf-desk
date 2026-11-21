@@ -1254,7 +1254,7 @@ public sealed partial class DocumentView : UserControl
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot,
         };
-        if (await PDFDesk.Services.DialogHost.ShowAsync(dialog) == ContentDialogResult.Primary &&
+        if (await PDFDesk.Services.DialogHost.ShowAsync(this, dialog) == ContentDialogResult.Primary &&
             !string.IsNullOrWhiteSpace(box.Text))
         {
             item.Name = box.Text.Trim();

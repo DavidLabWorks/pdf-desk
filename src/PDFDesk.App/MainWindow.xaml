@@ -174,8 +174,8 @@
                     </VisualStateManager.VisualStateGroups>
                     <Grid Height="34" VerticalAlignment="Center" CornerRadius="8">
                         <Border x:Name="Surface" Background="{ThemeResource HomeLayerBrush}" />
-                        <Grid x:Name="Selection" Opacity="0" Background="{ThemeResource HomePaperBrush}">
-                            <Border BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" />
+                        <Grid x:Name="Selection" Opacity="0" Background="{ThemeResource DocumentTabSelectedFill}">
+                            <Border BorderBrush="{ThemeResource DocumentTabSelectedStroke}" BorderThickness="1" CornerRadius="8" />
                         </Grid>
                         <Grid Padding="{TemplateBinding Padding}">
                             <Grid.ColumnDefinitions>
@@ -1131,53 +1131,8 @@
                 </ScrollViewer>
             </Border>
 
-            <!-- Find bar -->
-            <Border
-                x:Name="FindBar"
-                Visibility="Collapsed"
-                VerticalAlignment="Top"
-                HorizontalAlignment="Right"
-                Margin="0,8,16,0"
-                Padding="6"
-                Background="{ThemeResource HomeCardBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="8">
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <TextBox
-                        x:Name="FindBox"
-                        Width="220"
-                        PlaceholderText="{Binding FindInDocument, Source={StaticResource UiText}}"
-                        TextChanged="FindBox_TextChanged"
-                        KeyDown="FindBox_KeyDown" />
-                    <TextBlock
-                        x:Name="FindCount"
-                        VerticalAlignment="Center"
-                        MinWidth="64"
-                        Margin="4,0"
-                        Style="{StaticResource CaptionTextBlockStyle}"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <!-- These four were the smallest targets in the app, about
-                         28x26 from padding alone. Squared off to the touch
-                         minimum; the glyphs are unchanged. -->
-                    <ToggleButton x:Name="MatchCaseButton" Click="MatchCase_Click" AutomationProperties.Name="{Binding MatchCase, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding MatchCase, Source={StaticResource UiText}}"
-                                  Width="{StaticResource TouchTargetMin}" Height="{StaticResource TouchTargetMin}" Padding="0">
-                        <TextBlock Text="Aa" FontSize="13" />
-                    </ToggleButton>
-                    <Button x:Name="FindPrev" Click="FindPrev_Click" AutomationProperties.Name="{Binding PreviousMatch, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding PreviousShiftEnter, Source={StaticResource UiText}}"
-                            Width="{StaticResource TouchTargetMin}" Height="{StaticResource TouchTargetMin}" Padding="0">
-                        <FontIcon Glyph="&#xE70E;" FontSize="12" />
-                    </Button>
-                    <Button x:Name="FindNext" Click="FindNext_Click" AutomationProperties.Name="{Binding NextMatch, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding NextEnter, Source={StaticResource UiText}}"
-                            Width="{StaticResource TouchTargetMin}" Height="{StaticResource TouchTargetMin}" Padding="0">
-                        <FontIcon Glyph="&#xE70D;" FontSize="12" />
-                    </Button>
-                    <Button x:Name="FindClose" Click="FindClose_Click" AutomationProperties.Name="{Binding CloseFindBar, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding CloseEsc, Source={StaticResource UiText}}"
-                            Width="{StaticResource TouchTargetMin}" Height="{StaticResource TouchTargetMin}" Padding="0">
-                        <FontIcon Glyph="&#xE711;" FontSize="12" />
-                    </Button>
-                </StackPanel>
-            </Border>
+            <controls:DocumentFindBar x:Name="FindBar" Visibility="Collapsed"
+                                      VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,8,16,0" />
 
             </Grid>
 
