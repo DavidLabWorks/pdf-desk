@@ -300,6 +300,7 @@ public sealed class UiText : INotifyPropertyChanged
     public string RotateRightCtrlR => Chinese ? "向右旋转 (Ctrl+R)" : "Rotate right (Ctrl+R)";
     public string Save => Chinese ? "保存" : "Save";
     public string SaveAs => Chinese ? "另存为…" : "Save as…";
+    public string SaveCopyAction => Chinese ? "保存副本…" : "Save a copy…";
     public string SaveAsAction => Chinese ? "另存为…" : "Save As…";
     public string SelectTheStarOnAPDFInRecent => Chinese ? "点击最近文件右上角的星标即可收藏。" : "Select the star on a PDF in Recent.";
     public string Settings => Chinese ? "设置" : "Settings";
@@ -593,6 +594,11 @@ public sealed class UiText : INotifyPropertyChanged
         "Bookmarks not saved" => "阅读书签尚未保存",
         "PDF saved, bookmarks pending" => "PDF 已保存，阅读书签尚未保存",
         "Bookmarks will be saved automatically when storage is available." => "存储恢复可用后，阅读书签会自动保存。",
+        "Cannot find {0} at its original location" => "在原位置找不到 {0}",
+        "Your changes are unsaved. Save a copy to keep them." => "你的修改尚未保存。请保存副本，以保留本次修改。",
+        "The file may have been moved or deleted. You can still read this document." => "文件可能已移动或删除，当前内容仍可查看。",
+        "Save changes to a new file?" => "将修改保存为新文件？",
+        "{0} - Copy" => "{0} - 副本",
         "Copy saved" => "副本已保存",
         "The destination has pending edits. Save them or choose another file." => "目标文档有未完成的编辑。请先保存，或选择其他文件。",
         "Choose a different file for the copy." => "请为副本选择不同于原文件的路径。",

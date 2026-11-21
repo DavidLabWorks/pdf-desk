@@ -14,12 +14,16 @@ public sealed partial class PdfDocument : IDisposable
     private (long Length, DateTime LastWriteUtc, string Digest) _savedDiskVersion;
 
     public string FilePath { get; private set; }
-    public bool IsReadOnlySnapshot { get; private set; }
+    private bool _readOnlySnapshot;
+    private volatile bool _sourceMissing;
+    public bool IsReadOnlySnapshot => _readOnlySnapshot || _sourceMissing;
+
+    public void SetSourceMissing(bool missing) => _sourceMissing = missing;
 
     public WindowsFileIdentity.NavigationKey GetOpenedNavigationKey(WindowsFileIdentity.NavigationKey key) =>
         key.FromHandle(_fileAccess.FileHandle);
 
-    public void MakeReadOnly() => IsReadOnlySnapshot = true;
+    public void MakeReadOnly() => _readOnlySnapshot = true;
 
     private void RequireWritable()
     {
@@ -63,7 +67,7 @@ public sealed partial class PdfDocument : IDisposable
     public static PdfDocument OpenReadOnly(string path)
     {
         var document = Open(path);
-        document.IsReadOnlySnapshot = true;
+        document.MakeReadOnly();
         return document;
     }
 

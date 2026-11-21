@@ -43,6 +43,34 @@ public sealed partial class MainWindow : Window
     private readonly Dictionary<DocumentView, TabPosition> _detachedPositions = [];
     private readonly HashSet<DocumentView> _savingViews = [];
 
+    private readonly DispatcherTimer _sourceTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private DocumentView? _checkingSource;
+
+    private async Task RefreshSourceAsync()
+    {
+        if (CurrentView is not { IsDocumentLoaded: true } view || _checkingSource == view) return;
+        _checkingSource = view;
+        try
+        {
+            bool missing = await Task.Run(() => DocumentView.IsSourceMissing(view.FilePath));
+            if (CurrentView == view && missing != view.SourceMissing)
+            {
+                if (missing && !view.IsSnapshot)
+                {
+                    if (view.HasOpenOrganizer) return;
+                    await view.CommitPendingEditsAsync();
+                    if (CurrentView != view || view.HasPendingOperation) return;
+                    SetActiveTool(AnnotationTool.None);
+                    HideToolOptions();
+                }
+                view.UpdateSourceNotice(missing, _savingViews.Contains(view));
+                UpdateToolbarForActive();
+            }
+        }
+        catch (Exception ex) { ErrorLog.Default.Write(nameof(RefreshSourceAsync), ex); }
+        finally { if (_checkingSource == view) _checkingSource = null; }
+    }
+
     private PdfViewer? _activeViewer;
     private bool _quickToolsExpanded = true;
     private readonly DockedToolbarMotion _quickToolsMotion;
@@ -98,6 +126,7 @@ public sealed partial class MainWindow : Window
 
         RootGrid.Loaded += RestoreOnFirstLoad;
         Closed += MainWindow_Closed;
+        _sourceTimer.Tick += async (_, _) => await RefreshSourceAsync();
         Activated += (_, args) =>
         {
             if (!App.Exiting && args.WindowActivationState == WindowActivationState.Deactivated && CurrentView is { } leaving) CaptureState(leaving);
@@ -105,9 +134,12 @@ public sealed partial class MainWindow : Window
                 EndShelfDrag();
             if (args.WindowActivationState != WindowActivationState.Deactivated)
             {
+                _sourceTimer.Start();
+                _ = RefreshSourceAsync();
                 if (SettingsPage.Visibility == Visibility.Visible) RefreshDefaultPdfStatus();
                 else if (CurrentView == null && App.Readers.Count > 1) PopulateRecents();
             }
+            else _sourceTimer.Stop();
         };
         AppWindow.Closing += AppWindow_Closing;
     }
@@ -223,6 +255,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task<bool> EnsureSafeToCloseAsync(HashSet<long> discarded)
     {
+        if (_savingViews.Count != 0) return false;
         if (_compressionTasks.Count != 0)
         {
             RestoreWindow();
@@ -253,7 +286,8 @@ public sealed partial class MainWindow : Window
         }
 
         if (!AppWindow.IsVisible) RestoreWindow();
-        var choice = await PromptSaveChangesAsync(dirty.Select(item => item.View.DisplayName).ToArray());
+        var choice = await PromptSaveChangesAsync(dirty.Select(item => item.View.DisplayName).ToArray(),
+            dirty.Length == 1 && DocumentView.IsSourceMissing(dirty[0].View.FilePath));
         if (choice is null)
         {
             return false; // cancelled
@@ -264,7 +298,7 @@ public sealed partial class MainWindow : Window
             {
                 try
                 {
-                    await view.SaveInPlaceAsync();
+                    if (!await SaveOrRecoverAsync(view)) return false;
                 }
                 catch (Exception ex)
                 {
@@ -420,6 +454,7 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_Closed(object sender, WindowEventArgs e)
     {
+        _sourceTimer.Stop();
         FindBar.Close();
         FindBar.Attach(null);
         ExitPresentation();
@@ -672,7 +707,8 @@ public sealed partial class MainWindow : Window
         var view = CurrentView;
         bool readOnly = view?.IsReadOnlyView == true;
         EditTools.Visibility = readOnly ? Visibility.Collapsed : Visibility.Visible;
-        ReaderSaveButton.Visibility = ReaderSaveSeparator.Visibility = EditTools.Visibility;
+        ReaderSaveButton.Visibility = ReaderSaveSeparator.Visibility = !readOnly || view?.SourceMissing == true ? Visibility.Visible : Visibility.Collapsed;
+        FocusEditor.Visibility = CopySnapshot.Visibility = view?.SourceMissing == true ? Visibility.Collapsed : Visibility.Visible;
         ViewOnlyStatus.Visibility = readOnly ? Visibility.Visible : Visibility.Collapsed;
         if (readOnly) UpdateSnapshotActions(view!);
         bool ready = view is { IsDocumentLoaded: true, LoadError: null };
@@ -1332,10 +1368,18 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void UpdateReaderSaveButton() =>
-        ReaderSaveButton.IsEnabled = CurrentView is { IsDocumentLoaded: true, LoadError: null } view
-            && !view.IsReadOnlyView && (view.IsDirty || view.Viewer.HasPendingFormEdit || view.Viewer.IsEditingText)
-            && !_savingViews.Contains(view);
+    private void UpdateReaderSaveButton()
+    {
+        var view = CurrentView;
+        bool missing = view?.SourceMissing == true;
+        bool saving = view != null && _savingViews.Contains(view);
+        string action = missing ? UiText.Current.SaveCopyAction : UiText.Current.Save;
+        AutomationProperties.SetName(ReaderSaveButton, action);
+        ToolTipService.SetToolTip(ReaderSaveButton, $"{action} (Ctrl+S)");
+        ReaderSaveButton.IsEnabled = view is { IsDocumentLoaded: true, LoadError: null } && !saving
+            && (missing || (!view.IsReadOnlyView && (view.IsDirty || view.Viewer.HasPendingFormEdit || view.Viewer.IsEditingText)));
+        if (missing) view!.UpdateSourceNotice(true, saving);
+    }
 
     private async void Viewer_NoteRequested(object? sender, (int PageIndex, double X, double Y) at)
     {
@@ -1465,78 +1509,110 @@ public sealed partial class MainWindow : Window
 
     private async Task SaveActiveAsync()
     {
-        if (CurrentView is not { IsDocumentLoaded: true, LoadError: null } view
-            || (!view.IsDirty && !view.Viewer.IsEditingText && !view.Viewer.HasPendingFormEdit)
-            || !_savingViews.Add(view))
-        {
-            return;
-        }
+        if (CurrentView is { IsDocumentLoaded: true, LoadError: null } view)
+            await SaveOrRecoverAsync(view);
+    }
+
+    internal Task<bool> SaveMissingCopyAsync(DocumentView view) => SaveOrRecoverAsync(view, forceCopy: true);
+
+    private async Task<bool> SaveOrRecoverAsync(DocumentView view, bool closingTab = false, bool forceCopy = false)
+    {
+        if (!_savingViews.Add(view)) return false;
         UpdateReaderSaveButton();
         try
         {
-            await view.SaveInPlaceAsync();
+            if (!forceCopy && !DocumentView.IsSourceMissing(view.FilePath))
+            {
+                if (view.SourceMissing) await RefreshSourceAsync();
+                if (view.IsReadOnlyView) return false;
+                try { await view.SaveInPlaceAsync(); return true; }
+                catch (IOException) when (DocumentView.IsSourceMissing(view.FilePath)) { }
+            }
+            return await SaveCopyAsync(view, recover: true, closingTab);
         }
         catch (Exception ex)
         {
-            ErrorLog.Default.Write(nameof(SaveActiveAsync), ex);
             ShowError(UiText.Format("Save failed: {0}", UiText.Translate(ex.Message)));
+            return false;
         }
         finally
         {
             _savingViews.Remove(view);
-            UpdateDirtyIndicator(view);
+            UpdateReaderSaveButton();
         }
     }
 
     private async Task SaveAsActiveAsync()
     {
-        if (CurrentView is not { IsDocumentLoaded: true, LoadError: null } view || view.Viewer.Document is not { } document)
-        {
-            return;
-        }
+        if (CurrentView is not { IsDocumentLoaded: true } view || !_savingViews.Add(view)) return;
+        try { await SaveCopyAsync(view, DocumentView.IsSourceMissing(view.FilePath)); }
+        catch (Exception ex) { ShowError(UiText.Format("Save As failed: {0}", ex.Message)); }
+        finally { _savingViews.Remove(view); UpdateReaderSaveButton(); }
+    }
 
+    private async Task<bool> SaveCopyAsync(DocumentView view, bool recover, bool closingTab = false)
+    {
+        if (view.Viewer.Document is not { } document) return false;
+        var oldTab = Tabs.TabItems.OfType<TabViewItem>().Single(t => ReferenceEquals(t.Tag, view));
+        var suggested = Path.GetFileNameWithoutExtension(view.FilePath);
         var picked = await FilePickerHost.PickSaveAsync(
             WinRT.Interop.WindowNative.GetWindowHandle(this),
-            Path.GetFileNameWithoutExtension(view.FilePath),
+            recover ? UiText.Format("{0} - Copy", suggested) : suggested,
             UiText.Translate("PDF document"),
             ".pdf");
         if (picked.Failed)
         {
             ShowError(FilePickerHost.FailureMessage);
-            return;
+            return false;
         }
         if (picked.File is not { } file)
         {
-            return;
+            return false;
         }
 
+        if (WindowsFileIdentity.SameFile(view.FilePath, file.Path))
+        {
+            if (view.IsReadOnlyView || recover) throw new IOException(UiText.Translate("Choose a different file for the copy."));
+            await view.SaveInPlaceAsync();
+            return true;
+        }
+        await view.CommitPendingEditsAsync();
+        long revision = document.UnsavedRevision;
+        string digest = document.SavedDigest;
+        var bookmarks = view.BookmarksForExport();
+        await WriteReaderCopyAsync(view.FilePath, file.Path, async staging =>
+        {
+            await view.Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
+            {
+                if (view.IsReadOnlyView || recover) document.SaveSharingCopy(staging);
+                else document.SaveAs(staging);
+                digest = PDFDesk.Engine.PdfDocument.ReadFileVersion(staging).Digest;
+                return true;
+            });
+            return true;
+        }, () => { _state.StoreCopyBookmarks(file.Path, digest, bookmarks); SaveBookmarkState(view, file.Path, true); });
+        if (!recover) { OpenOrActivate(file.Path); return true; }
+        if (document.UnsavedRevision != revision || view.Viewer.HasPendingFormEdit || view.Viewer.IsEditingText)
+            throw new IOException(UiText.Current.SourceChangedDuringMove);
+        if (closingTab) return true;
+
+        var restore = PositionOf(view)?.ForPath(file.Path);
+        var replacement = AddTab(file.Path, restore, false, Tabs.TabItems.IndexOf(oldTab));
+        var newTab = Tabs.TabItems.OfType<TabViewItem>().Single(t => ReferenceEquals(t.Tag, replacement));
         try
         {
-            if (WindowsFileIdentity.SameFile(view.FilePath, file.Path))
-            {
-                if (view.IsReadOnlyView) throw new IOException(UiText.Translate("Choose a different file for the copy."));
-                await view.SaveInPlaceAsync();
-                return;
-            }
-            await view.CommitPendingEditsAsync();
-            string digest = document.SavedDigest;
-            var bookmarks = view.BookmarksForExport();
-            await WriteReaderCopyAsync(view.FilePath, file.Path, async staging =>
-            {
-                await view.Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
-                {
-                    if (view.IsReadOnlyView) document.SaveSharingCopy(staging);
-                    else document.SaveAs(staging);
-                    digest = PDFDesk.Engine.PdfDocument.ReadFileVersion(staging).Digest;
-                    return true;
-                });
-                return true;
-            }, () => { _state.StoreCopyBookmarks(file.Path, digest, bookmarks); SaveBookmarkState(view, file.Path, true); });
-            OpenOrActivate(file.Path);
+            await replacement.EnsureLoadedAsync(restore);
+            if (replacement.LoadError != null) throw new IOException(replacement.LoadError);
+            if (document.UnsavedRevision != revision || view.Viewer.IsEditingText || view.Viewer.HasPendingFormEdit)
+                throw new IOException(UiText.Current.SourceChangedDuringMove);
+            if (CurrentView == view) Tabs.SelectedItem = newTab;
+            CloseTab(oldTab);
+            return true;
         }
-        catch (Exception ex)
+        catch
         {
-            ShowError(UiText.Format("Save As failed: {0}", ex.Message));
+            CloseTab(newTab);
+            throw;
         }
     }
 

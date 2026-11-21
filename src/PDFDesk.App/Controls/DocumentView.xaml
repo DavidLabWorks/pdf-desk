@@ -213,14 +213,20 @@
 
         <!-- SplitView.Content is already the region to the right of the pane,
              so the notice follows the reading column and stays clear of the sidebar. -->
-        <Grid x:Name="ReadingColumn" RowDefinitions="Auto,*,Auto"
+        <Grid x:Name="ReadingColumn" RowDefinitions="Auto,Auto,*,Auto"
               Background="{ThemeResource HomeCanvasBrush}"
               CornerRadius="{StaticResource RadiusMedium}">
-            <Grid x:Name="SnapshotBar" Grid.Row="2" Visibility="Collapsed" Padding="8,4" ColumnDefinitions="*,Auto" ColumnSpacing="{StaticResource SpaceXS}">
+            <InfoBar x:Name="MissingSourceBar" Grid.Row="1" Severity="Warning" IsClosable="False"
+                     Margin="8,4,8,4" AutomationProperties.LiveSetting="Polite">
+                <InfoBar.ActionButton>
+                    <Button x:Name="SaveMissingCopy" Click="SaveMissingCopy_Click" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+            <Grid x:Name="SnapshotBar" Grid.Row="3" Visibility="Collapsed" Padding="8,4" ColumnDefinitions="*,Auto" ColumnSpacing="{StaticResource SpaceXS}">
                 <TextBlock x:Name="SnapshotStatus" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                 <Button Grid.Column="1" x:Name="ReloadSnapshot" Click="ReloadSnapshot_Click"/>
             </Grid>
-            <Grid Grid.Row="1">
+            <Grid Grid.Row="2">
             <controls:PdfViewer x:Name="ViewerControl">
                 <controls:PdfViewer.RenderTransform>
                     <TranslateTransform />

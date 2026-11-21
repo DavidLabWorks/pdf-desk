@@ -29,9 +29,50 @@ public sealed partial class DocumentView : UserControl
 
     private void SetReadOnlyView(bool readOnly)
     {
-        IsReadOnlyView = readOnly;
-        ThumbList.CanReorderItems = ThumbList.CanDragItems = ThumbList.AllowDrop = !readOnly;
+        IsSnapshot = readOnly;
+        UpdateThumbnailEditing();
     }
+
+    private void UpdateThumbnailEditing()
+    {
+        ThumbList.CanReorderItems = ThumbList.CanDragItems = ThumbList.AllowDrop = !IsReadOnlyView;
+    }
+
+    internal bool SourceMissing { get; private set; }
+
+    internal static bool IsSourceMissing(string path)
+    {
+        try { _ = File.GetAttributes(path); }
+        catch (FileNotFoundException) { return true; }
+        catch (DirectoryNotFoundException) { return true; }
+        catch (UnauthorizedAccessException) { }
+        catch (IOException) { }
+        return false;
+    }
+
+    internal void UpdateSourceNotice(bool missing, bool saving)
+    {
+        if (missing != SourceMissing)
+        {
+            SourceMissing = missing;
+            _document?.SetSourceMissing(missing);
+            UpdateThumbnailEditing();
+        }
+        if (missing)
+        {
+            MissingSourceBar.Title = UiText.Format("Cannot find {0} at its original location", DisplayName);
+            MissingSourceBar.Message = IsDirty || Viewer.HasPendingFormEdit || Viewer.IsEditingText
+                ? UiText.Translate("Your changes are unsaved. Save a copy to keep them.")
+                : UiText.Translate("The file may have been moved or deleted. You can still read this document.");
+            ToolTipService.SetToolTip(MissingSourceBar, FilePath);
+            SaveMissingCopy.Content = UiText.Current.SaveCopyAction;
+            SaveMissingCopy.IsEnabled = !saving;
+        }
+        MissingSourceBar.IsOpen = missing;
+    }
+
+    private async void SaveMissingCopy_Click(object sender, RoutedEventArgs e) =>
+        await HostWindow.SaveMissingCopyAsync(this);
 
     internal void RefreshSnapshotBar()
     {
@@ -44,7 +85,8 @@ public sealed partial class DocumentView : UserControl
     private async void ReloadSnapshot_Click(object sender, RoutedEventArgs e) => await HostWindow.ReloadSnapshotAsync(this, false);
 
     internal MainWindow HostWindow { get; set; } = null!;
-    internal bool IsReadOnlyView { get; private set; }
+    internal bool IsSnapshot { get; private set; }
+    internal bool IsReadOnlyView => IsSnapshot || SourceMissing;
     internal string? LatestSavedDigest { get; set; }
     internal bool NewVersionAvailable => LatestSavedDigest is { } latest && _document is { } document && latest != document.SavedDigest;
     internal WindowsFileIdentity.NavigationKey NavigationKey { get; set; }
@@ -1044,8 +1086,8 @@ public sealed partial class DocumentView : UserControl
     /// <summary>Raised whenever undo/redo availability or labels change.</summary>
     public event EventHandler? UndoStateChanged;
 
-    public bool CanUndo => _undoStack.CanUndo;
-    public bool CanRedo => _undoStack.CanRedo;
+    public bool CanUndo => !IsReadOnlyView && _undoStack.CanUndo;
+    public bool CanRedo => !IsReadOnlyView && _undoStack.CanRedo;
     public string? UndoLabel => _undoStack.UndoLabel;
     public string? RedoLabel => _undoStack.RedoLabel;
 
@@ -1058,7 +1100,7 @@ public sealed partial class DocumentView : UserControl
     public async Task UndoAsync()
     {
         await Viewer.FinishEraserAsync();
-        if (_pageOpRunning)
+        if (IsReadOnlyView || _pageOpRunning)
         {
             return;
         }
@@ -1072,7 +1114,7 @@ public sealed partial class DocumentView : UserControl
     public async Task RedoAsync()
     {
         await Viewer.FinishEraserAsync();
-        if (_pageOpRunning)
+        if (IsReadOnlyView || _pageOpRunning)
         {
             return;
         }

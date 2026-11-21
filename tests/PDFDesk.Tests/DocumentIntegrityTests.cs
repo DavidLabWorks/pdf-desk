@@ -78,6 +78,34 @@ public class DocumentIntegrityTests
     }
 
     [Fact]
+    public void MissingSourceBlocksFurtherEditsAndPreservesPendingChangesInCopy()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            string source = Path.Combine(dir.FullName, "reader.pdf");
+            string moved = Path.Combine(dir.FullName, "moved.pdf");
+            string copy = Path.Combine(dir.FullName, "copy.pdf");
+            File.Copy(PixelAssert.CorpusPath("hello.pdf"), source);
+            using var reader = PdfDocument.Open(source);
+            reader.AddNote(0, 40, 40, "keep this edit");
+            File.Move(source, moved);
+            reader.SetSourceMissing(true);
+            Assert.Throws<InvalidOperationException>(() => reader.AddNote(0, 80, 80, "later edit"));
+            reader.SaveSharingCopy(copy);
+            using var saved = PdfDocument.Open(copy);
+            Assert.Contains(saved.GetAnnotations(0), a => a.Contents == "keep this edit");
+            Assert.False(File.Exists(source));
+            saved.AddNote(0, 80, 80, "new edit");
+            saved.SaveInPlace();
+            reader.MakeReadOnly();
+            reader.SetSourceMissing(false);
+            Assert.True(reader.IsReadOnlySnapshot);
+        }
+        finally { dir.Delete(true); }
+    }
+
+    [Fact]
     public void SnapshotBookmarksRemainAvailableAfterEditorSaves()
     {
         var recent = new RecentFile { Path = "reader.pdf" };

@@ -16,7 +16,7 @@ public sealed partial class MainWindow
     private DocumentView AddTab(string path, RecentFile? restore, bool select, int? index = null, bool readOnly = false, DocumentView? existing = null, WindowsFileIdentity.NavigationKey? key = null)
     {
         key ??= existing?.NavigationKey ?? new WindowsFileIdentity.NavigationKey(path);
-        var view = existing ?? new DocumentView(key, readOnly || MatchingTabs(key).Any(t => !t.View.IsReadOnlyView));
+        var view = existing ?? new DocumentView(key, readOnly || MatchingTabs(key).Any(t => !t.View.IsSnapshot));
         view.HostWindow = this;
         _pendingRestore[view] = restore;
         view.Viewer.LinkActivated += Viewer_LinkActivated;
@@ -117,7 +117,7 @@ public sealed partial class MainWindow
         select (window, tab, view);
 
     internal static bool HasOtherEditor(DocumentView view) =>
-        MatchingTabs(view.NavigationKey).Any(t => t.View != view && !t.View.IsReadOnlyView);
+        MatchingTabs(view.NavigationKey).Any(t => t.View != view && !t.View.IsSnapshot);
 
     private static void RefreshSavedLocation(DocumentView writer)
     {
@@ -148,12 +148,12 @@ public sealed partial class MainWindow
 
     internal async Task ReloadSnapshotAsync(DocumentView view, bool edit)
     {
-        if (!view.IsReadOnlyView || !_savingViews.Add(view)) return;
+        if (view.SourceMissing || !view.IsSnapshot || !_savingViews.Add(view)) return;
         DocumentView? replacement = null;
         try
         {
             var matches = MatchingTabs(view.NavigationKey).ToList();
-            if (edit && matches.Any(t => !t.View.IsReadOnlyView)) { OpenOrActivate(view.FilePath); return; }
+            if (edit && matches.Any(t => !t.View.IsSnapshot)) { OpenOrActivate(view.FilePath); return; }
             var old = matches.Single(t => t.View == view).Tab;
             var restore = PositionOf(view)?.ForPath(view.FilePath);
             replacement = AddTab(view.FilePath, restore, false, Tabs.TabItems.IndexOf(old), readOnly: !edit);
@@ -256,9 +256,9 @@ public sealed partial class MainWindow
         if (selected != null && SettingsPage.Visibility == Visibility.Visible) LeaveSettings();
         var layout = selected?.ReaderLayout;
         MoveReaderControl(Toolbar, RootGrid, layout, 0);
-        MoveReaderControl(ReaderOverlays, Workspace, layout, 1);
-        MoveReaderControl(ReaderQuickTools, Workspace, layout, 1);
-        MoveReaderControl(ExportQueue, RootGrid, layout ?? RootGrid, layout == null ? 2 : 1);
+        MoveReaderControl(ReaderOverlays, Workspace, layout, layout == null ? 1 : 2);
+        MoveReaderControl(ReaderQuickTools, Workspace, layout, layout == null ? 1 : 2);
+        MoveReaderControl(ExportQueue, RootGrid, layout ?? RootGrid, 2);
         Canvas.SetZIndex(ExportQueue, 1);
         UpdateExportQueue();
         DocHost.Content = selected;
@@ -271,6 +271,7 @@ public sealed partial class MainWindow
         if (!_restoringSession && CurrentView is { } view)
         {
             await LoadTabAsync(view);
+            await RefreshSourceAsync();
         }
     }
 
@@ -387,7 +388,7 @@ public sealed partial class MainWindow
         }
         if (tab.Tag is DocumentView { IsDirty: true } dirtyView)
         {
-            var choice = await PromptSaveChangesAsync([dirtyView.DisplayName]);
+            var choice = await PromptSaveChangesAsync([dirtyView.DisplayName], DocumentView.IsSourceMissing(dirtyView.FilePath));
             if (choice is null)
             {
                 return; // cancelled
@@ -396,7 +397,7 @@ public sealed partial class MainWindow
             {
                 try
                 {
-                    await dirtyView.SaveInPlaceAsync();
+                    if (!await SaveOrRecoverAsync(dirtyView, closingTab: true)) return;
                 }
                 catch (Exception ex)
                 {
@@ -409,14 +410,14 @@ public sealed partial class MainWindow
     }
 
     /// <summary>true = save, false = discard, null = cancel.</summary>
-    private async Task<bool?> PromptSaveChangesAsync(string[] names)
+    private async Task<bool?> PromptSaveChangesAsync(string[] names, bool missing = false)
     {
         var dialog = new ContentDialog
         {
-            Title = UiText.Current.SaveBeforeClosing,
+            Title = missing ? UiText.Translate("Save changes to a new file?") : UiText.Current.SaveBeforeClosing,
             Content = names,
             ContentTemplate = (DataTemplate)RootGrid.Resources["UnsavedDocumentsTemplate"],
-            PrimaryButtonText = names.Length == 1 ? UiText.Current.Save : UiText.Current.SaveAllChanges,
+            PrimaryButtonText = missing ? UiText.Current.SaveCopyAction : names.Length == 1 ? UiText.Current.Save : UiText.Current.SaveAllChanges,
             SecondaryButtonText = UiText.Current.DiscardChanges,
             SecondaryButtonStyle = (Style)Application.Current.Resources["DestructiveDialogButtonStyle"],
             CloseButtonText = UiText.Current.Cancel,
