@@ -4,6 +4,15 @@ namespace PDFDesk.Tests;
 
 public class PageLayoutTests
 {
+    [Fact]
+    public void MaximumPixelExtentKeepsTheFinalPartialTile()
+    {
+        var (cols, rows) = TileMath.GridFor(int.MaxValue, 100);
+        Assert.Equal((2097152, 1), (cols, rows));
+        Assert.Equal((cols - 1, cols), TileMath.VisibleRange(int.MaxValue - 10, int.MaxValue, 1, cols));
+        Assert.Equal(1023, TileMath.TileWindow(int.MaxValue, 100, 0, cols - 1).Width);
+    }
+
     private static readonly (float, float)[] ThreeLetterPages =
     [
         (612f, 792f), (612f, 792f), (612f, 792f),

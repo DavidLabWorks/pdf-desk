@@ -5,6 +5,16 @@ namespace PDFDesk.Tests;
 
 public class PdfLibraryTests
 {
+    [Theory]
+    [InlineData("-balanced.pdf")]
+    [InlineData("-均衡压缩 (12).pdf")]
+    public void LongCopyNamesKeepSuffixAndWholeUnicodeCharacters(string ending)
+    {
+        string prefix = new('x', 254 - ending.Length);
+        string name = PdfLibrary.FitFileName(prefix + "📄book", ending);
+        Assert.Equal(prefix + ending, name);
+    }
+
     [Fact]
     public void CreateBlank_SavesAnEditableA4PdfWithoutOverwriting()
     {

@@ -28,6 +28,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public FlattenResult FlattenPage(int pageIndex, bool forPrint = false)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
 
@@ -77,14 +78,16 @@ public sealed partial class PdfDocument
     /// Flattens every page, reporting progress as (pagesDone, pageCount).
     /// Returns the number of pages actually changed.
     /// </summary>
-    public int FlattenAllPages(bool forPrint = false, Action<int, int>? onProgress = null, CancellationToken cancellationToken = default)
+    public int FlattenAllPages(bool forPrint = false, Action<int, int>? onProgress = null, CancellationToken cancellationToken = default, Action<int>? onPageFailed = null)
     {
         int changed = 0;
         int total = PageCount;
         for (int i = 0; i < total; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (FlattenPage(i, forPrint) == FlattenResult.Flattened)
+            var result = FlattenPage(i, forPrint);
+            if (result == FlattenResult.Failed) onPageFailed?.Invoke(i + 1);
+            if (result == FlattenResult.Flattened)
             {
                 changed++;
             }

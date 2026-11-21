@@ -21,6 +21,7 @@ public sealed partial class PdfDocument
     public IReadOnlyList<InkEraseChange> EraseInk(
         IReadOnlyDictionary<int, (double X, double Y)[]> trails, double width)
     {
+        RequireWritable();
         if (!double.IsFinite(width) || width <= 0 || width > float.MaxValue)
         {
             throw new ArgumentOutOfRangeException(nameof(width));
@@ -45,6 +46,7 @@ public sealed partial class PdfDocument
 
     public void ApplyInkEraseChanges(IReadOnlyList<InkEraseChange> changes, bool restore)
     {
+        RequireWritable();
         lock (PdfiumLibrary.Lock)
         {
             ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);

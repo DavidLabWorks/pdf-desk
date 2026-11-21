@@ -28,6 +28,15 @@ public readonly record struct PageAnchor(int PageIndex, double LocalX, double Lo
 /// </summary>
 public static class ZoomAnchor
 {
+    public static PageAnchor CaptureReadingLocation(PageLayout layout, int page, DipRect viewport,
+        out (double X, double Y) focus)
+    {
+        focus = ReadingFocus(layout, page, viewport);
+        var rect = layout.GetPageRect(page);
+        return new PageAnchor(page, (viewport.X + focus.X - rect.X) / layout.Zoom,
+            (viewport.Y + focus.Y - rect.Y) / layout.Zoom);
+    }
+
     /// <summary>Focus button-driven zoom on the visible portion of the reading page.</summary>
     public static (double X, double Y) ReadingFocus(PageLayout layout, int page, DipRect viewport)
     {

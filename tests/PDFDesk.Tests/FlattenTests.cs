@@ -126,6 +126,26 @@ public class FlattenTests
     }
 
     [Fact]
+    public void FlattenAllPages_ReportsUnreadablePageAlongsideSuccessfulPage()
+    {
+        var encoding = System.Text.Encoding.Latin1;
+        string pdf = File.ReadAllText(PixelAssert.CorpusPath("hello.pdf"), encoding);
+        const string kids = "/Kids [4 0 R 6 0 R]";
+        Assert.Contains(kids, pdf);
+        string path = TempPdf();
+        try
+        {
+            File.WriteAllText(path, pdf.Replace(kids, "/Kids [4 0 R 0 0 R]"), encoding);
+            using var doc = PdfDocument.Open(path);
+            doc.AddNote(0, 20, 20, "flatten");
+            List<int> failed = [];
+            Assert.Equal(1, doc.FlattenAllPages(onPageFailed: failed.Add));
+            Assert.Equal([2], failed);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void FlattenAllPages_ReportsProgressForEveryPage()
     {
         using var doc = PdfDocument.Open(PixelAssert.CorpusPath("hello.pdf"));

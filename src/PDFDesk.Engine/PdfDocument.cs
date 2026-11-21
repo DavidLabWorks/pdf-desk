@@ -8,19 +8,32 @@ namespace PDFDesk.Engine;
 /// </summary>
 public sealed partial class PdfDocument : IDisposable
 {
-    private readonly FileAccessAdapter _fileAccess;
+    private FileAccessAdapter _fileAccess;
     private IntPtr _handle;
     private (float Width, float Height)[] _pageSizes;
-    private (long Length, DateTime LastWriteUtc) _savedDiskVersion;
+    private (long Length, DateTime LastWriteUtc, string Digest) _savedDiskVersion;
 
     public string FilePath { get; private set; }
+    public bool IsReadOnlySnapshot { get; private set; }
+
+    public WindowsFileIdentity.NavigationKey GetOpenedNavigationKey(WindowsFileIdentity.NavigationKey key) =>
+        key.FromHandle(_fileAccess.FileHandle);
+
+    public void MakeReadOnly() => IsReadOnlySnapshot = true;
+
+    private void RequireWritable()
+    {
+        if (IsReadOnlySnapshot) throw new InvalidOperationException("This reader is read-only.");
+    }
+
     public int PageCount { get; private set; }
 
-    private PdfDocument(string path, FileAccessAdapter fileAccess, IntPtr handle)
+    private PdfDocument(string path, FileAccessAdapter fileAccess, IntPtr handle,
+        (long Length, DateTime LastWriteUtc, string Digest) version)
     {
         FilePath = path;
         _fileAccess = fileAccess;
-        _savedDiskVersion = fileAccess.FileVersion;
+        _savedDiskVersion = version;
         _handle = handle;
         _pageSizes = [];
         ReadPageMetricsLocked(); // Open holds the lock around this ctor
@@ -47,29 +60,41 @@ public sealed partial class PdfDocument : IDisposable
     }
 
     /// <exception cref="PdfiumException">Invalid/corrupt file, or password required.</exception>
+    public static PdfDocument OpenReadOnly(string path)
+    {
+        var document = Open(path);
+        document.IsReadOnlySnapshot = true;
+        return document;
+    }
+
     public static PdfDocument Open(string path, string? password = null)
     {
         PdfiumLibrary.EnsureInitialized();
 
         path = Path.GetFullPath(path);
         var fileAccess = new FileAccessAdapter(path);
-        lock (PdfiumLibrary.Lock)
+        try
         {
-            IntPtr handle = PdfiumNative.LoadCustomDocument(fileAccess, password);
-            if (handle == IntPtr.Zero)
+            var version = fileAccess.FileVersion;
+            lock (PdfiumLibrary.Lock)
             {
-                var error = PdfiumNative.LastError();
-                fileAccess.Dispose();
-                throw error;
+                IntPtr handle = PdfiumNative.LoadCustomDocument(fileAccess, password);
+                if (handle == IntPtr.Zero) throw PdfiumNative.LastError();
+                try { return new PdfDocument(path, fileAccess, handle, version); }
+                catch { PdfiumNative.CloseDocument(handle); throw; }
             }
-            return new PdfDocument(path, fileAccess, handle);
         }
+        catch { fileAccess.Dispose(); throw; }
     }
 
     public bool IsEncrypted
     {
         get { lock (PdfiumLibrary.Lock) return PdfiumNative.GetSecurityRevision(_handle) >= 0; }
     }
+
+    public string ThumbnailVersion => _fileAccess.ThumbnailVersion;
+
+    public string SavedDigest => _savedDiskVersion.Digest;
 
     public bool MatchesFileOnDisk() => ReadFileVersion(FilePath) == _savedDiskVersion;
 

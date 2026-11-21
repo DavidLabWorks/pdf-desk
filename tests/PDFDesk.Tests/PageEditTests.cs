@@ -8,6 +8,66 @@ public class PageEditTests
     private static string CorpusPath(string name) => Path.Combine(AppContext.BaseDirectory, "corpus", name);
 
     [Fact]
+    public void ExtractAndSaveAsRejectAnAliasOfTheSavedSource()
+    {
+        string path = Path.GetTempFileName();
+        try
+        {
+            File.Copy(CorpusPath("slides.pdf"), path, overwrite: true);
+            using var source = PdfDocument.Open(path);
+            source.MovePages([0], 1);
+            source.SaveInPlace();
+            byte[] saved = File.ReadAllBytes(path);
+            string alias = @"\\?\" + path;
+            Assert.Throws<IOException>(() => source.ExportPagesToFile([0], alias));
+            Assert.Throws<IOException>(() => source.SaveAs(alias));
+            Assert.Equal(saved, File.ReadAllBytes(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void FailedSaveAsPreservesDestinationAndSuccessfulExportReplacesIt()
+    {
+        string target = Path.GetTempFileName();
+        try
+        {
+            var original = File.ReadAllBytes(CorpusPath("hello.pdf"));
+            File.WriteAllBytes(target, original);
+            var closed = PdfDocument.Open(CorpusPath("hello.pdf"));
+            closed.Dispose();
+            Assert.Throws<ObjectDisposedException>(() => closed.SaveAs(target));
+            Assert.Equal(original, File.ReadAllBytes(target));
+
+            using var source = PdfDocument.Open(CorpusPath("hello.pdf"));
+            Assert.Throws<InvalidOperationException>(() => source.ExportPagesToFile([], target));
+            Assert.Equal(original, File.ReadAllBytes(target));
+            source.ExportPagesToFile([1], target);
+            using var exported = PdfDocument.Open(target);
+            Assert.Equal(1, exported.PageCount);
+            Assert.Contains("Page two", exported.ExtractText(0));
+        }
+        finally { File.Delete(target); }
+    }
+
+    [Fact]
+    public void DiscardApprovalOnlyMatchesOneDocumentRevision()
+    {
+        using var first = PdfDocument.Open(CorpusPath("hello.pdf"));
+        using var second = PdfDocument.Open(CorpusPath("hello.pdf"));
+        Assert.Equal(0L, first.UnsavedRevision);
+        first.MovePages([0], 1);
+        long approved = first.UnsavedRevision;
+        Assert.NotEqual(0L, approved);
+        second.MovePages([0], 1);
+        Assert.NotEqual(approved, second.UnsavedRevision);
+        first.MovePages([1], 0);
+        Assert.NotEqual(approved, first.UnsavedRevision);
+        first.MarkSaved();
+        Assert.Equal(0L, first.UnsavedRevision);
+    }
+
+    [Fact]
     public void DeletePages_RemovesAndReindexes()
     {
         using var doc = PdfDocument.Open(CorpusPath("hello.pdf")); // 2 pages

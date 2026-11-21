@@ -14,6 +14,14 @@ namespace PDFDesk.Tests;
 public class StampTests
 {
     [Fact]
+    public void RejectsOverflowingPixelDimensionsBeforeStampCreation()
+    {
+        using var doc = PdfDocument.Open(PixelAssert.CorpusPath("hello.pdf"));
+        Assert.Null(doc.AddStamp(0, 10, 10, 20, 20, new byte[4], int.MaxValue, int.MaxValue));
+        Assert.False(doc.IsDirty);
+    }
+
+    [Fact]
     public void StampOverFormFieldKeepsInkAboveWidgetAndTransparentPaperClear()
     {
         using var doc = PdfDocument.Open(PixelAssert.CorpusPath("form.pdf"));

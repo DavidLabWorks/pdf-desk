@@ -23,6 +23,17 @@ public sealed class UndoStack<TEdit> where TEdit : class, IUndoableEdit
     private readonly List<TEdit> _undo = [];
     private readonly List<TEdit> _redo = [];
 
+    public TEdit? NextUndo => _undo.LastOrDefault();
+    public TEdit? NextRedo => _redo.LastOrDefault();
+
+    // Another edit or a save can complete while the render thread is working.
+    public void Complete(TEdit edit, bool undo)
+    {
+        if (undo && ReferenceEquals(NextUndo, edit)) PopUndo();
+        else if (!undo && ReferenceEquals(NextRedo, edit)) PopRedo();
+        else Clear(); // the recorded order no longer describes the document
+    }
+
     public bool CanUndo => _undo.Count > 0;
     public bool CanRedo => _redo.Count > 0;
     public string? UndoLabel => CanUndo ? _undo[^1].Label : null;
@@ -46,6 +57,7 @@ public sealed class UndoStack<TEdit> where TEdit : class, IUndoableEdit
         var edit = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
         _redo.Add(edit);
+        Trim();
         return edit;
     }
 
@@ -75,11 +87,12 @@ public sealed class UndoStack<TEdit> where TEdit : class, IUndoableEdit
         {
             _undo.RemoveAt(0);
         }
-        long bytes = _undo.Sum(e => e.SnapshotBytes);
-        while (bytes > MaxSnapshotBytes && _undo.Count > 1)
+        long bytes = _undo.Sum(e => e.SnapshotBytes) + _redo.Sum(e => e.SnapshotBytes);
+        while (bytes > MaxSnapshotBytes && _undo.Count + _redo.Count > 1)
         {
-            bytes -= _undo[0].SnapshotBytes;
-            _undo.RemoveAt(0);
+            var oldest = _redo.Count > 1 || _undo.Count == 0 ? _redo : _undo;
+            bytes -= oldest[0].SnapshotBytes;
+            oldest.RemoveAt(0);
         }
     }
 }

@@ -32,6 +32,7 @@ public sealed class UiText : INotifyPropertyChanged
     public string RenameFolder => Chinese ? "重命名文件夹" : "Rename folder";
     public string DeleteFolder => Chinese ? "删除文件夹" : "Delete folder";
     public string FolderName => Chinese ? "文件夹名称" : "Folder name";
+    public string FolderRemoved => Chinese ? "此文件夹已被删除。" : "This folder has been deleted.";
     public string FolderNameTaken => Chinese ? "已有同名文件夹，请换一个名称。" : "A folder already has this name. Choose another.";
     public string SaveToFolder => Chinese ? "收藏到文件夹" : "Save to folder";
     public string MoveFavorite => Chinese ? "移动收藏" : "Move favorite";
@@ -58,6 +59,8 @@ public sealed class UiText : INotifyPropertyChanged
     public string BlackInk => Chinese ? "黑色墨水" : "Black ink";
     public string Blue => Chinese ? "蓝色" : "Blue";
     public string BlueInk => Chinese ? "蓝色墨水" : "Blue ink";
+    public string AddPageBookmark => Chinese ? "添加书签" : "Add bookmark";
+    public string RemovePageBookmark => Chinese ? "移除书签" : "Remove bookmark";
     public string BookmarkThisPage => Chinese ? "为此页添加书签" : "Bookmark this page";
     public string Bookmarks => Chinese ? "书签" : "Bookmarks";
     public string Cancel => Chinese ? "取消" : "Cancel";
@@ -147,7 +150,23 @@ public sealed class UiText : INotifyPropertyChanged
     public string NewWindow => Chinese ? "新建窗口" : "New window";
     public string FinishExportBeforeClosing => Chinese ? "请等待导出完成或取消任务后再关闭窗口。" : "Finish or cancel the export before closing this window.";
     public string SourceChangedDuringMove => Chinese ? "移动期间原标签发生了编辑，请重试。" : "The source changed during the move. Please try again.";
-    public string OpenInNewWindow => Chinese ? "在新窗口中打开" : "Open in new window";
+    public string Screenshot => Chinese ? "截图" : "Screenshot";
+    public string RectangleCapture => Chinese ? "矩形截图" : "Rectangular capture";
+    public string FreehandCapture => Chinese ? "自由绘制" : "Freehand capture";
+    public string RectangleCaptureHint => Chinese ? "拖动框选，松开复制" : "Drag a rectangle and release to copy";
+    public string FreehandCaptureHint => Chinese ? "沿轮廓绘制，松开复制" : "Trace an outline and release to copy";
+    public string RectangleCapturing => Chinese ? "矩形截图中" : "Capturing rectangle";
+    public string FreehandCapturing => Chinese ? "自由截图中" : "Capturing freehand";
+    public string ScreenshotCopied => Chinese ? "截图已复制" : "Screenshot copied";
+    public string ScreenshotFailed => Chinese ? "截图失败" : "Screenshot failed";
+    public string EditCopy => Chinese ? "编辑副本" : "Edit a copy";
+    public string StartEditing => Chinese ? "开始编辑" : "Start editing";
+    public string GoToEditor => Chinese ? "前往编辑窗口" : "Go to editor";
+    public string ReloadVersion => Chinese ? "加载新版本" : "Load new version";
+    public string DestinationOpen => Chinese ? "目标文件已在窗口中打开。请选择其他文件。" : "The destination is open in a window. Choose another file.";
+    public string ViewOnly => Chinese ? "只读" : "View only";
+    public string SnapshotUpdated => Chinese ? "文件已有新版本" : "New version available";
+    public string OpenInNewWindow => Chinese ? "在新窗口查看" : "View in new window";
     public string MoveTabToWindow => Chinese ? "移至新窗口" : "Move to new window";
     public string ExitPresentation => Chinese ? "退出演示" : "Exit presentation";
     public string Home => Chinese ? "主页" : "Home";
@@ -545,6 +564,15 @@ public sealed class UiText : INotifyPropertyChanged
         "Digitally signed document" => "文档含数字签名",
         "{0} digital signatures" => "{0} 个数字签名",
         "PDF Desk has not verified the signature. Open Document information for signature details." => "PDF Desk 未验证签名的有效性。你可以在「文档信息」中查看签名详情。",
+        "Flattened {0} pages. Failed pages: {1}." => "已合并 {0} 页的批注。合并失败的页码：{1}。",
+        "Could not replay the ink stroke." => "未能完成本次笔迹操作，请重试。",
+        "The text box could not be updated. Undo history was preserved." => "未能更新文本框，撤销和重做记录已保留。",
+        "Bookmarks not saved" => "阅读书签尚未保存",
+        "PDF saved, bookmarks pending" => "PDF 已保存，阅读书签尚未保存",
+        "Bookmarks will be saved automatically when storage is available." => "存储恢复可用后，阅读书签会自动保存。",
+        "Copy saved" => "副本已保存",
+        "The destination has pending edits. Save them or choose another file." => "目标文档有未完成的编辑。请先保存，或选择其他文件。",
+        "Choose a different file for the copy." => "请为副本选择不同于原文件的路径。",
         "Nothing to flatten." => "没有可合并的批注。",
         "Flattened {0} page. Save to write the change to disk." => "已合并 {0} 页的批注。请保存以写入文件。",
         "Flattened {0} pages. Save to write the change to disk." => "已合并 {0} 页的批注。请保存以写入文件。",
@@ -578,6 +606,7 @@ public sealed class UiText : INotifyPropertyChanged
         "That image already has a transparent background." => "这张图片已有透明背景。",
         "Open recent: {0}" => "打开最近文件：{0}",
         "Go to page {0}" => "跳转到第 {0} 页",
+        "Remove from list (discards 1 bookmark)" => "从列表移除（同时删除 1 个书签）",
         "Remove from list (discards {0} bookmarks)" => "从列表移除（同时删除 {0} 个书签）",
         _ => label,
     } : label;

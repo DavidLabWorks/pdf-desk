@@ -21,11 +21,8 @@
     that quietly resolved no runtime pack would otherwise ship broken to exactly
     the users least able to work around it.
 
-    A bundle also carries RESOURCE packages (scale-100, scale-125 and so on),
-    which hold scaled images and no code whatsoever. Those are skipped, and the
-    test for "is this a package that needs a runtime" is whether it contains an
-    executable at all rather than whether its name looks like a resource - the
-    naming is a convention, the .exe is the actual thing being asked about.
+    Resource packages are identified by their manifest. A release bundle
+    must include an application for both x64 and arm64.
 
     Nested containers are unpacked to TEMP FILES rather than to byte arrays. A
     self-contained bundle is ~135 MB and each package inside it ~130 MB, which
@@ -67,9 +64,9 @@ if (-not (Test-Path -LiteralPath $Path)) {
 $full = (Resolve-Path -LiteralPath $Path).Path
 $temps = New-Object System.Collections.ArrayList
 
-function Get-EntryNames([string]$zipPath) {
+function Get-EntryNames([string]$zipPath, [switch]$NonEmpty) {
     $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
-    try { return @($zip.Entries | ForEach-Object { $_.FullName }) }
+    try { return @($zip.Entries | Where-Object { !$NonEmpty -or $_.Length -gt 0 } | ForEach-Object { $_.FullName }) }
     finally { $zip.Dispose() }
 }
 
@@ -97,6 +94,7 @@ try {
     # .msix is already there; an upload has a bundle in it, and the bundle has
     # the packages.
     $packages = @{}
+    $inners = @()
 
     $bundles = @(Get-EntryNames $full | Where-Object { $_ -match '\.(msixbundle|appxbundle)$' })
     if ($bundles.Count -gt 0) {
@@ -127,24 +125,40 @@ try {
 
     $failed = $false
     $checked = 0
+    $architectures = @()
     foreach ($name in ($packages.Keys | Sort-Object)) {
-        $entries = @(Get-EntryNames $packages[$name])
-        $files = @($entries | ForEach-Object { Split-Path $_ -Leaf })
-
-        # No executable, no runtime needed: this is a resource package.
-        if (-not ($entries | Where-Object { $_ -match '^[^/]+\.exe$' })) {
+        $entries = @(Get-EntryNames $packages[$name] -NonEmpty)
+        $manifestPath = Expand-Entry $packages[$name] 'AppxManifest.xml'
+        $manifest = New-Object System.Xml.XmlDocument
+        $manifest.XmlResolver = $null
+        $manifest.Load($manifestPath)
+        $package = $manifest.DocumentElement
+        $resource = $package.SelectSingleNode("*[local-name()='Properties']/*[local-name()='ResourcePackage']")
+        if ($resource -and $resource.InnerText.Trim() -eq 'true') {
             Write-Output "  skip  $name (resources only)"
             continue
         }
-
+        $identity = $package.SelectSingleNode("*[local-name()='Identity']")
+        $apps = @($package.SelectNodes("*[local-name()='Applications']/*[local-name()='Application']"))
+        if (!$identity -or !$apps.Count) { throw "Invalid application manifest in $name" }
+        $arch = $identity.GetAttribute('ProcessorArchitecture')
+        if ($arch -notin 'x64','arm64') { throw "Unexpected application architecture '$arch' in $name" }
+        $architectures += $arch
         $checked++
-        $missing = @($Required | Where-Object { $files -notcontains $_ })
+        $missing = @(foreach ($app in $apps) {
+            $exe = $app.GetAttribute('Executable').Replace('\','/')
+            if (!$exe -or $entries -notcontains $exe) { "declared executable '$exe'" }
+            $dir = $exe.Substring(0, $exe.LastIndexOf('/') + 1)
+            foreach ($runtime in $Required) {
+                if ($entries -notcontains ($dir + $runtime)) { $dir + $runtime }
+            }
+        })
 
         if ($missing.Count -eq 0) {
             Write-Output "  OK    $name"
         }
         else {
-            Write-Output "  FAIL  $name - missing $($missing -join ', ')"
+            Write-Output "  FAIL  $name - missing or empty: $($missing -join ', ')"
             $failed = $true
         }
     }
@@ -154,13 +168,15 @@ try {
         exit 2
     }
 
-    if ($failed) {
-        Write-Output ""
-        Write-Output "This package has no .NET runtime in it. Installing it from the Store"
-        Write-Output "would prompt the user to download .NET on first launch."
-        Write-Output "Check that <SelfContained>true</SelfContained> is still set in PDFDesk.App.csproj."
-        exit 1
+    if ($bundles.Count -gt 0 -or $inners.Count -gt 0) {
+        foreach ($arch in 'x64','arm64') {
+            if ($architectures -notcontains $arch) {
+                Write-Output "  FAIL  Missing $arch application package"
+                $failed = $true
+            }
+        }
     }
+    if ($failed) { exit 1 }
 
     Write-Output "Every package carries its own .NET runtime."
     exit 0

@@ -479,7 +479,7 @@ public sealed partial class MainWindow
         box.TextChanged += (_, _) =>
         {
             var name = box.Text.Trim();
-            bool duplicate = _state.FavoriteFolders.Any(p => p.Key != id && string.Equals(p.Value, name, StringComparison.OrdinalIgnoreCase));
+            bool duplicate = _state.FolderNameTaken(id, name);
             error.Visibility = duplicate ? Visibility.Visible : Visibility.Collapsed;
             dialog.IsPrimaryButtonEnabled = name.Length > 0 && !duplicate;
         };
@@ -489,17 +489,25 @@ public sealed partial class MainWindow
     private async Task EditFolderAsync(Guid? id)
     {
         var ui = UiText.Current;
+        if (id.HasValue && !_state.FavoriteFolders.ContainsKey(id.Value)) return;
         var dialog = FavoriteDialog(id.HasValue ? ui.RenameFolder : ui.NewFavoriteFolder, FolderGlyph, id.HasValue ? ui.Save : ui.Create);
         var (panel, box) = FolderNameEditor(dialog, id);
         dialog.Content = panel;
         dialog.IsPrimaryButtonEnabled = false;
         dialog.Opened += (_, _) => { box.Focus(FocusState.Programmatic); box.SelectAll(); };
         if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary) return;
-        Guid folder = id ?? Guid.NewGuid();
-        _state.FavoriteFolders[folder] = box.Text.Trim();
+        if (!TrySaveFolderName(id, box.Text, out Guid folder)) return;
         _folderFilter = folder;
         FavoritesTab.IsChecked = true;
         SaveFolderChanges();
+    }
+
+    private bool TrySaveFolderName(Guid? existing, string name, out Guid folder)
+    {
+        if (_state.TrySetFolderName(existing, name, out folder)) return true;
+        ShowError(existing.HasValue && !_state.FavoriteFolders.ContainsKey(folder)
+            ? UiText.Current.FolderRemoved : UiText.Current.FolderNameTaken);
+        return false;
     }
 
     private async Task ChooseFavoriteAsync(RecentCard card)
@@ -542,8 +550,13 @@ public sealed partial class MainWindow
         Guid? folder = location.Id;
         if (location == create)
         {
-            folder = Guid.NewGuid();
-            _state.FavoriteFolders[folder.Value] = box.Text.Trim();
+            if (!TrySaveFolderName(null, box.Text, out var created)) return;
+            folder = created;
+        }
+        else if (folder is Guid selected && selected != Guid.Empty && !_state.FavoriteFolders.ContainsKey(selected))
+        {
+            ShowError(ui.FolderRemoved);
+            return;
         }
         SetFavorite(card, true, folder == Guid.Empty ? null : folder);
     }
@@ -551,10 +564,11 @@ public sealed partial class MainWindow
     private async Task DeleteFolderAsync(Guid id)
     {
         var ui = UiText.Current;
+        if (!_state.FavoriteFolders.TryGetValue(id, out var name)) return;
         var dialog = new ContentDialog
         {
             Title = ui.DeleteFolder,
-            Content = ui.ConfirmDeleteFolder(_state.FavoriteFolders[id]),
+            Content = ui.ConfirmDeleteFolder(name),
             PrimaryButtonText = ui.Delete,
             CloseButtonText = ui.Cancel,
             DefaultButton = ContentDialogButton.Close,

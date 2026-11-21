@@ -236,6 +236,8 @@ public static class PdfiumNative
 
     public static bool LastErrorIsPassword() => NativeMethods.FPDF_GetLastError() == NativeMethods.FPDF_ERR_PASSWORD;
 
+    public static bool HasNamedDestinations(IntPtr document) => NativeMethods.FPDF_CountNamedDests(document) != 0;
+
     public static int GetPageCount(IntPtr document) => NativeMethods.FPDF_GetPageCount(document);
 
     public static IntPtr LoadPage(IntPtr document, int pageIndex) => NativeMethods.FPDF_LoadPage(document, pageIndex);
@@ -897,8 +899,12 @@ public static class PdfiumNative
     /// reverse) because FPDFBitmap_GetBuffer isn't bound, which would leave a
     /// bitmap from FPDFBitmap_Create impossible to fill.
     /// </summary>
+    public static bool FitsBgraBuffer(byte[] pixels, int width, int height) =>
+        width > 0 && height > 0 && (long)width * height <= pixels.LongLength / 4;
+
     public static unsafe bool SetImageObjectBitmap(IntPtr page, IntPtr imageObject, byte[] bgra, int width, int height)
     {
+        if (!FitsBgraBuffer(bgra, width, height)) return false;
         fixed (byte* p = bgra)
         {
             IntPtr bitmap = NativeMethods.FPDFBitmap_CreateEx(

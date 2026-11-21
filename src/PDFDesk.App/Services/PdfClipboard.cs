@@ -10,9 +10,9 @@ internal static class PdfClipboard
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "PDFDesk", "share");
 
-    public static async Task CopyAsync(string path, PdfDocument? unsaved, IPdfWorkQueue workQueue)
+    public static async Task CopyAsync(string path, PdfDocument document, IPdfWorkQueue workQueue)
     {
-        string copyPath = unsaved is null ? path : await WriteCopyAsync(path, unsaved, workQueue);
+        string copyPath = await WriteCopyAsync(path, document, workQueue);
         var file = await StorageFile.GetFileFromPathAsync(copyPath);
         var package = new DataPackage();
         package.SetStorageItems([file]);
@@ -33,7 +33,7 @@ internal static class PdfClipboard
             SweepOldCopies(root);
 
             string copy = Path.Combine(directory, Path.GetFileName(path));
-            document.SaveAs(copy);
+            document.SaveSharingCopy(copy);
             return copy;
         });
     }

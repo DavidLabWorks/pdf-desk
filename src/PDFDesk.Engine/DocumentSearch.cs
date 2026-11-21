@@ -58,7 +58,11 @@ public sealed class DocumentSearch
                 ? await Task.Run(() => _document.SearchPage(p, _query, _matchCase, _wholeWord), cancellationToken)
                             .ConfigureAwait(false)
                 : await _workQueue.RunAsync(PdfWorkPriority.Background,
-                            () => _document.SearchPage(p, _query, _matchCase, _wholeWord))
+                            () =>
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+                                return _document.SearchPage(p, _query, _matchCase, _wholeWord);
+                            })
                             .ConfigureAwait(false);
 
             if (hits.Count > 0)

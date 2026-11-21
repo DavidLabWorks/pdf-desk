@@ -8,6 +8,59 @@ namespace PDFDesk.Engine;
 /// </summary>
 public static class BookmarkRemap
 {
+    public static List<PDFDesk.Services.BookmarkEntry> ReplayPageEdit(
+        IReadOnlyList<PDFDesk.Services.BookmarkEntry> current,
+        IReadOnlyList<PDFDesk.Services.BookmarkEntry> destination,
+        Func<int, int?> map, Func<int, int?> inverse)
+    {
+        // Only pages reintroduced by this operation need a historical bookmark.
+        var result = destination.Where(b => inverse(b.PageIndex) is null).ToList();
+        foreach (var bookmark in current)
+            if (map(bookmark.PageIndex) is int page)
+                result.Add(new() { PageIndex = page, Name = bookmark.Name });
+        return result.OrderBy(b => b.PageIndex).ToList();
+    }
+
+    public static int? FindSavedPage(int current, int originalCount, IReadOnlyList<Func<int, int?>> maps)
+    {
+        for (int original = 0; original < originalCount; original++)
+        {
+            int? page = original;
+            foreach (var map in maps)
+            {
+                if (!page.HasValue) break;
+                page = map(page.Value);
+            }
+            if (page == current) return original;
+        }
+        return null;
+    }
+
+    // Remote edits arrive in the saved document's coordinates. Apply their delta
+    // to the local working copy, keeping a local edit on a same-bookmark conflict.
+    public static List<PDFDesk.Services.BookmarkEntry> Merge(
+        IReadOnlyList<PDFDesk.Services.BookmarkEntry> baseline,
+        IReadOnlyList<PDFDesk.Services.BookmarkEntry> incoming,
+        IReadOnlyList<PDFDesk.Services.BookmarkEntry> local,
+        IReadOnlyList<Func<int, int?>> maps)
+    {
+        var original = baseline.ToDictionary(b => b.PageIndex, b => b.Name);
+        var remote = incoming.ToDictionary(b => b.PageIndex, b => b.Name);
+        var merged = local.ToDictionary(b => b.PageIndex, b => b.Name);
+        foreach (int page in original.Keys.Union(remote.Keys))
+        {
+            string? before = original.GetValueOrDefault(page), after = remote.GetValueOrDefault(page);
+            if (before == after) continue;
+            int? current = page;
+            foreach (var map in maps)
+                if (current is int i) current = map(i);
+            if (current is not int target || merged.GetValueOrDefault(target) != before) continue;
+            if (after is null) merged.Remove(target);
+            else merged[target] = after;
+        }
+        return merged.OrderBy(p => p.Key).Select(p => new PDFDesk.Services.BookmarkEntry { PageIndex = p.Key, Name = p.Value }).ToList();
+    }
+
     /// <summary>New index of a page after deleting <paramref name="deletedPages"/>, or null if it was deleted.</summary>
     public static int? AfterDelete(int page, IReadOnlyCollection<int> deletedPages)
     {

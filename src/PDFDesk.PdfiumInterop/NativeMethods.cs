@@ -33,6 +33,9 @@ internal static partial class NativeMethods
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
     internal static extern int FPDF_GetPageCount(IntPtr document);
 
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern uint FPDF_CountNamedDests(IntPtr document);
+
     // ---- Page ----
 
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]

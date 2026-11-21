@@ -166,6 +166,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public AnnotationSpec? AddTextBox(int pageIndex, double x, double y, TextBoxContent content)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
 
@@ -833,6 +834,7 @@ public sealed partial class PdfDocument
     public (int NewIndex, AnnotationSpec Before)? ResizeTextBox(
         int pageIndex, int annotIndex, double x, double y, double widthPt)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
         ArgumentOutOfRangeException.ThrowIfNegative(annotIndex);
@@ -841,7 +843,7 @@ public sealed partial class PdfDocument
         {
             return null;
         }
-        if (GetAnnotations(pageIndex).ElementAtOrDefault(annotIndex) is not { } original
+        if (GetAnnotations(pageIndex).FirstOrDefault(a => a.Index == annotIndex) is not { } original
             || original.Subtype != PdfiumNative.AnnotStamp || original.Width <= 0)
         {
             return null;
@@ -871,17 +873,18 @@ public sealed partial class PdfDocument
 
         if (!RemoveAnnotation(pageIndex, annotIndex))
         {
-            RemoveAnnotation(pageIndex, GetAnnotations(pageIndex).Count - 1);
+            RemoveAnnotation(pageIndex, GetAnnotations(pageIndex)[^1].Index);
             return null;
         }
 
         // Re-creating appends, so the box is now last.
-        return (GetAnnotations(pageIndex).Count - 1, before);
+        return (GetAnnotations(pageIndex)[^1].Index, before);
     }
 
     /// <summary>Rebuild an existing text stamp at its current position, preserving its index and stacking order.</summary>
     public bool UpdateTextBox(int pageIndex, int index, TextBoxContent expected, TextBoxContent replacement)
     {
+        RequireWritable();
         if (string.IsNullOrWhiteSpace(replacement.Text) || replacement.FontSize <= 0) return false;
         lock (PdfiumLibrary.Lock)
         {
@@ -914,6 +917,12 @@ public sealed partial class PdfDocument
         }
     }
 
+    public void ReplayTextBoxEdit(int pageIndex, int index, TextBoxContent expected, TextBoxContent replacement)
+    {
+        if (!UpdateTextBox(pageIndex, index, expected, replacement))
+            throw new InvalidOperationException("The text box could not be updated. Undo history was preserved.");
+    }
+
     /// <summary>Small enough to be a footnote, and still readable at 100%.</summary>
     private const double MinFontPt = 4;
 
@@ -930,6 +939,7 @@ public sealed partial class PdfDocument
     /// </summary>
     internal AnnotationSpec? AddTextToPageContent(int pageIndex, double x, double y, TextBoxContent content)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
 

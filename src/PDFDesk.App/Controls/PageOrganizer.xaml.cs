@@ -22,6 +22,7 @@ public sealed partial class PageOrganizer : ContentDialog
     private readonly ThumbnailItem[] _sources;
     private readonly PageDraft _draft;
     private readonly Dictionary<int, Task> _renders = [];
+    private TaskCompletionSource<bool>? _closeRequest;
     private bool _saved;
     private bool _promptOpen;
     private bool _discarded;
@@ -58,12 +59,28 @@ public sealed partial class PageOrganizer : ContentDialog
             AutomationProperties.SetName(ConfirmLayer, UiText.Current.SavePageChanges);
             ConfirmSave.Focus(FocusState.Programmatic);
         };
-        Closed += (_, _) => view.XamlRoot.Changed -= RootChanged;
+        Closed += (_, _) =>
+        {
+            view.XamlRoot.Changed -= RootChanged;
+            _closeRequest?.TrySetResult(true);
+        };
+    }
+
+    internal Task<bool> RequestCloseAsync()
+    {
+        if (_busy) return Task.FromResult(false);
+        if (_closeRequest is not null) return _closeRequest.Task;
+        var request = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _closeRequest = request;
+        if (!_promptOpen) Hide();
+        return request.Task;
     }
 
     private void ReturnToDraft()
     {
         _promptOpen = false;
+        _closeRequest?.TrySetResult(false);
+        _closeRequest = null;
         ConfirmLayer.Visibility = Visibility.Collapsed;
         EditorSurface.IsEnabled = true;
         Dismiss.Focus(FocusState.Programmatic);
@@ -107,6 +124,7 @@ public sealed partial class PageOrganizer : ContentDialog
         }
         catch (Exception ex)
         {
+            SaveCopy.Visibility = Visibility.Visible;
             _error = UiText.Format("Save failed: {0}", UiText.Translate(ex.Message));
         }
     }
@@ -203,7 +221,7 @@ public sealed partial class PageOrganizer : ContentDialog
         Later.IsEnabled = contiguous && pages[^1] < _items.Count - 1;
         Undo.IsEnabled = _draft.CanUndo;
         Redo.IsEnabled = _draft.CanRedo;
-        SaveDraft.IsEnabled = _draft.Changed;
+        SaveCopy.IsEnabled = SaveDraft.IsEnabled = _draft.Changed;
         Status.Text = _error ?? UiText.Format("{0} selected · {1} pages", pages.Count, _items.Count);
     }
 
@@ -245,6 +263,21 @@ public sealed partial class PageOrganizer : ContentDialog
         var pages = Selection();
         await EditAsync(async () =>
         {
+            if (button == SaveCopy)
+            {
+                try
+                {
+                    var picked = await FilePickerHost.PickSaveAsync(App.OwnerHandle(this),
+                        Path.GetFileNameWithoutExtension(_view.FilePath) + " - " + UiText.Current.OrganizePages,
+                        UiText.Translate("PDF document"), ".pdf");
+                    if (picked.Failed) throw new IOException(FilePickerHost.FailureMessage);
+                    if (picked.File is not { } file) return;
+                    await _view.SavePageDraftAsync(_draft, file.Path);
+                    _saved = true;
+                }
+                catch (Exception ex) { _error = UiText.Format("Save failed: {0}", UiText.Translate(ex.Message)); }
+                return;
+            }
             if (button == SaveDraft)
             {
                 if (_draft.Changed) await SaveChangesAsync();
@@ -252,8 +285,9 @@ public sealed partial class PageOrganizer : ContentDialog
             }
             if (button == Undo || button == Redo)
             {
-                if (button == Undo) _draft.Undo(); else _draft.Redo();
+                var selection = button == Undo ? _draft.Undo() : _draft.Redo();
                 RefreshDraft();
+                SelectPages(selection);
             }
             else if (pages.Count == 0) return;
             else if (button == Duplicate)

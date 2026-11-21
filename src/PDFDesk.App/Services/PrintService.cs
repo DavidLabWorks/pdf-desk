@@ -35,231 +35,289 @@ public sealed class PrintService
         internal volatile bool FitOversized = true;
         internal volatile bool Grayscale = true;
     }
-    private JobPreferences _preferences = null!;
-    private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcher =
-        Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-    private PrintTaskOptions? _previewOptions;
-    private int _layoutVersion;
     private readonly nint _hwnd;
-    private PrintDocument? _printDocument;
-    private IPrintDocumentSource? _printSource;
-    private PdfDocument? _document;
-    private IPdfWorkQueue? _workQueue;
-    private string _jobName = "PDF Desk";
+    private PrintJob? _requestedJob;
     private bool _registered;
+    private bool _showing;
 
-    public PrintService(nint hwnd) => _hwnd = hwnd;
+    private readonly Action<string> _reportError;
+
+    public PrintService(nint hwnd, Action<string> reportError)
+    {
+        _hwnd = hwnd;
+        _reportError = reportError;
+    }
 
     public static bool IsSupported => PrintManager.IsSupported();
 
     /// <summary>
     /// Opens the system print dialog for the given document.
-    /// <paramref name="workQueue"/> is the document's render thread — page
-    /// rasterization is scheduled there, never run inline in the print
-    /// callbacks (which arrive on the UI thread).
+    /// <paramref name="workQueue"/> captures current edits. The system print task then owns
+    /// the snapshot and its own render queue.
     /// </summary>
     public async Task ShowAsync(PdfDocument document, string jobName, IPdfWorkQueue workQueue)
     {
-        _preferences = new();
-        _previewOptions = null;
-        _layoutVersion++;
-        _document = document;
-        _workQueue = workQueue;
-        _jobName = jobName;
-
+        if (_showing || _requestedJob is not null) return;
         if (!_registered)
         {
             var manager = PrintManagerInterop.GetForWindow(_hwnd);
-            manager.PrintTaskRequested += Manager_PrintTaskRequested;
+            manager.PrintTaskRequested += (_, args) =>
+            {
+                var requested = _requestedJob;
+                _requestedJob = null;
+                if (requested is null) return;
+                try { requested.CreateTask(args); }
+                catch (Exception ex)
+                {
+                    requested.Dispose();
+                    _reportError(UiText.Format("Printing failed: {0}", ex.Message));
+                }
+            };
             _registered = true;
         }
-
-        // A fresh PrintDocument per job: reusing one across jobs breaks preview.
-        _printDocument = new PrintDocument();
-        _printDocument.Paginate += PrintDocument_Paginate;
-        _printDocument.GetPreviewPage += PrintDocument_GetPreviewPage;
-        _printDocument.AddPages += PrintDocument_AddPages;
-        _printSource = _printDocument.DocumentSource;
-
-        await PrintManagerInterop.ShowPrintUIForWindowAsync(_hwnd);
-    }
-
-    private void Manager_PrintTaskRequested(PrintManager sender, PrintTaskRequestedEventArgs args)
-    {
-        var task = args.Request.CreatePrintTask(_jobName, sourceArgs =>
-        {
-            sourceArgs.SetSource(_printSource);
-        });
-        var details = PrintTaskOptionDetails.GetFromPrintTaskOptions(task.Options);
-        var job = _printDocument!;
-        var preferences = _preferences;
-        var color = details.CreateItemListOption(ColorOption, preferences.ColorLabel);
-        color.AddItem("grayscale", preferences.MonochromeLabel);
-        color.AddItem("color", preferences.FullColorLabel);
-        color.TrySetValue("grayscale");
-        var scale = details.CreateItemListOption(ScaleOption, preferences.ScaleLabel);
-        scale.AddItem("fit", preferences.FitLabel);
-        scale.AddItem("actual", preferences.ActualLabel);
-        scale.TrySetValue("fit");
-
-        void SetDriverColor(bool inColor)
-        {
-            if (details.Options.TryGetValue(StandardPrintTaskOptions.ColorMode, out var option))
-                option.TrySetValue(inColor ? PrintColorMode.Color : PrintColorMode.Grayscale);
-        }
-        SetDriverColor(false);
-        task.Options.PageRangeOptions.AllowAllPages = true;
-        task.Options.PageRangeOptions.AllowCustomSetOfPages = true;
-        var displayed = details.DisplayedOptions;
-        displayed.Clear();
-        displayed.Add(StandardPrintTaskOptions.CustomPageRanges);
-        displayed.Add(StandardPrintTaskOptions.Copies);
-        displayed.Add(StandardPrintTaskOptions.Orientation);
-        displayed.Add(StandardPrintTaskOptions.MediaSize);
-        displayed.Add(ColorOption);
-        displayed.Add(ScaleOption);
-        displayed.Add(StandardPrintTaskOptions.Duplex);
-        displayed.Add(StandardPrintTaskOptions.Collation);
-
-        details.OptionChanged += (_, change) =>
-        {
-            switch (change.OptionId as string)
-            {
-                case ColorOption:
-                    bool inColor = color.Value as string == "color";
-                    preferences.Grayscale = !inColor;
-                    SetDriverColor(inColor);
-                    break;
-                case ScaleOption:
-                    preferences.FitOversized = scale.Value as string != "actual";
-                    break;
-                default:
-                    return;
-            }
-            _dispatcher.TryEnqueue(() =>
-            {
-                if (_printDocument != job) return;
-                _layoutVersion++;
-                job.InvalidatePreview();
-            });
-        };
-
-    }
-
-    private void PrintDocument_Paginate(object sender, PaginateEventArgs e)
-    {
-        _previewOptions = (PrintTaskOptions)e.PrintTaskOptions;
-        _layoutVersion++;
-        _printDocument?.SetPreviewPageCount(_document?.PageCount ?? 0, PreviewPageCountType.Final);
-    }
-
-    // Both handlers are async void: the rasterization they need belongs on the
-    // render thread, and the print system explicitly allows SetPreviewPage /
-    // AddPage to be called after the handler returns.
-    private async void PrintDocument_GetPreviewPage(object sender, GetPreviewPageEventArgs e)
-    {
-        if (_previewOptions is not { } options || _document is not { } doc || e.PageNumber < 1 || e.PageNumber > doc.PageCount)
-        {
-            return;
-        }
-
-        int pageNumber = e.PageNumber; // read before awaiting; the args are not ours to keep
+        _showing = true;
+        PdfDocument? snapshot = null;
+        bool shown = false;
         try
         {
-            // Preview at screen-ish resolution; cheap and rendered on demand.
-            int version = _layoutVersion;
-            var paper = options.GetPageDescription((uint)(pageNumber - 1));
-            var raster = await RenderAsync(doc, pageNumber - 1, 96f, paper, _preferences.FitOversized, _preferences.Grayscale);
-            if (version == _layoutVersion) _printDocument?.SetPreviewPage(pageNumber, BuildPageElement(raster, paper));
-        }
-        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or PdfiumException)
-        {
-            // Document closed or page unreadable — that preview page stays blank.
-        }
-    }
-
-    private async void PrintDocument_AddPages(object sender, AddPagesEventArgs e)
-    {
-        if (_document is not { } doc || _printDocument is null)
-        {
-            return;
-        }
-
-        // Honor a custom range from the dialog; otherwise print everything.
-        // Materialize before the first await — the event args are only valid
-        // for the synchronous part of the callback.
-        var job = _printDocument;
-        var options = e.PrintTaskOptions;
-        var fit = _preferences.FitOversized;
-        var grayscale = _preferences.Grayscale;
-        var ranges = options.CustomPageRanges;
-        List<int> pageNumbers = ranges.Count > 0
-            ? [.. ranges.SelectMany(r => Enumerable.Range(r.FirstPageNumber, r.LastPageNumber - r.FirstPageNumber + 1))
-                        .Where(n => n >= 1 && n <= doc.PageCount)
-                        .Distinct()
-                        .OrderBy(n => n)]
-            : [.. Enumerable.Range(1, doc.PageCount)];
-
-        try
-        {
-            foreach (int pageNumber in pageNumbers)
-            {
-                var paper = options.GetPageDescription((uint)(pageNumber - 1));
-                var raster = await RenderAsync(doc, pageNumber - 1, PrintDpi, paper, fit, grayscale);
-                job.AddPage(BuildPageElement(raster, paper));
-            }
-        }
-        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or PdfiumException)
-        {
-            // Fall through: the job still has to be completed or the dialog hangs.
+            snapshot = await workQueue.RunAsync(PdfWorkPriority.Interactive, document.CreatePrintSnapshot);
+            _requestedJob = new PrintJob(snapshot, jobName, _reportError);
+            snapshot = null;
+            shown = await PrintManagerInterop.ShowPrintUIForWindowAsync(_hwnd);
         }
         finally
         {
-            job.AddPagesComplete();
+            snapshot?.Dispose();
+            if (!shown)
+            {
+                _requestedJob?.Dispose();
+                _requestedJob = null;
+            }
+            _showing = false;
         }
     }
 
-    /// <summary>A rendered page detached from the pooled buffer, plus its physical size in DIPs.</summary>
-    private readonly record struct RasterPage(byte[] Pixels, int Width, int Height, double WidthDip, double HeightDip);
-
-    /// <summary>Rasterizes one page on the render thread and copies it out of the pooled buffer.</summary>
-    private async Task<RasterPage> RenderAsync(PdfDocument doc, int pageIndex, float dpi, PrintPageDescription paper, bool fit, bool grayscale)
+    private sealed class PrintJob : IDisposable
     {
-        if (_workQueue is not { } queue)
+        private readonly PdfDocument _document;
+        private readonly RenderScheduler _workQueue = new((_, _) => { });
+        private bool _disposed;
+        private readonly string _jobName;
+        private readonly Action<string> _reportError;
+        private readonly PrintDocument _printDocument = new();
+        private readonly IPrintDocumentSource _source;
+        private readonly JobPreferences _preferences = new();
+        private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcher =
+            Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        private PrintTaskOptions? _previewOptions;
+        private int _layoutVersion;
+
+        internal PrintJob(PdfDocument document, string jobName, Action<string> reportError)
         {
-            throw new InvalidOperationException("PrintService was used before ShowAsync supplied a work queue.");
+            _document = document;
+            _jobName = jobName;
+            _reportError = reportError;
+            _source = _printDocument.DocumentSource;
+            _printDocument.Paginate += PrintDocument_Paginate;
+            _printDocument.GetPreviewPage += PrintDocument_GetPreviewPage;
+            _printDocument.AddPages += PrintDocument_AddPages;
         }
 
-        return await queue.RunAsync(PdfWorkPriority.Interactive, () =>
+        public void Dispose()
         {
-            var (ptWidth, ptHeight) = doc.GetPageSize(pageIndex);
-            double width = ptWidth * 96 / 72, height = ptHeight * 96 / 72;
-            var area = paper.ImageableRect;
-            double ratio = fit ? Math.Min(1, Math.Min(area.Width / width, area.Height / height)) : 1;
-            // Bound the raster even when printing an unusually large sheet at actual size.
-            double scale = Math.Min(dpi / 72.0 * ratio, 8192 / Math.Max(ptWidth, ptHeight));
-            var page = doc.RenderPage(pageIndex, scale: (float)scale);
+            if (_disposed) return;
+            _disposed = true;
+            _layoutVersion++;
+            _printDocument.Paginate -= PrintDocument_Paginate;
+            _printDocument.GetPreviewPage -= PrintDocument_GetPreviewPage;
+            _printDocument.AddPages -= PrintDocument_AddPages;
+            _workQueue.Dispose();
+            _document.Dispose();
+        }
+
+        internal void CreateTask(PrintTaskRequestedEventArgs args)
+        {
+            var task = args.Request.CreatePrintTask(_jobName, sourceArgs => sourceArgs.SetSource(_source));
+            task.Completed += (_, _) => _dispatcher.TryEnqueue(Dispose);
+            var details = PrintTaskOptionDetails.GetFromPrintTaskOptions(task.Options);
+            var color = details.CreateItemListOption(ColorOption, _preferences.ColorLabel);
+            color.AddItem("grayscale", _preferences.MonochromeLabel);
+            color.AddItem("color", _preferences.FullColorLabel);
+            color.TrySetValue("grayscale");
+            var scale = details.CreateItemListOption(ScaleOption, _preferences.ScaleLabel);
+            scale.AddItem("fit", _preferences.FitLabel);
+            scale.AddItem("actual", _preferences.ActualLabel);
+            scale.TrySetValue("fit");
+
+            void SetDriverColor(bool inColor)
+            {
+                if (details.Options.TryGetValue(StandardPrintTaskOptions.ColorMode, out var option))
+                    option.TrySetValue(inColor ? PrintColorMode.Color : PrintColorMode.Grayscale);
+            }
+            SetDriverColor(false);
+            task.Options.PageRangeOptions.AllowAllPages = true;
+            task.Options.PageRangeOptions.AllowCustomSetOfPages = true;
+            var displayed = details.DisplayedOptions;
+            displayed.Clear();
+            displayed.Add(StandardPrintTaskOptions.CustomPageRanges);
+            displayed.Add(StandardPrintTaskOptions.Copies);
+            displayed.Add(StandardPrintTaskOptions.Orientation);
+            displayed.Add(StandardPrintTaskOptions.MediaSize);
+            displayed.Add(ColorOption);
+            displayed.Add(ScaleOption);
+            displayed.Add(StandardPrintTaskOptions.Duplex);
+            displayed.Add(StandardPrintTaskOptions.Collation);
+
+            details.OptionChanged += (_, change) =>
+            {
+                switch (change.OptionId as string)
+                {
+                    case ColorOption:
+                        bool inColor = color.Value as string == "color";
+                        _preferences.Grayscale = !inColor;
+                        SetDriverColor(inColor);
+                        break;
+                    case ScaleOption:
+                        _preferences.FitOversized = scale.Value as string != "actual";
+                        break;
+                    default:
+                        return;
+                }
+                _dispatcher.TryEnqueue(() =>
+                {
+                    _layoutVersion++;
+                    _printDocument.InvalidatePreview();
+                });
+            };
+
+        }
+
+        private void PrintDocument_Paginate(object sender, PaginateEventArgs e)
+        {
+            _previewOptions = (PrintTaskOptions)e.PrintTaskOptions;
+            _layoutVersion++;
+            _printDocument.SetPreviewPageCount(_document.PageCount, PreviewPageCountType.Final);
+        }
+
+        // Both handlers are async void: the rasterization they need belongs on the
+        // render thread, and the print system explicitly allows SetPreviewPage /
+        // AddPage to be called after the handler returns.
+        private async void PrintDocument_GetPreviewPage(object sender, GetPreviewPageEventArgs e)
+        {
+            if (_previewOptions is not { } options || e.PageNumber < 1 || e.PageNumber > _document.PageCount)
+            {
+                return;
+            }
+
+            int pageNumber = e.PageNumber; // read before awaiting; the args are not ours to keep
             try
             {
-                var pixels = new byte[page.Stride * page.Height];
-                Array.Copy(page.Pixels, pixels, pixels.Length);
-                if (grayscale)
+                // Preview at screen-ish resolution; cheap and rendered on demand.
+                int version = _layoutVersion;
+                var paper = options.GetPageDescription((uint)(pageNumber - 1));
+                var raster = await RenderAsync(pageNumber - 1, 96f, paper, _preferences.FitOversized, _preferences.Grayscale);
+                if (version == _layoutVersion) _printDocument.SetPreviewPage(pageNumber, BuildPageElement(raster, paper));
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or PdfiumException)
+            {
+                // Document closed or page unreadable — that preview page stays blank.
+            }
+        }
+
+        private async void PrintDocument_AddPages(object sender, AddPagesEventArgs e)
+        {
+            // Honor a custom range from the dialog; otherwise print everything.
+            // Materialize before the first await — the event args are only valid
+            // for the synchronous part of the callback.
+            List<int> pageNumbers = [];
+            int submitted = 0;
+            try
+            {
+                var options = e.PrintTaskOptions;
+                var fit = _preferences.FitOversized;
+                var grayscale = _preferences.Grayscale;
+                int count = _document.PageCount;
+                var ranges = options.CustomPageRanges;
+                pageNumbers = ranges.Count > 0
+                    ? [.. ranges.SelectMany(r =>
+                        {
+                            int first = Math.Clamp(r.FirstPageNumber, 1, Math.Max(1, count));
+                            int last = Math.Min(r.LastPageNumber, count);
+                            return Enumerable.Range(first, r.FirstPageNumber > count ? 0 : Math.Max(0, last - first + 1));
+                        }).Distinct().OrderBy(n => n)]
+                    : [.. Enumerable.Range(1, count)];
+                foreach (int pageNumber in pageNumbers)
                 {
-                    // PDFium provides BGRA. Preserve alpha and use luminance weights.
-                    for (int i = 0; i < pixels.Length; i += 4)
-                    {
-                        byte gray = (byte)((19 * pixels[i] + 183 * pixels[i + 1] + 54 * pixels[i + 2] + 128) >> 8);
-                        pixels[i] = pixels[i + 1] = pixels[i + 2] = gray;
-                    }
+                    var paper = options.GetPageDescription((uint)(pageNumber - 1));
+                    var raster = await RenderAsync(pageNumber - 1, PrintDpi, paper, fit, grayscale);
+                    _printDocument.AddPage(BuildPageElement(raster, paper));
+                    submitted++;
                 }
-                return new RasterPage(pixels, page.Width, page.Height, width * ratio, height * ratio);
+            }
+            catch (OperationCanceledException) when (_disposed) { }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                ErrorLog.Default.Write(nameof(PrintDocument_AddPages), ex);
+                if (submitted >= pageNumbers.Count)
+                {
+                    _reportError(ex.Message);
+                    return;
+                }
+                int failed = pageNumbers[submitted];
+                int remaining = pageNumbers.Count - submitted;
+                _reportError(UiText.Current.LanguageTag == "zh-CN"
+                    ? $"打印在第 {failed} 页中断，所选页面中有 {remaining} 页未提交。"
+                    : $"Printing stopped at page {failed}. {remaining} selected pages were not submitted.");
             }
             finally
             {
-                page.Return();
+                try { _printDocument.AddPagesComplete(); }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    ErrorLog.Default.Write(nameof(PrintDocument_AddPages), ex);
+                    _reportError(ex.Message);
+                }
             }
-        });
+        }
+
+        /// <summary>Rasterizes one page on the render thread and copies it out of the pooled buffer.</summary>
+        private async Task<RasterPage> RenderAsync(int pageIndex, float dpi, PrintPageDescription paper, bool fit, bool grayscale)
+        {
+            return await _workQueue.RunAsync(PdfWorkPriority.Interactive, () =>
+            {
+                var (ptWidth, ptHeight) = _document.GetPageSize(pageIndex);
+                double width = ptWidth * 96 / 72, height = ptHeight * 96 / 72;
+                var area = paper.ImageableRect;
+                double ratio = fit ? Math.Min(1, Math.Min(area.Width / width, area.Height / height)) : 1;
+                // Bound the raster even when printing an unusually large sheet at actual size.
+                double scale = Math.Min(dpi / 72.0 * ratio, 8192 / Math.Max(ptWidth, ptHeight));
+                var page = _document.RenderPage(pageIndex, scale: (float)scale);
+                try
+                {
+                    var pixels = new byte[page.Stride * page.Height];
+                    Array.Copy(page.Pixels, pixels, pixels.Length);
+                    if (grayscale)
+                    {
+                        // PDFium provides BGRA. Preserve alpha and use luminance weights.
+                        for (int i = 0; i < pixels.Length; i += 4)
+                        {
+                            byte gray = (byte)((19 * pixels[i] + 183 * pixels[i + 1] + 54 * pixels[i + 2] + 128) >> 8);
+                            pixels[i] = pixels[i + 1] = pixels[i + 2] = gray;
+                        }
+                    }
+                    return new RasterPage(pixels, page.Width, page.Height, width * ratio, height * ratio);
+                }
+                finally
+                {
+                    page.Return();
+                }
+            });
+        }
+
     }
+
+    private readonly record struct RasterPage(byte[] Pixels, int Width, int Height, double WidthDip, double HeightDip);
 
     /// <summary>UI-thread half: WriteableBitmap and Image must be created here.</summary>
     private static Canvas BuildPageElement(RasterPage page, PrintPageDescription paper)

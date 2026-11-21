@@ -4,6 +4,26 @@ namespace PDFDesk.Tests;
 
 public class SchedulerOpTests
 {
+    [Fact]
+    public async Task UnloadingViewerCommitsQueuedFormCharactersInOrder()
+    {
+        using var document = PdfDocument.Open(CorpusPath("form.pdf"));
+        var field = document.GetFormFields(0).First(f => f.Name == "name");
+        Assert.True(document.FormClick(0, field.X + field.Width / 2, field.Y + field.Height / 2));
+        using var scheduler = new RenderScheduler((_, bmp) => bmp.Return());
+        using var gate = new ManualResetEventSlim();
+        var blocker = scheduler.RunAsync(PdfWorkPriority.Interactive, () => gate.Wait());
+        var first = scheduler.RunAsync(PdfWorkPriority.Interactive, () => document.FormChar(0, 'A'));
+        var second = scheduler.RunAsync(PdfWorkPriority.Interactive, () => document.FormChar(0, 'B'));
+        var commit = scheduler.RunAsync(PdfWorkPriority.Interactive, document.FormKillFocus);
+        var thumbnail = scheduler.RunAsync(PdfWorkPriority.Thumbnail, () => 1);
+        var stop = Task.Run(scheduler.StopAfterInteractiveWork);
+        try { await Assert.ThrowsAnyAsync<OperationCanceledException>(() => thumbnail.WaitAsync(TimeSpan.FromSeconds(10))); }
+        finally { gate.Set(); }
+        await Task.WhenAll(stop, blocker, first, second, commit);
+        Assert.Equal("AB", document.GetFormFieldValue(0, "name"));
+    }
+
     private static string CorpusPath(string name) => Path.Combine(AppContext.BaseDirectory, "corpus", name);
 
     [Fact]

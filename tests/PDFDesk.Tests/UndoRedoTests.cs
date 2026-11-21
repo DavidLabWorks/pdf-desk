@@ -7,6 +7,21 @@ public class UndoStackTests
     private sealed record Edit(string Label, long SnapshotBytes) : IUndoableEdit;
 
     [Fact]
+    public void AFailedOperationLeavesItsEntryAvailableForRetry()
+    {
+        var stack = new UndoStack<Edit>();
+        var deleted = new Edit("delete A", 0);
+        stack.Push(deleted);
+        Assert.Same(deleted, stack.NextUndo);
+        Assert.Null(stack.NextRedo);
+        Assert.Same(deleted, stack.NextUndo);
+        stack.Complete(deleted, undo: true);
+        Assert.Same(deleted, stack.NextRedo);
+        stack.Complete(deleted, undo: false);
+        Assert.Same(deleted, stack.NextUndo);
+    }
+
+    [Fact]
     public void Push_Pop_FollowsLifoAndTracksLabels()
     {
         var stack = new UndoStack<Edit>();

@@ -173,6 +173,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public bool FormClick(int pageIndex, double localX, double localY)
     {
+        if (IsReadOnlySnapshot) return false;
         if (!HasFillableForm)
         {
             return false;
@@ -282,6 +283,7 @@ public sealed partial class PdfDocument
 
     private bool WithFormPage(int pageIndex, Func<IntPtr, IntPtr, bool> action)
     {
+        if (IsReadOnlySnapshot) return false;
         if (!HasFillableForm)
         {
             return false;
@@ -437,6 +439,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public bool SetFieldAppearance(int pageIndex, string name, FieldAppearance appearance)
     {
+        RequireWritable();
         // The in-progress edit lives in the focused widget, and rebuilding the
         // page underneath it would strand that. Commit first, as saving does.
         FormKillFocus();

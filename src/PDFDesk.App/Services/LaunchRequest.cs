@@ -9,12 +9,12 @@ internal sealed record LaunchRequest(string[] Files, int? Page = null, double? Z
     public static LaunchRequest FromCurrentProcess(string[] args)
     {
         // Resolve relative paths before handing off to a process with a different working directory.
-        if (args.Length > 0 && File.Exists(args[0]))
+        if (args.Length > 0)
         {
-            var files = new List<string> { Path.GetFullPath(args[0]) };
+            var files = new List<string>();
             int? page = null;
             double? zoom = null;
-            for (int i = 1; i < args.Length; i++)
+            for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--page" && i + 1 < args.Length && int.TryParse(args[i + 1], out int p))
                 {
@@ -31,7 +31,7 @@ internal sealed record LaunchRequest(string[] Files, int? Page = null, double? Z
                     files.Add(Path.GetFullPath(args[i]));
                 }
             }
-            return new(files.ToArray(), page, zoom);
+            if (files.Count > 0) return new(files.ToArray(), page, zoom);
         }
 
         // The Store package's file association can also arrive as a Windows file activation.

@@ -27,6 +27,27 @@ public sealed partial class DocumentView : UserControl
     private bool _closed;
     private bool _syncingSelection;
 
+    private void SetReadOnlyView(bool readOnly)
+    {
+        IsReadOnlyView = readOnly;
+        ThumbList.CanReorderItems = ThumbList.CanDragItems = ThumbList.AllowDrop = !readOnly;
+    }
+
+    internal void RefreshSnapshotBar()
+    {
+        var text = UiText.Current;
+        SnapshotStatus.Text = NewVersionAvailable ? text.SnapshotUpdated : string.Empty;
+        SnapshotBar.Visibility = NewVersionAvailable ? Visibility.Visible : Visibility.Collapsed;
+        ReloadSnapshot.Content = text.ReloadVersion;
+    }
+
+    private async void ReloadSnapshot_Click(object sender, RoutedEventArgs e) => await HostWindow.ReloadSnapshotAsync(this, false);
+
+    internal MainWindow HostWindow { get; set; } = null!;
+    internal bool IsReadOnlyView { get; private set; }
+    internal string? LatestSavedDigest { get; set; }
+    internal bool NewVersionAvailable => LatestSavedDigest is { } latest && _document is { } document && latest != document.SavedDigest;
+    internal WindowsFileIdentity.NavigationKey NavigationKey { get; set; }
     public string FilePath { get; }
     public string DisplayName => Path.GetFileName(FilePath);
     public PdfViewer Viewer => ViewerControl;
@@ -37,12 +58,18 @@ public sealed partial class DocumentView : UserControl
 
     public event EventHandler? Loaded2;
 
-    public DocumentView(string filePath)
+    internal DocumentView(WindowsFileIdentity.NavigationKey key, bool readOnly)
     {
         InitializeComponent();
-        FilePath = filePath;
+        NavigationKey = key;
+        FilePath = key.Path;
+        SetReadOnlyView(readOnly);
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         ThumbList.ItemsSource = _thumbnails;
+        ViewerControl.PageMenuOpening += AddBookmarkMenuAction;
+        ViewerControl.ScreenshotFinished += error => ShowNotice(null, error == null
+            ? UiText.Current.ScreenshotCopied : $"{UiText.Current.ScreenshotFailed} · {error}",
+            error == null ? InfoBarSeverity.Success : InfoBarSeverity.Error);
         ViewerControl.OrganizeRequested += page => OpenOrganizer([page]);
         BookmarkList.ItemsSource = _bookmarks;
 
@@ -100,7 +127,7 @@ public sealed partial class DocumentView : UserControl
     /// PDFium and finishing the work off-thread is safe. Without the fallback a
     /// tab closed at the wrong moment would leak the native document.
     /// </summary>
-    private async Task<T> RunPdfAsync<T>(PdfWorkPriority priority, Func<T> work)
+    internal async Task<T> RunPdfAsync<T>(PdfWorkPriority priority, Func<T> work)
     {
         try
         {
@@ -134,11 +161,25 @@ public sealed partial class DocumentView : UserControl
             await ready.Task;
             if (_closed) return;
 
-            var document = await RunPdfAsync(PdfWorkPriority.Interactive, () => PdfDocument.Open(FilePath));
+            // Opening sees all earlier saves. Keep notifications arriving during the open.
+            LatestSavedDigest = null;
+            var reservedKey = NavigationKey;
+            var (document, openedKey) = await RunPdfAsync(PdfWorkPriority.Interactive, () =>
+            {
+                var opened = IsReadOnlyView ? PdfDocument.OpenReadOnly(FilePath) : PdfDocument.Open(FilePath);
+                return (opened, opened.GetOpenedNavigationKey(reservedKey));
+            });
             if (_closed)
             {
                 await RunPdfAsync(PdfWorkPriority.Interactive, document.Dispose);
                 return;
+            }
+            // A save notification during the open may already have advanced the path identity.
+            if (ReferenceEquals(reservedKey, NavigationKey)) NavigationKey = openedKey;
+            if (!IsReadOnlyView && MainWindow.HasOtherEditor(this))
+            {
+                document.MakeReadOnly();
+                SetReadOnlyView(true);
             }
             _document = document;
             Viewer.SetPageColumns(restore?.LayoutColumns ?? 1);
@@ -249,7 +290,7 @@ public sealed partial class DocumentView : UserControl
             : Task.CompletedTask;
     }
 
-    private async Task SaveInPlaceCoreAsync(PdfDocument document)
+    internal async Task CommitPendingEditsAsync()
     {
         await Viewer.FinishEraserAsync();
         await Viewer.CommitTextAsync();
@@ -257,11 +298,14 @@ public sealed partial class DocumentView : UserControl
         {
             throw new InvalidOperationException(UiText.Current.TextCommitFailed);
         }
-        if (Viewer.IsFormFieldFocused)
-        {
-            Viewer.KillFormFocus();
-        }
-        await Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
+        await Viewer.CommitFormFocusAsync();
+    }
+
+    private async Task SaveInPlaceCoreAsync(PdfDocument document)
+    {
+        await CommitPendingEditsAsync();
+        if (!document.IsDirty) return;
+        await RunPdfAsync(PdfWorkPriority.Interactive, () =>
         {
             document.SaveInPlace();
             return true;
@@ -271,6 +315,11 @@ public sealed partial class DocumentView : UserControl
             if (!document.IsDirty)
             {
                 ClearUndoHistory();
+                if (_bookmarkMappingPending)
+                {
+                    SetBookmarks(FinishBookmarkMapping(), saved: true);
+                }
+                else NotifyBookmarksChanged(saved: true);
             }
             RefreshThumbnails();
         }
@@ -501,9 +550,13 @@ public sealed partial class DocumentView : UserControl
     // ---------------------------------------------------------------- page editing
 
     private bool _pageOpRunning;
+    internal bool HasPendingOperation => HasOpenOrganizer || Viewer.IsEditingText ||
+        Viewer.HasPendingFormEdit || _pageOpRunning || _saveTask is { IsCompleted: false };
 
     /// <summary>Raised after any page delete/move/insert (dirty marker + toolbar refresh).</summary>
     public event EventHandler? PagesEdited;
+    internal event Action? SearchInvalidated;
+    internal event Action? SearchRefreshRequested;
 
     /// <summary>Raised when a page operation fails with a user-relevant message.</summary>
     public event EventHandler<string>? PageOpFailed;
@@ -562,9 +615,11 @@ public sealed partial class DocumentView : UserControl
 
         try
         {
-            var bytes = await Viewer.RunOnRenderThreadAsync(
-                PdfWorkPriority.Interactive, () => document.ExportPages(pages));
-            await File.WriteAllBytesAsync(path, bytes);
+            await Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
+            {
+                document.ExportPagesToFile(pages, path);
+                return true;
+            });
             return true;
         }
         catch (Exception ex) when (ex is PDFDesk.PdfiumInterop.PdfiumException or IOException or UnauthorizedAccessException)
@@ -582,7 +637,7 @@ public sealed partial class DocumentView : UserControl
     /// </summary>
     private async Task<bool> RunPageOpAsync(Action<PdfDocument> op, Func<int, int?>? remapBookmark)
     {
-        if (_pageOpRunning || _document is not { } document)
+        if (IsReadOnlyView || _pageOpRunning || _document is not { } document)
         {
             return false;
         }
@@ -591,6 +646,7 @@ public sealed partial class DocumentView : UserControl
         {
             await Viewer.FinishEraserAsync();
             _thumbnailGeneration++;
+            SearchInvalidated?.Invoke();
             Viewer.PreparePageMutation();
             await Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
             {
@@ -609,6 +665,7 @@ public sealed partial class DocumentView : UserControl
         finally
         {
             _pageOpRunning = false;
+            SearchRefreshRequested?.Invoke();
         }
     }
 
@@ -621,21 +678,23 @@ public sealed partial class DocumentView : UserControl
     /// dropped for the same reason: the annotation objects an undo entry refers
     /// to no longer exist.
     /// </summary>
-    public async Task<int> FlattenDocumentAsync()
+    public async Task<(int Changed, List<int> FailedPages)?> FlattenDocumentAsync()
     {
         if (_document is not { } document)
         {
-            return 0;
+            return null;
         }
 
         int changed = 0;
-        await RunPageOpAsync(doc => changed = doc.FlattenAllPages(), remapBookmark: null);
+        List<int> failedPages = [];
+        if (!await RunPageOpAsync(doc => changed = doc.FlattenAllPages(onPageFailed: failedPages.Add), remapBookmark: null))
+            return null;
         if (changed > 0)
         {
             ClearUndoHistory();
             PagesEdited?.Invoke(this, EventArgs.Empty);
         }
-        return changed;
+        return (changed, failedPages);
     }
 
     private void AfterPageMutation(Func<int, int?>? remapBookmark)
@@ -645,9 +704,15 @@ public sealed partial class DocumentView : UserControl
             return;
         }
 
+        if (remapBookmark is not null && !_bookmarkMappingPending) _bookmarkOriginalPageCount = _thumbnails.Count;
         RefreshEditedPages(document, remapBookmark);
         _ = PopulateOutlineAsync(document);
 
+        if (remapBookmark is not null)
+        {
+            _bookmarkBaseline ??= GetBookmarks();
+            _bookmarkMaps.Add(remapBookmark);
+        }
         if (remapBookmark is not null && _bookmarks.Count > 0)
         {
             var remapped = _bookmarks
@@ -659,7 +724,7 @@ public sealed partial class DocumentView : UserControl
                 item.PageIndex = newPage!.Value;
                 _bookmarks.Add(item);
             }
-            BookmarksChanged?.Invoke(this, EventArgs.Empty);
+            NotifyBookmarksChanged();
         }
 
         RefreshPaneVisibility();
@@ -726,20 +791,22 @@ public sealed partial class DocumentView : UserControl
     {
         var deleted = pages.ToHashSet();
         var before = GetBookmarks();
-        byte[][]? snapshots = null;
+        byte[]? snapshot = null;
+        FormFieldInfo[] remainingFields = [];
         byte[]? clipboardBytes = null;
 
         bool ok = await RunPageOpAsync(d =>
         {
-            snapshots = [.. pages.Select(p => d.ExportPages([p]))]; // per-page, for undo restore
+            snapshot = d.CapturePageTree();
             if (cut)
             {
                 clipboardBytes = d.ExportPages(pages); // whole selection in one PDF, in order
             }
             d.DeletePages(pages);
+            remainingFields = ReadFields(d);
         }, p => BookmarkRemap.AfterDelete(p, deleted));
 
-        if (!ok || snapshots is null)
+        if (!ok || snapshot is null)
         {
             return;
         }
@@ -750,22 +817,24 @@ public sealed partial class DocumentView : UserControl
 
         int? Forward(int page) => BookmarkRemap.AfterDelete(page, deleted);
         var origIndices = pages.ToList();
-        var pageSnapshots = snapshots;
+        static FormFieldInfo[] ReadFields(PdfDocument doc) => doc.HasFillableForm
+            ? Enumerable.Range(0, doc.PageCount).SelectMany(doc.GetFormFields).ToArray() : [];
         PushEdit(new DocumentEdit
         {
             Label = pages.Count == 1 ? (cut ? "cut page" : "delete page") : $"{(cut ? "cut" : "delete")} {pages.Count} pages",
             IsPageMutation = true,
             ForwardMap = Forward,
             ReverseMap = InvertPageMap(_thumbnails.Count + pages.Count, _thumbnails.Count, Forward),
-            SnapshotBytes = pageSnapshots.Sum(s => (long)s.Length),
+            SnapshotBytes = snapshot.LongLength,
             BookmarksBefore = before,
             BookmarksAfter = GetBookmarks(),
             UndoAction = d =>
             {
-                for (int i = 0; i < origIndices.Count; i++)
-                {
-                    d.InsertPages(pageSnapshots[i], origIndices[i]); // ascending — positions line up
-                }
+                if (!remainingFields.SequenceEqual(ReadFields(d)))
+                    throw new InvalidOperationException(UiText.Current.LanguageTag == "zh-CN"
+                        ? "删页后表单值已更改。请先恢复表单值，再撤销删页。"
+                        : "Form values changed after deletion. Restore them before undoing the deletion.");
+                d.RestorePageTree(snapshot);
             },
             RedoAction = d => d.DeletePages(origIndices),
         });
@@ -835,27 +904,52 @@ public sealed partial class DocumentView : UserControl
     internal Task<int> DuplicatePagesAsync(List<int> pages) =>
         InsertWithUndoAsync(d => d.ExportPages(pages), pages[^1] + 1, "duplicate");
 
-    internal void OpenOrganizer(List<int>? selected = null)
+    private PageOrganizer? _organizer;
+    private Task? _organizerSession;
+    internal bool HasOpenOrganizer => _organizer is not null;
+
+    internal async Task<bool> CloseOrganizerAsync()
     {
-        if (_document is null || _pageOpRunning || DialogHost.IsOpen(this)) return;
-        var dialog = new PageOrganizer(this, _thumbnails, selected ?? [Viewer.CurrentPage]);
-        _ = DialogHost.ShowAsync(this, dialog);
+        if (_organizer is not { } dialog || _organizerSession is not { } session) return true;
+        if (!await dialog.RequestCloseAsync()) return false;
+        await session;
+        return true;
     }
 
-    internal async Task SavePageDraftAsync(PageDraft draft)
+    internal void OpenOrganizer(List<int>? selected = null)
     {
-        if (_pageOpRunning || _document is not { } document)
+        if (IsReadOnlyView || _document is null || _pageOpRunning || DialogHost.IsOpen(this)) return;
+        var dialog = new PageOrganizer(this, _thumbnails, selected ?? [Viewer.CurrentPage]);
+        _organizer = dialog;
+        _organizerSession = ShowOrganizerAsync(dialog);
+    }
+
+    private async Task ShowOrganizerAsync(PageOrganizer dialog)
+    {
+        try { await DialogHost.ShowAsync(this, dialog); }
+        finally { _organizer = null; }
+    }
+
+    internal async Task SavePageDraftAsync(PageDraft draft, string? copyPath = null)
+    {
+        if (IsReadOnlyView || _pageOpRunning || _document is not { } document)
             throw new InvalidOperationException("The document is unavailable.");
         _pageOpRunning = true;
         try
         {
             if (_saveTask is { IsCompleted: false }) await _saveTask;
-            await Viewer.FinishEraserAsync();
-            await Viewer.CommitTextAsync();
-            if (Viewer.IsEditingText) throw new InvalidOperationException(UiText.Current.TextCommitFailed);
-            if (Viewer.IsFormFieldFocused) Viewer.KillFormFocus();
+            await CommitPendingEditsAsync();
+            if (copyPath != null)
+            {
+                string digest = "";
+                await MainWindow.WriteReaderCopyAsync(FilePath, copyPath, async staging =>
+                {
+                    digest = await RunPdfAsync(PdfWorkPriority.Interactive, () => draft.SaveAs(document, staging));
+                    return true;
+                }, () => DraftCopySaved?.Invoke(copyPath, digest, draft.MapBookmarks(BookmarksForExport())));
+                return;
+            }
             var positions = draft.OriginalPositions();
-            var bookmarks = GetBookmarks().Where(b => positions[b.PageIndex].HasValue).ToList();
             var replacement = await RunPdfAsync(PdfWorkPriority.Interactive, () => draft.Save(document));
             if (_closed)
             {
@@ -864,18 +958,23 @@ public sealed partial class DocumentView : UserControl
             }
             double zoom = Viewer.Zoom, scroll = Viewer.ScrollFraction;
             int rotation = Viewer.ViewRotation;
+            var fitMode = Viewer.FitMode;
+            int current = Math.Clamp(Viewer.CurrentPage, 0, positions.Length - 1);
+            int target = positions[current] ?? Math.Min(current, replacement.PageCount - 1);
+            var location = positions[current].HasValue ? Viewer.CaptureReadingLocation(current) : null;
+            SearchInvalidated?.Invoke();
             _document = replacement;
             Viewer.SetDocument(replacement);
-            Viewer.RestoreView(zoom, rotation, scroll);
+            Viewer.RestoreView(zoom, rotation, scroll, fitMode, target, location);
             PopulateThumbnails(replacement);
             SyncThumbnailSelection(Viewer.CurrentPage);
-            foreach (var b in bookmarks) b.PageIndex = positions[b.PageIndex]!.Value;
-            SetBookmarks(bookmarks);
-            BookmarksChanged?.Invoke(this, EventArgs.Empty);
+            var bookmarks = draft.MapBookmarks(FinishBookmarkMapping());
+            SetBookmarks(bookmarks, saved: true);
             ClearUndoHistory();
             _ = PopulateOutlineAsync(replacement);
             _ = ReadSignatureCountAsync(replacement);
             PagesEdited?.Invoke(this, EventArgs.Empty);
+            SearchRefreshRequested?.Invoke();
             await RunPdfAsync(PdfWorkPriority.Interactive, document.Dispose);
         }
         finally { _pageOpRunning = false; }
@@ -883,13 +982,12 @@ public sealed partial class DocumentView : UserControl
 
     private async Task<int> InsertWithUndoAsync(Func<PdfDocument, byte[]> source, int at, string verb)
     {
-        byte[] bytes = [];
         var before = GetBookmarks();
         int inserted = 0;
         bool ok = await RunPageOpAsync(d =>
         {
-            bytes = source(d);
-            inserted = d.InsertPages(bytes, at);
+            at = Math.Clamp(at, 0, d.PageCount);
+            inserted = d.InsertPages(source(d), at);
         },
             p => BookmarkRemap.AfterInsert(p, at, inserted));
         if (!ok || inserted == 0)
@@ -898,17 +996,18 @@ public sealed partial class DocumentView : UserControl
         }
 
         int insertedCount = inserted;
+        var insertion = new InsertedPages(at, insertedCount);
         PushEdit(new DocumentEdit
         {
             Label = insertedCount == 1 ? $"{verb} page" : $"{verb} {insertedCount} pages",
             IsPageMutation = true,
             ForwardMap = p => BookmarkRemap.AfterInsert(p, at, insertedCount),
             ReverseMap = p => p < at ? p : p < at + insertedCount ? null : p - insertedCount,
-            SnapshotBytes = bytes.Length,
+            Insertion = insertion,
             BookmarksBefore = before,
             BookmarksAfter = GetBookmarks(),
-            UndoAction = d => d.DeletePages([.. Enumerable.Range(at, insertedCount)]),
-            RedoAction = d => d.InsertPages(bytes, at),
+            UndoAction = insertion.Undo,
+            RedoAction = insertion.Redo,
         });
         return inserted;
     }
@@ -919,7 +1018,8 @@ public sealed partial class DocumentView : UserControl
     private sealed class DocumentEdit : IUndoableEdit
     {
         public required string Label { get; init; }
-        public long SnapshotBytes { get; init; }
+        public InsertedPages? Insertion { get; init; }
+        public long SnapshotBytes { get => Insertion?.SnapshotBytes ?? field; init; }
         public required Action<PdfDocument> UndoAction { get; init; }
         public required Action<PdfDocument> RedoAction { get; init; }
         public Func<int, int?>? ForwardMap { get; init; }
@@ -927,8 +1027,8 @@ public sealed partial class DocumentView : UserControl
         public bool IsPageMutation { get; init; }
         public int PageIndex { get; init; } // annotation edits: the page to refresh
         public IReadOnlyList<int>? InkPages { get; init; }
-        public IReadOnlyList<PDFDesk.Services.BookmarkEntry>? BookmarksBefore { get; init; }
-        public IReadOnlyList<PDFDesk.Services.BookmarkEntry>? BookmarksAfter { get; init; }
+        public IReadOnlyList<PDFDesk.Services.BookmarkEntry>? BookmarksBefore { get; set; }
+        public IReadOnlyList<PDFDesk.Services.BookmarkEntry>? BookmarksAfter { get; set; }
     }
 
     private static Func<int, int?> InvertPageMap(int oldCount, int newCount, Func<int, int?> forward)
@@ -962,10 +1062,10 @@ public sealed partial class DocumentView : UserControl
         {
             return;
         }
-        var edit = _undoStack.PopUndo();
+        var edit = _undoStack.NextUndo;
         if (edit is not null)
         {
-            await ApplyEditAsync(edit, edit.UndoAction, edit.BookmarksBefore, edit.ReverseMap);
+            await ApplyEditAsync(edit, edit.UndoAction, edit.BookmarksBefore, edit.ReverseMap, undo: true);
         }
     }
 
@@ -976,15 +1076,15 @@ public sealed partial class DocumentView : UserControl
         {
             return;
         }
-        var edit = _undoStack.PopRedo();
+        var edit = _undoStack.NextRedo;
         if (edit is not null)
         {
-            await ApplyEditAsync(edit, edit.RedoAction, edit.BookmarksAfter, edit.ForwardMap);
+            await ApplyEditAsync(edit, edit.RedoAction, edit.BookmarksAfter, edit.ForwardMap, undo: false);
         }
     }
 
     private async Task ApplyEditAsync(DocumentEdit edit, Action<PdfDocument> action,
-        IReadOnlyList<PDFDesk.Services.BookmarkEntry>? bookmarks, Func<int, int?>? remap)
+        IReadOnlyList<PDFDesk.Services.BookmarkEntry>? bookmarks, Func<int, int?>? remap, bool undo)
     {
         if (_document is not { } document)
         {
@@ -996,6 +1096,7 @@ public sealed partial class DocumentView : UserControl
             if (edit.IsPageMutation)
             {
                 _thumbnailGeneration++;
+                SearchInvalidated?.Invoke();
                 Viewer.PreparePageMutation();
             }
             await Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
@@ -1003,14 +1104,21 @@ public sealed partial class DocumentView : UserControl
                 action(document);
                 return true;
             });
+            _undoStack.Complete(edit, undo);
 
             if (edit.IsPageMutation)
             {
+                if (undo && _bookmarkMaps.Count != 0) _bookmarkMaps.RemoveAt(_bookmarkMaps.Count - 1);
+                else if (!undo && remap is not null) _bookmarkMaps.Add(remap);
                 RefreshEditedPages(document, remap);
                 _ = PopulateOutlineAsync(document);
-                if (bookmarks is not null)
+                var inverse = undo ? edit.ForwardMap : edit.ReverseMap;
+                if (bookmarks is not null && remap is not null && inverse is not null)
                 {
-                    SetBookmarks(bookmarks);
+                    var current = GetBookmarks();
+                    if (undo) edit.BookmarksAfter = current;
+                    else edit.BookmarksBefore = current;
+                    SetBookmarks(BookmarkRemap.ReplayPageEdit(current, bookmarks, remap, inverse));
                 }
                 RefreshPaneVisibility();
                 SyncThumbnailSelection(Viewer.CurrentPage);
@@ -1032,25 +1140,27 @@ public sealed partial class DocumentView : UserControl
             }
             PagesEdited?.Invoke(this, EventArgs.Empty);
         }
-        catch (Exception ex) when (ex is PDFDesk.PdfiumInterop.PdfiumException or InvalidOperationException)
+        catch (Exception ex) when (ex is PDFDesk.PdfiumInterop.PdfiumException or InvalidOperationException
+            or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or OperationCanceledException)
         {
-            PageOpFailed?.Invoke(this, ex.Message);
+            PageOpFailed?.Invoke(this, UiText.Translate(ex.Message));
         }
         finally
         {
             _pageOpRunning = false;
+            if (edit.IsPageMutation) SearchRefreshRequested?.Invoke();
             UndoStateChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
-    private void SetBookmarks(IReadOnlyList<PDFDesk.Services.BookmarkEntry> entries)
+    private void SetBookmarks(IReadOnlyList<PDFDesk.Services.BookmarkEntry> entries, bool saved = false)
     {
         _bookmarks.Clear();
         foreach (var entry in entries.OrderBy(b => b.PageIndex))
         {
             _bookmarks.Add(new BookmarkItem(entry.PageIndex, entry.Name));
         }
-        BookmarksChanged?.Invoke(this, EventArgs.Empty);
+        NotifyBookmarksChanged(saved);
     }
 
     /// <summary>Drops the undo history — page identity is invalidated after a save-in-place reopen or close.</summary>
@@ -1064,7 +1174,7 @@ public sealed partial class DocumentView : UserControl
     // thumbnail list has keyboard focus (otherwise Ctrl+C means "copy text").
     public bool TryCopyPages(bool cut)
     {
-        if (!IsThumbListFocused() || ThumbList.SelectedItems.Count == 0)
+        if ((cut && IsReadOnlyView) || !IsThumbListFocused() || ThumbList.SelectedItems.Count == 0)
         {
             return false;
         }
@@ -1074,7 +1184,7 @@ public sealed partial class DocumentView : UserControl
 
     public bool TryPastePages()
     {
-        if (_document is null || !PageClipboard.HasPages)
+        if (IsReadOnlyView || _document is null || !PageClipboard.HasPages)
         {
             return false;
         }
@@ -1134,15 +1244,15 @@ public sealed partial class DocumentView : UserControl
         }
 
         var before = GetBookmarks();
-        bool ok = await RunPageOpAsync(d => d.MovePages(movedIndices, destIndex), p => map[p]);
+        bool ok = await RunPageOpAsync(d => d.MovePages(movedIndices, destIndex), p => p >= 0 && p < map.Length ? map[p] : null);
         if (ok)
         {
             PushEdit(new DocumentEdit
             {
                 Label = movedIndices.Count == 1 ? "move page" : $"move {movedIndices.Count} pages",
                 IsPageMutation = true,
-                ForwardMap = p => map[p],
-                ReverseMap = InvertPageMap(map.Length, map.Length, p => map[p]),
+                ForwardMap = p => p >= 0 && p < map.Length ? map[p] : null,
+                ReverseMap = InvertPageMap(map.Length, map.Length, p => p >= 0 && p < map.Length ? map[p] : null),
                 SnapshotBytes = 0, // moves store no snapshot — the inverse is a permutation
                 BookmarksBefore = before,
                 BookmarksAfter = GetBookmarks(),
@@ -1225,10 +1335,12 @@ public sealed partial class DocumentView : UserControl
         int insertAt = SelectedPageIndices() is { Count: > 0 } sel ? sel[^1] + 1 : _thumbnails.Count;
 
         var menu = new MenuFlyout();
-        AddMenuAction(menu, UiText.Current.OrganizePages, Symbol.AllApps, () => OpenOrganizer(SelectedPageIndices()));
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is ThumbnailItem clicked)
+            AddBookmarkMenuAction(menu, clicked.PageIndex);
+        if (!IsReadOnlyView) AddMenuAction(menu, UiText.Current.OrganizePages, Symbol.AllApps, () => OpenOrganizer(SelectedPageIndices()));
         menu.Items.Add(new MenuFlyoutSeparator());
         AddMenuAction(menu, UiText.Format("Copy {0}", pages), Symbol.Copy, () => _ = CopySelectedPagesAsync(cut: false));
-        AddMenuAction(menu, UiText.Format("Cut {0}", pages), Symbol.Cut, () => _ = CopySelectedPagesAsync(cut: true));
+        if (!IsReadOnlyView) AddMenuAction(menu, UiText.Format("Cut {0}", pages), Symbol.Cut, () => _ = CopySelectedPagesAsync(cut: true));
         var paste = new MenuFlyoutItem
         {
             Text = PageClipboard.PageCount is > 1 and var n ? UiText.Format("Paste {0} pages after", n) : UiText.Translate("Paste after"),
@@ -1236,15 +1348,27 @@ public sealed partial class DocumentView : UserControl
             IsEnabled = PageClipboard.HasPages,
         };
         paste.Click += (_, _) => _ = PastePagesAsync(insertAt);
-        menu.Items.Add(paste);
-        AddMenuAction(menu, UiText.Translate("Insert PDF here…"), Symbol.Add, () => _ = PickAndInsertPdfAsync(insertAt));
+        if (!IsReadOnlyView) menu.Items.Add(paste);
+        if (!IsReadOnlyView) AddMenuAction(menu, UiText.Translate("Insert PDF here…"), Symbol.Add, () => _ = PickAndInsertPdfAsync(insertAt));
         menu.Items.Add(new MenuFlyoutSeparator());
         AddMenuAction(menu, UiText.Format("Extract {0} to a new file…", pages), Symbol.Save,
             () => ExtractRequested?.Invoke(this, EventArgs.Empty));
-        AddMenuAction(menu, UiText.Format("Delete {0}", pages), Symbol.Delete, () => _ = DeleteSelectedPagesAsync());
+        if (!IsReadOnlyView) AddMenuAction(menu, UiText.Format("Delete {0}", pages), Symbol.Delete, () => _ = DeleteSelectedPagesAsync());
 
         menu.ShowAt(ThumbList, e.GetPosition(ThumbList));
         e.Handled = true;
+    }
+
+    private void AddBookmarkMenuAction(MenuFlyout menu, int page)
+    {
+        var document = _document;
+        bool bookmarked = _bookmarks.Any(b => b.PageIndex == page);
+        AddMenuAction(menu, bookmarked ? UiText.Current.RemovePageBookmark : UiText.Current.AddPageBookmark,
+            bookmarked ? Symbol.UnPin : Symbol.Pin, () =>
+            {
+                if (_document == document && _bookmarks.Any(b => b.PageIndex == page) == bookmarked)
+                    ToggleBookmark(page);
+            });
     }
 
     private static void AddMenuAction(MenuFlyout menu, string text, Symbol icon, Action action)
@@ -1272,6 +1396,50 @@ public sealed partial class DocumentView : UserControl
 
     private readonly ObservableCollection<BookmarkItem> _bookmarks = [];
     private bool _bookmarksLoaded;
+    private List<PDFDesk.Services.BookmarkEntry>? _bookmarkBaseline;
+    private List<PDFDesk.Services.BookmarkEntry>? _incomingBookmarks;
+    private readonly List<Func<int, int?>> _bookmarkMaps = [];
+    private int _bookmarkOriginalPageCount;
+    private bool _bookmarkMappingPending => _bookmarkBaseline is not null;
+
+    private List<PDFDesk.Services.BookmarkEntry> FinishBookmarkMapping()
+    {
+        var result = BookmarksForExport();
+        _bookmarkBaseline = null;
+        _incomingBookmarks = null;
+        _bookmarkMaps.Clear();
+        return result;
+    }
+
+    internal List<PDFDesk.Services.BookmarkEntry> BookmarksForExport()
+    {
+        var result = GetBookmarks();
+        if (_bookmarkBaseline is not null && _incomingBookmarks is not null)
+            result = BookmarkRemap.Merge(_bookmarkBaseline, _incomingBookmarks, result, _bookmarkMaps);
+        return result;
+    }
+
+    private void NotifyBookmarksChanged(bool saved = false)
+    {
+        if (!_bookmarkMappingPending) BookmarksChanged?.Invoke(this, saved);
+    }
+
+    internal List<PDFDesk.Services.BookmarkEntry> BookmarksForPersistence() =>
+        _bookmarkBaseline is null ? GetBookmarks() : [.. _incomingBookmarks ?? _bookmarkBaseline];
+
+    private void BookmarkEdited(int page, string? name)
+    {
+        if (_bookmarkBaseline is not null)
+        {
+            var savedPage = BookmarkRemap.FindSavedPage(page, _bookmarkOriginalPageCount, _bookmarkMaps);
+            if (savedPage is not int original) return; // A newly inserted page first needs a saved identity.
+            var entries = BookmarksForPersistence();
+            entries.RemoveAll(b => b.PageIndex == original);
+            if (name is not null) entries.Add(new() { PageIndex = original, Name = name });
+            _incomingBookmarks = entries.OrderBy(b => b.PageIndex).ToList();
+        }
+        BookmarksChanged?.Invoke(this, false);
+    }
 
     internal void RefreshBookmarkLabels()
     {
@@ -1279,12 +1447,15 @@ public sealed partial class DocumentView : UserControl
     }
 
     /// <summary>Raised after any bookmark add/remove/rename; the shell persists.</summary>
-    public event EventHandler? BookmarksChanged;
+    public event EventHandler<bool>? BookmarksChanged;
+    internal event Action<string, string, List<BookmarkEntry>>? DraftCopySaved;
 
     /// <summary>Fills the pane from persisted state. First call wins (idempotent across tab switches).</summary>
     public void LoadBookmarks(IEnumerable<PDFDesk.Services.BookmarkEntry> entries, bool refresh = false)
     {
-        if (_bookmarksLoaded && !refresh)
+        if (_bookmarkMappingPending && refresh)
+            _incomingBookmarks = entries.Select(b => new PDFDesk.Services.BookmarkEntry { PageIndex = b.PageIndex, Name = b.Name }).ToList();
+        if (_bookmarkMappingPending || (_bookmarksLoaded && !refresh))
         {
             return;
         }
@@ -1319,7 +1490,7 @@ public sealed partial class DocumentView : UserControl
             _bookmarks.Insert(insertAt, item);
         }
         RefreshPaneVisibility();
-        BookmarksChanged?.Invoke(this, EventArgs.Empty);
+        BookmarkEdited(pageIndex, existing is null ? _bookmarks.First(b => b.PageIndex == pageIndex).Name : null);
         return existing is null;
     }
 
@@ -1365,11 +1536,16 @@ public sealed partial class DocumentView : UserControl
     {
         _bookmarks.Remove(item);
         RefreshPaneVisibility();
-        BookmarksChanged?.Invoke(this, EventArgs.Empty);
+        BookmarkEdited(item.PageIndex, null);
     }
 
     private async Task RenameBookmarkAsync(BookmarkItem item)
     {
+        var document = _document;
+        var digest = document?.SavedDigest;
+        var maps = _bookmarkMaps.ToArray();
+        int page = item.PageIndex;
+        string originalName = item.Name;
         var box = new TextBox { Text = item.Name, SelectionStart = item.Name.Length, MinWidth = 280 };
         var dialog = new ContentDialog
         {
@@ -1381,10 +1557,12 @@ public sealed partial class DocumentView : UserControl
             XamlRoot = XamlRoot,
         };
         if (await PDFDesk.Services.DialogHost.ShowAsync(this, dialog) == ContentDialogResult.Primary &&
-            !string.IsNullOrWhiteSpace(box.Text))
+            !string.IsNullOrWhiteSpace(box.Text) && document == _document && digest == document?.SavedDigest &&
+            maps.SequenceEqual(_bookmarkMaps) && _bookmarks.FirstOrDefault(b => b.PageIndex == page) is { } current &&
+            current.Name == originalName)
         {
-            item.Name = box.Text.Trim();
-            BookmarksChanged?.Invoke(this, EventArgs.Empty);
+            current.Name = box.Text.Trim();
+            BookmarkEdited(page, current.Name);
         }
     }
 

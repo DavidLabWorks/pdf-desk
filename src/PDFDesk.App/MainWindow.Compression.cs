@@ -26,16 +26,11 @@ public sealed partial class MainWindow
     private TabViewItem? FindDocumentTab(string path) => Tabs.TabItems.OfType<TabViewItem>()
         .FirstOrDefault(t => t.Tag is DocumentView v && string.Equals(v.FilePath, path, StringComparison.OrdinalIgnoreCase));
 
-    private static (long Bytes, DateTime Modified) FileVersion(string path)
-    {
-        var file = new FileInfo(path);
-        return (file.Length, file.LastWriteTimeUtc);
-    }
-
     private async Task CompressExportAsync(string path)
     {
         if (DialogHost.IsOpen(RootGrid)) return;
         path = Path.GetFullPath(path);
+        if (CurrentView is { IsReadOnlyView: true } readOnlyView && WindowsFileIdentity.SameFile(readOnlyView.FilePath, path)) return;
         var owner = App.Readers.FirstOrDefault(w => w._compressionTasks.ContainsKey(path));
         if (owner != null)
         {
@@ -64,26 +59,25 @@ public sealed partial class MainWindow
         try
         {
             temporary = Directory.CreateTempSubdirectory("PDFDesk-compress-").FullName;
-            var version = FileVersion(path);
+            var version = await Task.Run(() => PdfDocument.ReadFileVersion(path), token);
             string snapshot = Path.Combine(temporary, "source.pdf");
             async Task<int> PrepareAsync(CancellationToken token)
             {
                 if (view is { IsDocumentLoaded: true })
                 {
-                    await view.Viewer.FinishEraserAsync();
-                    await view.Viewer.CommitTextAsync();
-                    if (view.Viewer.IsEditingText) throw new IOException(UiText.Current.TextCommitFailed);
-                    if (view.Viewer.IsFormFieldFocused) view.Viewer.KillFormFocus();
+                    await view.CommitPendingEditsAsync();
                     view.Viewer.DocumentEdited -= OnEdit;
                     view.Viewer.DocumentEdited += OnEdit;
+                    view.PagesEdited -= OnEdit;
+                    view.PagesEdited += OnEdit;
                 }
                 var document = view?.Viewer.Document;
-                if (document is not null && !document.MatchesFileOnDisk())
+                if (document is not null && document.SavedDigest != version.Digest)
                     throw new IOException(Local("The file has changed on disk. Reopen it first.", "文件已在外部更改，请重新打开。"));
                 string protectedMessage = Local("Compression is unavailable for signed or encrypted PDFs.", "已数字签名或加密的 PDF 无法压缩导出。");
                 if (document?.IsDirty == true)
                 {
-                    await view!.Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
+                    await view!.RunPdfAsync(PdfWorkPriority.Interactive, () =>
                     {
                         if (document.SignatureCount > 0 || document.IsEncrypted) throw new IOException(protectedMessage);
                         document.SaveAs(snapshot);
@@ -104,7 +98,7 @@ public sealed partial class MainWindow
                     return input.PageCount;
                 });
             }
-            var dialog = new CompressionDialog(path, snapshot, version.Bytes, WinRT.Interop.WindowNative.GetWindowHandle(this), PrepareAsync, _exportDestinations.Contains);
+            var dialog = new CompressionDialog(path, snapshot, version.Length, WinRT.Interop.WindowNative.GetWindowHandle(this), PrepareAsync, _exportDestinations.Contains);
             var result = await ShowDialogAsync(dialog);
             await dialog.Finished;
             if (!dialog.ExportRequested && result != ContentDialogResult.Primary) return;
@@ -142,7 +136,7 @@ public sealed partial class MainWindow
             }
             if (output is null) return;
             staging = Path.Combine(Path.GetDirectoryName(destination)!, $".pdfdesk-{Guid.NewGuid():N}.tmp");
-            await Task.Run(async () =>
+            string outputDigest = await Task.Run(async () =>
             {
                 using (var input = File.OpenRead(output))
                 using (var target = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -150,25 +144,28 @@ public sealed partial class MainWindow
                 token.ThrowIfCancellationRequested();
                 using var verified = PdfDocument.Open(staging);
                 if (verified.PageCount != pages) throw new InvalidDataException(Local("Page count changed during export.", "导出前后页数不一致。"));
+                return verified.SavedDigest;
             });
             token.ThrowIfCancellationRequested();
-            if (dialog.ReplaceOriginal && (FileVersion(path) != version || FindDocumentTab(path) != tab || edited))
+            if (dialog.ReplaceOriginal && (await Task.Run(() => PdfDocument.ReadFileVersion(path), token) != version || FindDocumentTab(path) != tab || edited ||
+                view?.HasOpenOrganizer == true || view?.Viewer.IsEditingText == true || view?.Viewer.IsFormFieldFocused == true))
                 throw new IOException(Local("The document changed. Start the export again.", "文档已更改，请重新压缩导出。"));
-            if (dialog.ReplaceOriginal) File.Replace(staging, destination, null);
-            else File.Move(staging, destination);
             if (dialog.ReplaceOriginal)
             {
-                _thumbnails.Forget(path);
-                if (tab != null)
+                var targets = GetReplaceableTabs(destination, view);
+                File.Replace(staging, destination, null);
+                if (_state.FindRecent(path) is { } recent)
                 {
-                    int index = Tabs.TabItems.IndexOf(tab);
-                    bool selected = ReferenceEquals(Tabs.SelectedItem, tab);
-                    CloseTab(tab);
-                    AddTab(path, _state.FindRecent(path), selected, index);
-                    if (FindDocumentTab(path)?.Tag is DocumentView reopened) await LoadTabAsync(reopened);
+                    var bookmarks = view?.Viewer.Document?.SavedDigest == version.Digest
+                        ? view.BookmarksForExport() : recent.BookmarksFor(version.Digest).ToList();
+                    recent.StoreBookmarks(outputDigest, bookmarks, saved: true);
+                    _store.Save(_state);
                 }
+                ReloadReplacedTabs(targets, destination, outputDigest);
+                _thumbnails.Forget(path);
                 PopulateRecents();
             }
+            else File.Move(staging, destination);
 
             if (dialog.AutoOpen) await LoadDocumentAsync(destination);
             ShowNotice(destination, InfoBarSeverity.Success, Local("Compression complete", "压缩导出完成"), null,
@@ -178,7 +175,11 @@ public sealed partial class MainWindow
         catch (Exception ex) { ShowError(ex.Message); }
         finally
         {
-            if (view != null) view.Viewer.DocumentEdited -= OnEdit;
+            if (view != null)
+            {
+                view.Viewer.DocumentEdited -= OnEdit;
+                view.PagesEdited -= OnEdit;
+            }
             _compressionTasks.Remove(path);
             if (reserved != null) _exportDestinations.Remove(reserved);
             if (card != null) ExportTasks.Children.Remove(card);

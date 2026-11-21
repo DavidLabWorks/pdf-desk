@@ -51,5 +51,26 @@
             <Rectangle IsHitTestVisible="False" StrokeThickness="1" StrokeDashArray="3,3"
                        Stroke="{ThemeResource AccentFillColorDefaultBrush}" />
         </Grid>
+        <Grid x:Name="ScreenshotOverlay" Visibility="Collapsed">
+            <local:DocumentCanvas x:Name="CaptureInput" Background="Transparent" ManipulationMode="None"
+                    PointerPressed="Capture_Pressed" PointerMoved="Capture_Moved" PointerReleased="Capture_Released"
+                    PointerCanceled="Capture_Lost" PointerCaptureLost="Capture_Lost" PointerWheelChanged="Capture_Wheel">
+                <Polygon x:Name="CaptureOutline" IsHitTestVisible="False" StrokeThickness="1.75" StrokeLineJoin="Round"
+                         Stroke="{ThemeResource AccentFillColorDefaultBrush}">
+                    <Polygon.Fill><SolidColorBrush Color="{ThemeResource SystemAccentColor}" Opacity="0.10" /></Polygon.Fill>
+                </Polygon>
+            </local:DocumentCanvas>
+            <Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8" Padding="10,2,2,2"
+                    Background="{ThemeResource HomeCardBrush}" BorderBrush="{ThemeResource HomeOutlineBrush}"
+                    BorderThickness="1" CornerRadius="{StaticResource RadiusMedium}">
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource SpaceXS}">
+                    <TextBlock x:Name="CaptureHint" VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" />
+                    <Button Style="{StaticResource IconButtonStyle}" Click="CaptureCancel_Click"
+                            AutomationProperties.Name="{Binding Cancel, Source={StaticResource UiText}}">
+                        <FontIcon Glyph="&#xE711;" FontSize="12" />
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

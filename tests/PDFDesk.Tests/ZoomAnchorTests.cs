@@ -14,6 +14,30 @@ namespace PDFDesk.Tests;
 /// </summary>
 public class ZoomAnchorTests
 {
+    [Theory]
+    [InlineData(1, 1.25, 1.25)]
+    [InlineData(2, 0.8, 1.1)]
+    [InlineData(3, 0.6, 0.5)]
+    public void ReorderedPageKeepsItsVisiblePoint(int columns, double oldZoom, double newZoom)
+    {
+        (float Width, float Height)[] sizes = [(300, 800), (400, 700), (500, 1400), (450, 900)];
+        var before = new PageLayout(sizes, oldZoom, 0, 800, 400, columns);
+        var draft = new PageDraft(sizes.Length);
+        draft.Move([2], 0);
+        var after = new PageLayout(Enumerable.Range(0, sizes.Length).Select(i => sizes[draft.SourceAt(i)]).ToArray(),
+            newZoom, 0, 800, 400, columns);
+        var page = before.GetPageRect(2);
+        var viewport = new DipRect(Math.Max(0, page.X - 20), page.Y + 200, 800, 400);
+        var anchor = ZoomAnchor.CaptureReadingLocation(before, 2, viewport, out var focus);
+        int newIndex = draft.OriginalPositions()[2]!.Value;
+        var offset = ZoomAnchor.Restore(after, anchor with { PageIndex = newIndex }, focus.X, focus.Y);
+        var moved = after.GetPageRect(0);
+        Assert.Equal((viewport.X + focus.X - page.X) / oldZoom,
+            (offset.X + focus.X - moved.X) / newZoom, 6);
+        Assert.Equal((viewport.Y + focus.Y - page.Y) / oldZoom,
+            (offset.Y + focus.Y - moved.Y) / newZoom, 6);
+    }
+
     private const double ViewportW = 1200;
     private const double ViewportH = 800;
 

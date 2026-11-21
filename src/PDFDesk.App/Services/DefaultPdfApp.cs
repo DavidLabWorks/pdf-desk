@@ -16,8 +16,7 @@ internal static class DefaultPdfApp
         {
             return string.Equals(QueryAssociation(21), appId, StringComparison.OrdinalIgnoreCase); // ASSOCSTR_APPID
         }
-        return string.Equals(QueryAssociation(20), ProgId, StringComparison.OrdinalIgnoreCase) // ASSOCSTR_PROGID
-            || string.Equals(QueryAssociation(2), Environment.ProcessPath, StringComparison.OrdinalIgnoreCase); // ASSOCSTR_EXECUTABLE
+        return Environment.ProcessPath is { } exe && string.Equals(QueryAssociation(2), exe, StringComparison.OrdinalIgnoreCase); // ASSOCSTR_EXECUTABLE
     }
 
     internal static async Task<bool> OpenSettingsAsync(string? appId)

@@ -441,24 +441,13 @@ public sealed partial class PdfViewer
             Label = kind == StampKind.Text ? "resize text" : "resize image",
             PageIndex = page,
             SnapshotBytes = before.Stamp?.Bgra.Length ?? 0,
-            UndoAction = d =>
-            {
-                d.RemoveAnnotation(page, newIndex);
-                d.AddAnnotationFromSpec(before);
-            },
+            UndoAction = d => d.RestoreDeletedAnnotation(before, index, replacingIndex: newIndex),
             RedoAction = d =>
             {
-                // Undo appended the original, so the thing to resize again is
-                // the last annotation rather than the index it used to have.
-                int last = d.GetAnnotations(page).Count - 1;
-                if (kind == StampKind.Text)
-                {
-                    d.ResizeTextBox(page, last, box.X, box.Y, box.Width);
-                }
-                else
-                {
-                    d.ResizeStamp(page, last, box.X, box.Y, box.Width, box.Height);
-                }
+                var applied = kind == StampKind.Text
+                    ? d.ResizeTextBox(page, index, box.X, box.Y, box.Width)
+                    : d.ResizeStamp(page, index, box.X, box.Y, box.Width, box.Height);
+                if (applied is null) throw new InvalidOperationException("Could not redo the resize.");
             },
         });
     }

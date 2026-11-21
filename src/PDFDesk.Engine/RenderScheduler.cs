@@ -157,11 +157,12 @@ public sealed class RenderScheduler : IDisposable, IPdfWorkQueue
         => (_document is not null && _desired.Count > 0)
            || _ops[0].Count > 0 || _ops[1].Count > 0 || _ops[2].Count > 0;
 
-    private List<ScheduledOp> DrainOps()
+    private List<ScheduledOp> DrainOps(bool keepInteractive = false)
     {
         var drained = new List<ScheduledOp>();
         foreach (var queue in _ops)
         {
+            if (keepInteractive && ReferenceEquals(queue, _ops[(int)PdfWorkPriority.Interactive])) continue;
             while (queue.Count > 0)
             {
                 drained.Add(queue.Dequeue());
@@ -196,7 +197,7 @@ public sealed class RenderScheduler : IDisposable, IPdfWorkQueue
                 {
                     Monitor.Wait(_gate);
                 }
-                if (_stopping)
+                if (_stopping && _ops[0].Count == 0)
                 {
                     return;
                 }
@@ -250,13 +251,18 @@ public sealed class RenderScheduler : IDisposable, IPdfWorkQueue
         }
     }
 
-    public void Dispose()
+    public void Dispose() => Stop(keepInteractive: false);
+
+    // Finish accepted input in FIFO order before detaching the tab.
+    public void StopAfterInteractiveWork() => Stop(keepInteractive: true);
+
+    private void Stop(bool keepInteractive)
     {
         List<ScheduledOp>? cancelled;
         lock (_gate)
         {
             _stopping = true;
-            cancelled = DrainOps();
+            cancelled = DrainOps(keepInteractive);
             Monitor.Pulse(_gate);
         }
         CancelAll(cancelled);

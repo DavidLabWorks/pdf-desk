@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
     private readonly AppState _state = SharedState;
     private Guid? _folderFilter;
     private readonly SessionState _initialSession;
+    private static readonly HashSet<string> LocalWindowIds = [];
     private readonly bool _startupWindow;
     private PdfLibrary _library;
     private string LibraryFolder => _state.Settings.LibraryFolder ?? _store.LibraryDirectory;
@@ -54,6 +55,9 @@ public sealed partial class MainWindow : Window
     internal MainWindow(SessionState session, bool startupWindow)
     {
         _initialSession = session;
+        LocalWindowIds.Add(session.WindowId);
+        if (startupWindow && !_state.Settings.RestoreSession)
+            LocalWindowIds.UnionWith(_state.AdditionalWindows.Select(w => w.WindowId));
         _startupWindow = startupWindow;
         InitializeComponent();
         _quickToolsMotion = new(ReaderQuickTools, ExpandedQuickTools, DockedReaderToggle);
@@ -110,6 +114,7 @@ public sealed partial class MainWindow : Window
 
     private bool _closeApproved;
     private bool _exitInProgress;
+    private static bool _applicationExitPending;
     private TrayIcon? _trayIcon;
 
     private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
@@ -121,7 +126,7 @@ public sealed partial class MainWindow : Window
 
     private void RequestWindowClose()
     {
-        if (_exitInProgress) return;
+        if (_exitInProgress || _applicationExitPending) return;
         if (App.Readers.Count > 1)
         {
             CloseReader();
@@ -166,11 +171,11 @@ public sealed partial class MainWindow : Window
 
     private async void CloseReader()
     {
-        if (_exitInProgress) return;
+        if (_exitInProgress || _applicationExitPending) return;
         _exitInProgress = true;
         try
         {
-            if (await EnsureSafeToCloseAsync())
+            if (await EnsureSafeToCloseAsync([]))
             {
                 _closeApproved = true;
                 Close();
@@ -181,14 +186,16 @@ public sealed partial class MainWindow : Window
 
     private async void ExitApplication()
     {
-        if (_exitInProgress) return;
-        _exitInProgress = true;
+        if (_exitInProgress || _applicationExitPending) return;
+        _applicationExitPending = true;
         try
         {
             CloseTrayMenu();
+            var discarded = new HashSet<long>();
+            // A different reader can change while a confirmation is awaiting input.
+            while (App.Readers.FirstOrDefault(w => w.NeedsCloseReview(discarded)) is { } pending)
+                if (!await pending.EnsureSafeToCloseAsync(discarded)) return;
             var windows = App.Readers.ToArray();
-            foreach (var window in windows)
-                if (!await window.EnsureSafeToCloseAsync()) return;
             if (App.MainWindow is MainWindow active && active.CurrentView is { } view) active.CaptureState(view);
             App.Exiting = true;
             SaveWindowSessions();
@@ -205,7 +212,7 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
-            _exitInProgress = false;
+            _applicationExitPending = false;
         }
     }
 
@@ -214,7 +221,7 @@ public sealed partial class MainWindow : Window
     /// the user cancelled or a save failed — i.e. it is NOT safe to close.
     /// Used for exits from the window and the tray icon.
     /// </summary>
-    private async Task<bool> EnsureSafeToCloseAsync()
+    private async Task<bool> EnsureSafeToCloseAsync(HashSet<long> discarded)
     {
         if (_compressionTasks.Count != 0)
         {
@@ -222,21 +229,38 @@ public sealed partial class MainWindow : Window
             ShowNotice(UiText.Current.FinishExportBeforeClosing, InfoBarSeverity.Informational);
             return false;
         }
-        var dirty = AllDocumentViews().Where(v => v.IsDirty).ToList();
-        if (dirty.Count == 0)
+        foreach (var view in AllDocumentViews().Where(v => v.HasOpenOrganizer).ToArray())
+        {
+            RestoreWindow();
+            if (!await view.CloseOrganizerAsync()) return false;
+        }
+        foreach (var view in AllDocumentViews().Where(v => v.Viewer.IsEditingText || v.Viewer.HasPendingFormEdit).ToArray())
+        {
+            await view.Viewer.CommitFormFocusAsync();
+            await view.Viewer.CommitTextAsync();
+            if (view.Viewer.IsEditingText)
+            {
+                RestoreWindow();
+                return false;
+            }
+        }
+        var dirty = AllDocumentViews()
+            .Select(view => (View: view, Revision: view.Viewer.Document?.UnsavedRevision ?? 0))
+            .Where(item => item.Revision != 0 && !discarded.Contains(item.Revision)).ToArray();
+        if (dirty.Length == 0)
         {
             return true;
         }
 
         if (!AppWindow.IsVisible) RestoreWindow();
-        var choice = await PromptSaveChangesAsync(dirty.Select(view => view.DisplayName).ToArray());
+        var choice = await PromptSaveChangesAsync(dirty.Select(item => item.View.DisplayName).ToArray());
         if (choice is null)
         {
             return false; // cancelled
         }
         if (choice == true)
         {
-            foreach (var view in dirty)
+            foreach (var (view, _) in dirty)
             {
                 try
                 {
@@ -249,8 +273,16 @@ public sealed partial class MainWindow : Window
                 }
             }
         }
+        else
+        {
+            foreach (var (_, revision) in dirty) discarded.Add(revision);
+        }
         return true;
     }
+
+    private bool NeedsCloseReview(HashSet<long> discarded) =>
+        _compressionTasks.Count != 0 || AllDocumentViews().Any(view =>
+            view.HasOpenOrganizer || view.Viewer.IsEditingText || view.Viewer.HasPendingFormEdit || (view.Viewer.Document is { IsDirty: true } doc && !discarded.Contains(doc.UnsavedRevision)));
 
     private void ApplyTheme(string theme)
     {
@@ -372,7 +404,7 @@ public sealed partial class MainWindow : Window
         var existing = AllDocumentViews().Select(v => v.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var path in session.OpenPaths.Where(File.Exists))
         {
-            if (existing.Add(path)) AddTab(path, session.RestorePosition(path, _state.FindRecent(path)), select: false);
+            if (existing.Add(path)) AddTab(path, session.RestorePosition(path, _state.FindRecent(path)), select: false, readOnly: session.ReadOnlyPaths?.Contains(path, StringComparer.OrdinalIgnoreCase) == true);
         }
 
         Tabs.SelectedItem = requestedTab ?? Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(
@@ -403,6 +435,7 @@ public sealed partial class MainWindow : Window
             }
         }
         App.RemoveReader(this);
+        RefreshSnapshotBars();
         if (!App.Exiting && App.Readers.Count > 0) SaveWindowSessions();
         else _store.Save(_state);
         _thumbnails.Dispose(); // stops the homepage cache's PDFium thread
@@ -414,15 +447,19 @@ public sealed partial class MainWindow : Window
         var windows = App.Readers.OrderByDescending(w => ReferenceEquals(w, App.MainWindow)).ToList();
         SessionState Snapshot(MainWindow w) => new()
         {
+            WindowId = w._initialSession.WindowId,
             Positions = w.AllDocumentViews().Select(v => (v.FilePath, Value: w.PositionOf(v)))
-                .Where(p => p.Value != null).ToDictionary(p => p.FilePath, p => p.Value!, StringComparer.OrdinalIgnoreCase),
+                .Where(p => p.Value != null).DistinctBy(p => p.FilePath, StringComparer.OrdinalIgnoreCase).ToDictionary(p => p.FilePath, p => p.Value!, StringComparer.OrdinalIgnoreCase),
             FavoritesSelected = w.FavoritesTab.IsChecked == true,
             FolderFilter = w._folderFilter,
+            ReadOnlyPaths = w.AllDocumentViews().Where(v => v.IsReadOnlyView).Select(v => v.FilePath).ToList(),
             OpenPaths = w.AllDocumentViews().Select(v => v.FilePath).ToList(),
             ActiveIndex = w._settingsReturnTab is { } tab ? w.Tabs.TabItems.IndexOf(tab) : w.Tabs.SelectedIndex
         };
+        var otherSessions = SharedState.AdditionalWindows.Prepend(SharedState.Session)
+            .Where(session => !LocalWindowIds.Contains(session.WindowId)).ToArray();
         SharedState.Session = Snapshot(windows[0]);
-        SharedState.AdditionalWindows = windows.Skip(1).Select(Snapshot).ToList();
+        SharedState.AdditionalWindows = [.. windows.Skip(1).Select(Snapshot), .. otherSessions];
         _store.Save(SharedState);
     }
 
@@ -445,6 +482,7 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+        if (view.IsReadOnlyView && _state.FindRecent(view.FilePath) != null) return;
         var position = PositionOf(view)!;
         _state.Remember(view.FilePath, view.DisplayName,
             position.PageIndex, position.Zoom, position.Rotation, position.ScrollFraction,
@@ -632,7 +670,14 @@ public sealed partial class MainWindow : Window
     private void UpdateToolbarForActive()
     {
         var view = CurrentView;
+        bool readOnly = view?.IsReadOnlyView == true;
+        EditTools.Visibility = readOnly ? Visibility.Collapsed : Visibility.Visible;
+        ReaderSaveButton.Visibility = ReaderSaveSeparator.Visibility = EditTools.Visibility;
+        ViewOnlyStatus.Visibility = readOnly ? Visibility.Visible : Visibility.Collapsed;
+        if (readOnly) UpdateSnapshotActions(view!);
         bool ready = view is { IsDocumentLoaded: true, LoadError: null };
+        CaptureModeButton.IsEnabled = ready;
+        SyncCaptureTools();
         var viewer = ready ? view!.Viewer : null;
         UpdatePageStepButtons(viewer);
         UpdateReaderSaveButton();
@@ -654,6 +699,10 @@ public sealed partial class MainWindow : Window
         {
             item.IsEnabled = ready;
         }
+        bool editable = ready && !view!.IsReadOnlyView;
+        foreach (var control in new Control[] { PenToolButton, HighlighterToolButton, NoteToolButton,
+                     TextToolButton, EraserToolButton, ImageToolButton, SignToolButton, OrganizePagesButton, FlattenItem, CompressExportItem })
+            control.IsEnabled = editable;
         CopyPdfFileItem.IsEnabled = ready && !_copyingPdfFile;
         UpdateUndoButtons();
 
@@ -702,6 +751,7 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+        if (CurrentView?.IsReadOnlyView == true && tool != AnnotationTool.None) return;
         if (_focusReading && tool != AnnotationTool.None) SetFocusReading(false);
         if (tool != _activeViewer.ActiveTool && _activeViewer.ActiveTool is AnnotationTool.Image or AnnotationTool.Signature)
             _activeViewer.ClearPendingStamp();
@@ -930,6 +980,71 @@ public sealed partial class MainWindow : Window
         {
             if (--_activeImports == 0) ImportStatus.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private bool _freehandSelected;
+
+    private void SyncCaptureTools()
+    {
+        bool? active = CurrentView?.Viewer.ScreenshotMode;
+        if (active.HasValue) _freehandSelected = active.Value;
+        var text = UiText.Current;
+        CaptureModeButton.IsChecked = active.HasValue;
+        RectCaptureIcon.Visibility = _freehandSelected ? Visibility.Collapsed : Visibility.Visible;
+        FreeCaptureIcon.Visibility = _freehandSelected ? Visibility.Visible : Visibility.Collapsed;
+        RectCaptureItem.IsChecked = !_freehandSelected;
+        FreeCaptureItem.IsChecked = _freehandSelected;
+        CaptureLabel.Text = _freehandSelected
+            ? (active.HasValue ? text.FreehandCapturing : text.FreehandCapture)
+            : (active.HasValue ? text.RectangleCapturing : text.RectangleCapture);
+        AutomationProperties.SetName(CaptureModeButton, CaptureLabel.Text);
+    }
+
+    private async void CaptureTool_Click(SplitButton sender, SplitButtonClickEventArgs args)
+    {
+        if (CurrentView?.Viewer.CancelScreenshot() != true)
+            await StartScreenshotAsync(_freehandSelected);
+        SyncCaptureTools();
+    }
+
+    private void CaptureMenu_Loaded(object sender, RoutedEventArgs args)
+    {
+        for (DependencyObject? element = (FrameworkElement)sender; element != null; element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is not FlyoutPresenter presenter) continue;
+            presenter.SetBinding(FrameworkElement.WidthProperty, new Microsoft.UI.Xaml.Data.Binding
+            {
+                Source = CaptureModeButton,
+                Path = new PropertyPath(nameof(FrameworkElement.ActualWidth)),
+                Mode = Microsoft.UI.Xaml.Data.BindingMode.OneWay,
+            });
+            break;
+        }
+    }
+
+    private async void CaptureMode_Click(object sender, RoutedEventArgs args)
+    {
+        CaptureModeFlyout.Hide();
+        bool freehand = ReferenceEquals(sender, FreeCaptureItem);
+        if (CurrentView?.Viewer.ScreenshotMode != freehand)
+        {
+            CurrentView?.Viewer.CancelScreenshot();
+            _freehandSelected = freehand;
+            SyncCaptureTools();
+            await StartScreenshotAsync(freehand);
+        }
+        SyncCaptureTools();
+    }
+
+    private async Task StartScreenshotAsync(bool freehand)
+    {
+        if (CurrentView is not { IsDocumentLoaded: true } view) return;
+        try
+        {
+            await view.CommitPendingEditsAsync();
+            if (CurrentView == view) view.Viewer.StartScreenshot(freehand);
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
     }
 
     private void EditTools_PointerWheelChanged(object sender, PointerRoutedEventArgs e) =>
@@ -1218,7 +1333,8 @@ public sealed partial class MainWindow : Window
     }
 
     private void UpdateReaderSaveButton() =>
-        ReaderSaveButton.IsEnabled = CurrentView is { IsDocumentLoaded: true, LoadError: null, IsDirty: true } view
+        ReaderSaveButton.IsEnabled = CurrentView is { IsDocumentLoaded: true, LoadError: null } view
+            && !view.IsReadOnlyView && (view.IsDirty || view.Viewer.HasPendingFormEdit || view.Viewer.IsEditingText)
             && !_savingViews.Contains(view);
 
     private async void Viewer_NoteRequested(object? sender, (int PageIndex, double X, double Y) at)
@@ -1350,7 +1466,7 @@ public sealed partial class MainWindow : Window
     private async Task SaveActiveAsync()
     {
         if (CurrentView is not { IsDocumentLoaded: true, LoadError: null } view
-            || (!view.IsDirty && !view.Viewer.IsEditingText)
+            || (!view.IsDirty && !view.Viewer.IsEditingText && !view.Viewer.HasPendingFormEdit)
             || !_savingViews.Add(view))
         {
             return;
@@ -1394,19 +1510,28 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (string.Equals(file.Path, view.FilePath, StringComparison.OrdinalIgnoreCase))
-        {
-            await SaveActiveAsync(); // picked the same file: in-place save
-            return;
-        }
-
         try
         {
-            await view.Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
+            if (WindowsFileIdentity.SameFile(view.FilePath, file.Path))
             {
-                document.SaveAs(file.Path);
+                if (view.IsReadOnlyView) throw new IOException(UiText.Translate("Choose a different file for the copy."));
+                await view.SaveInPlaceAsync();
+                return;
+            }
+            await view.CommitPendingEditsAsync();
+            string digest = document.SavedDigest;
+            var bookmarks = view.BookmarksForExport();
+            await WriteReaderCopyAsync(view.FilePath, file.Path, async staging =>
+            {
+                await view.Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
+                {
+                    if (view.IsReadOnlyView) document.SaveSharingCopy(staging);
+                    else document.SaveAs(staging);
+                    digest = PDFDesk.Engine.PdfDocument.ReadFileVersion(staging).Digest;
+                    return true;
+                });
                 return true;
-            });
+            }, () => { _state.StoreCopyBookmarks(file.Path, digest, bookmarks); SaveBookmarkState(view, file.Path, true); });
             OpenOrActivate(file.Path);
         }
         catch (Exception ex)
@@ -1463,22 +1588,93 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // Writing over the document being read from would pull the file out from
-        // under the open handle mid-export.
-        if (string.Equals(file.Path, view.FilePath, StringComparison.OrdinalIgnoreCase))
-        {
-            ShowError(UiText.Translate("Pick a different file: extracting over the open document would overwrite it."));
-            return;
-        }
-
         int count = view.SelectedPageCount;
-        if (await view.ExtractSelectedPagesAsync(file.Path))
+        try
         {
+            if (!await WriteReaderCopyAsync(view.FilePath, file.Path, view.ExtractSelectedPagesAsync)) return;
             // Not ShowError: this succeeded, so it gets success semantics.
             ShowNotice(
                 UiText.Format(count == 1 ? "Extracted {0} page to {1}." : "Extracted {0} pages to {1}.", count, file.Name),
                 InfoBarSeverity.Success);
         }
+        catch (Exception ex)
+        {
+            ShowError(UiText.Format("Could not extract pages: {0}", UiText.Translate(ex.Message)));
+        }
+    }
+
+    // Serialize off-thread, then check live tabs and replace the file in one UI turn.
+    internal static async Task<bool> WriteReaderCopyAsync(string source, string target, Func<string, Task<bool>> write, Action? committed = null)
+    {
+        void CheckSource()
+        {
+            if (WindowsFileIdentity.SameFile(source, target))
+                throw new IOException(UiText.Translate("Choose a different file for the copy."));
+        }
+
+        CheckSource();
+        string staging = Path.Combine(Path.GetDirectoryName(target)!, $".pdfdesk-{Guid.NewGuid():N}.saving");
+        try
+        {
+            if (!await write(staging)) return false;
+            CheckSource();
+            var targets = GetReplaceableTabs(target);
+            string? digest = null;
+            if (targets.Count != 0)
+            {
+                digest = await Task.Run(() => PDFDesk.Engine.PdfDocument.ReadFileVersion(staging).Digest);
+                CheckSource();
+                targets = GetReplaceableTabs(target);
+            }
+            if (targets.Count != 0 && File.Exists(target)) File.Replace(staging, target, null);
+            else File.Move(staging, target, overwrite: true);
+            try { committed?.Invoke(); }
+            finally { if (targets.Count != 0) ReloadReplacedTabs(targets, target, digest!); }
+            return true;
+        }
+        finally
+        {
+            try { File.Delete(staging); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ErrorLog.Default.Write(nameof(WriteReaderCopyAsync), ex);
+            }
+        }
+    }
+
+    private static List<(MainWindow Window, TabViewItem Tab, DocumentView View)> GetReplaceableTabs(
+        string path, DocumentView? capturedSource = null)
+    {
+        var targets = (from window in App.Readers
+                       from tab in window.Tabs.TabItems.OfType<TabViewItem>()
+                       let view = tab.Tag as DocumentView
+                       where view != null && WindowsFileIdentity.SameFile(view.FilePath, path)
+                       select (window, tab, view)).ToList();
+        foreach (var (window, _, view) in targets)
+        {
+            // Compression can include this reader's unsaved PDF edits in its snapshot.
+            if ((!view.IsReadOnlyView && view != capturedSource) || (view.IsReadOnlyView && view == capturedSource))
+                throw new IOException(UiText.Current.DestinationOpen);
+            if (window._savingViews.Contains(view) || view.HasPendingOperation)
+                throw new IOException(UiText.Translate("The destination has pending edits. Save them or choose another file."));
+        }
+        return targets;
+    }
+
+    private static void ReloadReplacedTabs(List<(MainWindow Window, TabViewItem Tab, DocumentView View)> targets, string path, string digest)
+    {
+        var location = new WindowsFileIdentity.NavigationKey(path);
+        foreach (var (window, tab, view) in targets)
+        {
+            view.NavigationKey = view.NavigationKey.RecheckAfterReplacement(location);
+            if (!view.NavigationKey.Matches(location)) continue;
+            if (view.IsReadOnlyView) { view.LatestSavedDigest = digest; continue; }
+            int index = window.Tabs.TabItems.IndexOf(tab);
+            bool selected = ReferenceEquals(window.Tabs.SelectedItem, tab);
+            window.CloseTab(tab);
+            window.AddTab(view.FilePath, window._state.FindRecent(view.FilePath), selected, index);
+        }
+        RefreshSnapshotBars();
     }
 
     // ---------------------------------------------------------------- night / print / properties / settings
@@ -1515,7 +1711,9 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            _printService ??= new PrintService(WinRT.Interop.WindowNative.GetWindowHandle(this));
+            await view.CommitPendingEditsAsync();
+            if (CurrentView != view || view.Viewer.Document != document) return;
+            _printService ??= new PrintService(WinRT.Interop.WindowNative.GetWindowHandle(this), ShowError);
             var title = DocumentNameFormatter.Fit(view.DisplayName, name => name.Length <= 28);
             await _printService.ShowAsync(document, title, view.Viewer.WorkQueue);
         }
@@ -1576,9 +1774,9 @@ public sealed partial class MainWindow : Window
         CopyPdfFileItem.IsEnabled = false;
         try
         {
-            view.Viewer.KillFormFocus();
+            await view.CommitPendingEditsAsync();
             await PdfClipboard.CopyAsync(
-                view.FilePath, view.IsDirty ? document : null, view.Viewer.WorkQueue);
+                view.FilePath, document, view.Viewer.WorkQueue);
             ShowNotice(UiText.Current.PdfFileCopiedMessage, InfoBarSeverity.Success, UiText.Current.PdfFileCopied);
         }
         catch (Exception ex)
@@ -1617,9 +1815,8 @@ public sealed partial class MainWindow : Window
 
         if (_activeViewer is { } viewer && CurrentView is { IsDocumentLoaded: true, LoadError: null })
         {
-            commands.AddRange(
+            if (CurrentView.IsReadOnlyView == false) commands.AddRange(
             [
-                new(UiText.Current.FindInDocument, "Ctrl+F", FindBar.Open),
                 new(UiText.Current.HighlightSelection, "Ctrl+H", () => viewer.MarkupSelection(MarkupKind.Highlight)),
                 new(UiText.Current.DrawTogglePen, "Ctrl+E", TogglePenTool),
                 new(UiText.Current.HighlighterTool, "", () => SetActiveTool(AnnotationTool.Highlighter)),
@@ -1627,6 +1824,12 @@ public sealed partial class MainWindow : Window
                 new(UiText.Current.PlaceAPicture, "", () => _ = PickAndArmImageAsync()),
                 new(UiText.Current.EraserTool, "", () => SetActiveTool(AnnotationTool.Eraser)),
                 new(UiText.Current.Save, "Ctrl+S", () => _ = SaveActiveAsync()),
+                new(UiText.Current.Undo, "Ctrl+Z", () => _ = CurrentView?.UndoAsync()),
+                new(UiText.Current.Redo, "Ctrl+Y", () => _ = CurrentView?.RedoAsync()),
+            ]);
+            commands.AddRange(
+            [
+                new(UiText.Current.FindInDocument, "Ctrl+F", FindBar.Open),
                 new(UiText.Current.SaveAsAction, "Ctrl+Shift+S", () => _ = SaveAsActiveAsync()),
                 new(UiText.Current.ExtractSelectedPagesToANewFile, "", () => _ = ExtractSelectedPagesFromPaletteAsync()),
                 new(UiText.Current.PrintAction, "Ctrl+P", () => _ = PrintAsync()),
@@ -1636,8 +1839,6 @@ public sealed partial class MainWindow : Window
                 new(UiText.Current.ToggleSidebar, "F9", () => SidebarButton_Click(this, null!)),
                 new(UiText.Current.PresentationMode, "F5", TogglePresentation),
                 new(UiText.Current.BookmarkThisPage, "Ctrl+B", ToggleBookmark),
-                new(UiText.Current.Undo, "Ctrl+Z", () => _ = CurrentView?.UndoAsync()),
-                new(UiText.Current.Redo, "Ctrl+Y", () => _ = CurrentView?.RedoAsync()),
                 new(UiText.Current.NextPage, "", () => viewer.GoToPage(viewer.CurrentPage + 1)),
                 new(UiText.Current.PreviousPage, "", () => viewer.GoToPage(viewer.CurrentPage - 1)),
                 new(UiText.Current.FirstPage, "Home", () => viewer.GoToPage(0, recordHistory: true)),
@@ -1673,10 +1874,10 @@ public sealed partial class MainWindow : Window
             ShowError(UiText.Format("File not found: {0}", path));
             return;
         }
-        OpenOrActivate(path);
+        var view = OpenOrActivate(path);
 
         // Command-line overrides for scripted testing.
-        if ((initialPage ?? initialZoom) is not null && CurrentView is { } view)
+        if ((initialPage ?? initialZoom) is not null)
         {
             await view.EnsureLoadedAsync(null);
             if (initialZoom is double z)
@@ -1755,9 +1956,16 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            view.Viewer.KillFormFocus();
-            int changed = await view.FlattenDocumentAsync();
+            await view.CommitPendingEditsAsync();
+            if (await view.FlattenDocumentAsync() is not { } result) return;
+            var (changed, failedPages) = result;
             UpdateToolbarForActive(); // flatten removes what made the item enabled
+            if (failedPages.Count > 0)
+            {
+                ShowNotice(UiText.Format("Flattened {0} pages. Failed pages: {1}.", changed, string.Join(", ", failedPages)),
+                    changed == 0 ? InfoBarSeverity.Error : InfoBarSeverity.Warning);
+                return;
+            }
             // Not ShowError: this succeeded. Reporting it through the error
             // channel gave it a red bar, an error icon and error semantics for
             // screen readers.

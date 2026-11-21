@@ -18,6 +18,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public void DeletePages(IReadOnlyList<int> pageIndices)
     {
+        RequireWritable();
         var indices = NormalizeIndices(pageIndices);
         if (indices.Count == 0)
         {
@@ -31,6 +32,15 @@ public sealed partial class PdfDocument
         lock (PdfiumLibrary.Lock)
         {
             ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+            if (HasFillableForm)
+            {
+                // A widget also belongs to the catalog's field tree. Removing only
+                // its page leaves a name collision when redo imports the field again.
+                var remaining = Enumerable.Range(0, PageCount).Except(indices).ToArray();
+                RewriteDocument(directory => RunQpdf(directory, "source.pdf", "--pages", ".",
+                    FormatPageRanges(remaining), "--", "output.pdf"));
+                return;
+            }
             ReleaseAllPagesLocked(); // open handles must not outlive the pages they point at
             // Descending order so earlier deletions don't shift later indices.
             for (int i = indices.Count - 1; i >= 0; i--)
@@ -49,6 +59,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public void MovePages(IReadOnlyList<int> pageIndices, int destIndex)
     {
+        RequireWritable();
         var indices = NormalizeIndices(pageIndices);
         if (indices.Count == 0)
         {
@@ -79,12 +90,21 @@ public sealed partial class PdfDocument
             }
         }
 
-        // Fallback: export the block, delete the originals, re-import at the
-        // destination. destIndex already counts positions among the remaining
-        // pages, which is exactly where InsertPages places the block.
-        var bytes = ExportPages(indices);
-        DeletePages(indices);
-        InsertPages(bytes, destIndex);
+        MovePagesWithQpdf(indices, destIndex);
+    }
+
+    internal void MovePagesWithQpdf(IReadOnlyList<int> indices, int destIndex)
+    {
+        RequireWritable();
+        lock (PdfiumLibrary.Lock)
+        {
+            var order = Enumerable.Range(0, PageCount).Except(indices).ToList();
+            order.InsertRange(destIndex, indices);
+            // Select every page from the primary PDF so references to pages
+            // outside the moved block still resolve after the reorder.
+            RewriteDocument(directory => RunQpdf(directory, "source.pdf", "--pages", ".",
+                FormatPageRanges(order), "--", "output.pdf"));
+        }
     }
 
     /// <summary>Serializes the given pages as a standalone PDF (clipboard / undo snapshots).</summary>
@@ -100,6 +120,8 @@ public sealed partial class PdfDocument
         lock (PdfiumLibrary.Lock)
         {
             ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+            if (HasFillableForm || indices.Any(i => GetLinks(i).Any(link => link.IsInternal)))
+                return ExportLinkedOrFormPages(indices);
             IntPtr export = PdfiumNative.CreateNewDocument();
             if (export == IntPtr.Zero)
             {
@@ -124,9 +146,17 @@ public sealed partial class PdfDocument
         return stream.ToArray();
     }
 
+    public void ExportPagesToFile(IReadOnlyList<int> indices, string path)
+    {
+        byte[] bytes = ExportPages(indices);
+        if (bytes.Length == 0) throw new InvalidOperationException("No pages to extract.");
+        WriteOutputFile(path, stream => stream.Write(bytes), FilePath);
+    }
+
     /// <summary>Inserts all pages of a serialized PDF at <paramref name="destIndex"/>. Returns the count inserted.</summary>
     public int InsertPages(byte[] pdfBytes, int destIndex)
     {
+        RequireWritable();
         if (pdfBytes.Length == 0)
         {
             return 0;
@@ -150,6 +180,11 @@ public sealed partial class PdfDocument
                 try
                 {
                     inserted = PdfiumNative.GetPageCount(source);
+                    if (NeedsLinkedOrFormImport(source, inserted))
+                    {
+                        InsertLinkedOrFormPages(pdfBytes, destIndex, PdfiumNative.HasNamedDestinations(source));
+                        return inserted;
+                    }
                     if (!PdfiumNative.ImportPagesByIndex(_handle, source, null, destIndex))
                     {
                         throw new PdfiumException("Inserting the pages failed.", 1);
@@ -173,6 +208,7 @@ public sealed partial class PdfDocument
     /// <summary>Inserts every page of another PDF file at <paramref name="destIndex"/>. Returns the count inserted.</summary>
     public int InsertPagesFromFile(string path, int destIndex)
     {
+        RequireWritable();
         destIndex = Math.Clamp(destIndex, 0, PageCount);
 
         var fileAccess = new FileAccessAdapter(path);
@@ -191,6 +227,11 @@ public sealed partial class PdfDocument
                 try
                 {
                     inserted = PdfiumNative.GetPageCount(source);
+                    if (NeedsLinkedOrFormImport(source, inserted))
+                    {
+                        InsertLinkedOrFormPages(File.ReadAllBytes(path), destIndex, PdfiumNative.HasNamedDestinations(source));
+                        return inserted;
+                    }
                     if (!PdfiumNative.ImportPagesByIndex(_handle, source, null, destIndex))
                     {
                         throw new PdfiumException("Inserting the pages failed.", 1);
@@ -219,6 +260,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public void RestoreMovedPages(IReadOnlyList<int> movedIndices, int destIndex)
     {
+        RequireWritable();
         var sorted = NormalizeIndices(movedIndices);
         if (sorted.Count == 0)
         {

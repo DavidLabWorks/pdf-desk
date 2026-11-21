@@ -72,17 +72,19 @@ public sealed class PdfLibrary(string directory)
         for (int number = 1; ; number++)
         {
             string suffix = number == 1 ? "" : $" ({number})";
-            int room = MaxFileNameLength - extension.Length - suffix.Length;
-            string stem = name;
-            if (stem.Length > room && room > 0)
-            {
-                // Keep a surrogate pair intact when shortening for a numbered suffix.
-                stem = stem[..(char.IsHighSurrogate(stem[room - 1]) ? room - 1 : room)];
-            }
-            string destination = Path.Combine(directory, stem + suffix + extension);
+            string destination = Path.Combine(directory, FitFileName(name, suffix + extension));
             try { File.Move(staging, destination); return destination; }
             catch (IOException) when (File.Exists(destination) || Directory.Exists(destination)) { }
         }
+    }
+
+    public static string FitFileName(string stem, string ending)
+    {
+        int room = MaxFileNameLength - ending.Length;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(room);
+        if (stem.Length > room)
+            stem = stem[..(char.IsHighSurrogate(stem[room - 1]) ? room - 1 : room)];
+        return stem + ending;
     }
 
     private static void WriteBlankPdf(Stream output)

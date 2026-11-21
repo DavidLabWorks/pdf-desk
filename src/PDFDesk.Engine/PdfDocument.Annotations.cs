@@ -52,7 +52,15 @@ public sealed record AnnotationSpec(
 public sealed partial class PdfDocument
 {
     /// <summary>True when annotations were added/removed since open or last save.</summary>
-    public bool IsDirty { get; private set; }
+    public bool IsDirty
+    {
+        get => UnsavedRevision != 0;
+        private set => Interlocked.Exchange(ref _unsavedRevision, value ? Interlocked.Increment(ref _nextRevision) : 0);
+    }
+
+    private static long _nextRevision;
+    private long _unsavedRevision;
+    public long UnsavedRevision => Interlocked.Read(ref _unsavedRevision);
 
     /// <summary>
     /// Adds a text-markup annotation (highlight/underline/strikeout) covering
@@ -61,6 +69,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public void AddMarkup(int pageIndex, MarkupKind kind, IReadOnlyList<TextRect> rects, byte r, byte g, byte b, byte a)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
         if (rects.Count == 0)
@@ -135,6 +144,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public void AddInk(int pageIndex, IReadOnlyList<(double X, double Y)> stroke, byte r, byte g, byte b, byte a, float width)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
         if (stroke.Count < 2)
@@ -213,6 +223,7 @@ public sealed partial class PdfDocument
     /// <summary>Adds a sticky-note annotation at (x, y) in page points, top-left origin.</summary>
     public void AddNote(int pageIndex, double x, double y, string text)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
 
@@ -346,6 +357,7 @@ public sealed partial class PdfDocument
 
     public bool RemoveAnnotation(int pageIndex, int annotIndex)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
 
@@ -367,13 +379,14 @@ public sealed partial class PdfDocument
                 ReleasePageLocked(pageIndex);
             }
         }
-        IsDirty |= removed;
+        if (removed) IsDirty = true;
         return removed;
     }
 
     /// <summary>Removes the newest annotation on a page (undo of an add — ours are always appended).</summary>
     public bool RemoveLastAnnotation(int pageIndex)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
 
@@ -399,8 +412,43 @@ public sealed partial class PdfDocument
                 ReleasePageLocked(pageIndex);
             }
         }
-        IsDirty |= removed;
+        if (removed) IsDirty = true;
         return removed;
+    }
+
+    public void ReplayInkStroke(IReadOnlyList<AnnotationSpec> pieces, bool undo)
+    {
+        RequireWritable();
+        lock (PdfiumLibrary.Lock)
+        {
+            long revision = UnsavedRevision;
+            int applied = 0;
+            void Remove(AnnotationSpec piece)
+            {
+                if (!RemoveLastAnnotation(piece.PageIndex))
+                    throw new InvalidOperationException("Could not remove an ink stroke.");
+            }
+
+            try
+            {
+                for (; applied < pieces.Count; applied++)
+                {
+                    if (undo) Remove(pieces[pieces.Count - 1 - applied]);
+                    else AddAnnotationFromSpec(pieces[applied]);
+                }
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                while (applied > 0)
+                {
+                    applied--;
+                    if (undo) AddAnnotationFromSpec(pieces[pieces.Count - 1 - applied]);
+                    else Remove(pieces[applied]);
+                }
+                Interlocked.Exchange(ref _unsavedRevision, revision);
+                throw new InvalidOperationException("Could not replay the ink stroke.", ex);
+            }
+        }
     }
 
     /// <summary>
@@ -552,6 +600,7 @@ public sealed partial class PdfDocument
     /// <summary>Re-creates an annotation from a captured spec (appended — becomes the page's last annotation).</summary>
     public void AddAnnotationFromSpec(AnnotationSpec spec)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(spec.PageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(spec.PageIndex, PageCount);
 
@@ -574,11 +623,13 @@ public sealed partial class PdfDocument
                 {
                     foreach (var (ql, qb, qr, qt) in spec.Quads)
                     {
-                        PdfiumNative.AppendQuad(annot, ql, qb, qr, qt);
+                        if (!PdfiumNative.AppendQuad(annot, ql, qb, qr, qt))
+                            throw new PdfiumException("Could not restore annotation geometry.", 1);
                     }
                     foreach (var stroke in spec.InkStrokes)
                     {
-                        PdfiumNative.AddInkStroke(annot, [.. stroke]);
+                        if (!PdfiumNative.AddInkStroke(annot, [.. stroke]))
+                            throw new PdfiumException("Could not restore the ink stroke.", 1);
                     }
                     var (rl, rb, rr, rt) = spec.Rect;
                     PdfiumNative.SetAnnotRect(annot, rl, rb, rr, rt);
@@ -617,6 +668,11 @@ public sealed partial class PdfDocument
                     }
                     PdfiumNative.SetAnnotPrintFlag(annot);
                 }
+                catch
+                {
+                    PdfiumNative.RemoveAnnot(page, PdfiumNative.GetAnnotCount(page) - 1);
+                    throw;
+                }
                 finally
                 {
                     PdfiumNative.CloseAnnot(annot);
@@ -634,9 +690,28 @@ public sealed partial class PdfDocument
     /// Writes a full copy of the document (with all annotation edits) to
     /// <paramref name="path"/>.
     /// </summary>
-    public void SaveAs(string path)
+    public void SaveAs(string path) => WriteOutputFile(path, WriteDocument, FilePath);
+
+    // Snapshot the open reader. Preserve untouched PDF bytes (including signatures)
+    // even if the path now refers to a different file.
+    public void SaveSharingCopy(string path) => WriteOutputFile(path, output =>
     {
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        lock (PdfiumLibrary.Lock)
+        {
+            ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+            FormKillFocus();
+            if (!IsDirty && _fileAccess.FileVersion.Digest == SavedDigest)
+                _fileAccess.CopyTo(output);
+            else
+                WritePdfLocked(output);
+        }
+    }, FilePath);
+
+    internal string SaveDraftCopy(string path, string sourcePath) =>
+        WriteOutputFile(path, WriteDocument, sourcePath, returnDigest: true)!;
+
+    private void WriteDocument(Stream stream)
+    {
         lock (PdfiumLibrary.Lock)
         {
             ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
@@ -645,8 +720,43 @@ public sealed partial class PdfDocument
         }
     }
 
+    private static string? WriteOutputFile(string path, Action<Stream> write, string protectedSource, bool returnDigest = false)
+    {
+        string target = Path.GetFullPath(path);
+        string staging = Path.Combine(Path.GetDirectoryName(target)!, $".pdfdesk-{Guid.NewGuid():N}.saving");
+        try
+        {
+            using (var stream = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                write(stream);
+                stream.Flush(flushToDisk: true);
+            }
+            string? digest = returnDigest ? ReadFileVersion(staging).Digest : null;
+            WindowsFileIdentity.RequireDifferentFile(protectedSource, target);
+            File.Move(staging, target, overwrite: true);
+            return digest;
+        }
+        finally { TryDeleteSaveFile(staging); }
+    }
+
     // The live document and its undo history survive any edit or write failure.
     internal PdfDocument SaveEditedCopy(Action<PdfDocument> edit)
+    {
+        RequireWritable();
+        var copy = CreateEditedCopy(edit);
+        try
+        {
+            copy.FilePath = FilePath;
+            copy._savedDiskVersion = _savedDiskVersion;
+            copy.SaveInPlace();
+            return copy;
+        }
+        catch { copy.Dispose(); throw; }
+    }
+
+    public PdfDocument CreatePrintSnapshot() => CreateEditedCopy(null);
+
+    internal PdfDocument CreateEditedCopy(Action<PdfDocument>? edit)
     {
         string snapshot = Path.Combine(Path.GetTempPath(), $"pdfdesk-{Guid.NewGuid():N}.pdf");
         PdfDocument? copy = null;
@@ -654,10 +764,7 @@ public sealed partial class PdfDocument
         {
             SaveAs(snapshot);
             copy = Open(snapshot);
-            edit(copy);
-            copy.FilePath = FilePath;
-            copy._savedDiskVersion = _savedDiskVersion;
-            copy.SaveInPlace();
+            edit?.Invoke(copy);
             return copy;
         }
         catch
@@ -671,6 +778,7 @@ public sealed partial class PdfDocument
     /// <summary>Saves edits without closing the document used by the viewer.</summary>
     public void SaveInPlace()
     {
+        RequireWritable();
         lock (PdfiumLibrary.Lock)
         {
             ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
@@ -737,10 +845,10 @@ public sealed partial class PdfDocument
         }
     }
 
-    private static (long Length, DateTime LastWriteUtc) ReadFileVersion(string path)
+    public static (long Length, DateTime LastWriteUtc, string Digest) ReadFileVersion(string path)
     {
-        var file = new FileInfo(path);
-        return (file.Length, file.LastWriteTimeUtc);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        return FileAccessAdapter.ReadVersion(stream);
     }
 
     private static void TryDeleteSaveFile(string path)

@@ -23,6 +23,7 @@ public sealed partial class PresentationView : UserControl
     private PdfDocument? _document;
     private int _page;
     private int _rotation;
+    private int _tileGeneration;
     private bool _nightMode;
 
     private readonly Dictionary<(int Page, int Row, int Col), CanvasBitmap> _tiles = [];
@@ -157,6 +158,7 @@ public sealed partial class PresentationView : UserControl
             return;
         }
 
+        int generation = _tileGeneration;
         var viewer = _viewer;
         var document = _document;
         float scale = ScaleFor(page);
@@ -178,7 +180,7 @@ public sealed partial class PresentationView : UserControl
                 {
                     var bmp = await viewer.RunOnRenderThreadAsync(priority,
                         () => document.RenderRegion(page, scale, _rotation, srcX, srcY, w, h));
-                    bool keep = _document == document && IsActive;
+                    bool keep = generation == _tileGeneration && Math.Abs(_page - page) <= 1;
                     if (keep)
                     {
                         try
@@ -197,9 +199,15 @@ public sealed partial class PresentationView : UserControl
                         }
                     }
                     bmp.Return();
+                    if (!keep)
+                    {
+                        if (generation == _tileGeneration) _requested.Remove(key);
+                        return;
+                    }
                 }
                 catch
                 {
+                    if (generation != _tileGeneration) return;
                     _requested.Remove(key); // doc swapped/closed or corrupt page
                 }
             }
@@ -224,6 +232,7 @@ public sealed partial class PresentationView : UserControl
 
     private void ClearTiles()
     {
+        _tileGeneration++;
         foreach (var bitmap in _tiles.Values)
         {
             bitmap.Dispose();

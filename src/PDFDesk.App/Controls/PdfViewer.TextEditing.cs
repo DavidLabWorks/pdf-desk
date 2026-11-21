@@ -301,6 +301,19 @@ public sealed partial class PdfViewer
             string text = TextEditor.Text;
             if (string.IsNullOrWhiteSpace(text))
             {
+                if (_editingStamp is { } empty)
+                {
+                    TextEditor.IsReadOnly = true;
+                    try
+                    {
+                        if (!await RemoveAnnotationAsync(document, anchor.Page, empty.Index, "delete text", expectedText: empty.Content))
+                        {
+                            if (_document == document) TextCommitFailed?.Invoke(this, EventArgs.Empty);
+                            return;
+                        }
+                    }
+                    finally { TextEditor.IsReadOnly = false; }
+                }
                 CloseTextEditor();
                 return;
             }
@@ -330,8 +343,8 @@ public sealed partial class PdfViewer
                     AnnotationEdited?.Invoke(this, new AnnotationEditEventArgs
                     {
                         Label = "edit text", PageIndex = anchor.Page,
-                        UndoAction = d => d.UpdateTextBox(anchor.Page, existing.Index, content, before),
-                        RedoAction = d => d.UpdateTextBox(anchor.Page, existing.Index, before, content),
+                        UndoAction = d => d.ReplayTextBoxEdit(anchor.Page, existing.Index, content, before),
+                        RedoAction = d => d.ReplayTextBoxEdit(anchor.Page, existing.Index, before, content),
                     });
                 }
                 CloseTextEditor();

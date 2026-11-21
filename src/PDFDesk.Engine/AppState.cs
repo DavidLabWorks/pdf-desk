@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 
 namespace PDFDesk.Services;
 
@@ -33,6 +34,23 @@ public sealed class RecentFile
 
     /// <summary>User bookmarks (Ctrl+B); old state files deserialize to empty.</summary>
     public List<BookmarkEntry> Bookmarks { get; set; } = [];
+    public string? BookmarkDigest { get; set; }
+    public Dictionary<string, List<BookmarkEntry>> OtherVersionBookmarks { get; set; } = [];
+
+    public IReadOnlyList<BookmarkEntry> BookmarksFor(string digest) =>
+        BookmarkDigest is null || BookmarkDigest == digest ? Bookmarks : OtherVersionBookmarks.GetValueOrDefault(digest) ?? [];
+
+    public void StoreBookmarks(string digest, List<BookmarkEntry> bookmarks, bool saved)
+    {
+        if (saved || BookmarkDigest is null || BookmarkDigest == digest)
+        {
+            if (BookmarkDigest is { } previous && previous != digest) OtherVersionBookmarks[previous] = Bookmarks;
+            BookmarkDigest = digest;
+            Bookmarks = bookmarks;
+            OtherVersionBookmarks.Remove(digest);
+        }
+        else OtherVersionBookmarks[digest] = bookmarks;
+    }
 }
 
 /// <summary>What was open last time, so a restart can reopen it.</summary>
@@ -48,8 +66,11 @@ public sealed record TabPosition(int PageIndex, double Zoom, int Rotation, doubl
         entry.ScrollFraction, entry.SidebarOpen, entry.LayoutColumns);
 }
 
-public sealed class SessionState
+public sealed class SessionState : IJsonOnDeserializing
 {
+    public string WindowId { get; set; } = Guid.NewGuid().ToString("N");
+    void IJsonOnDeserializing.OnDeserializing() => WindowId = "";
+
     private Dictionary<string, TabPosition> _positions = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, TabPosition> Positions
     {
@@ -66,6 +87,7 @@ public sealed class SessionState
 
     public bool? FavoritesSelected { get; set; }
     public Guid? FolderFilter { get; set; }
+    public List<string> ReadOnlyPaths { get; set; } = [];
     public List<string> OpenPaths { get; set; } = [];
     public int ActiveIndex { get; set; }
 }
@@ -204,10 +226,66 @@ public sealed class ToolStyle
 }
 
 /// <summary>The whole persisted app state (one JSON file).</summary>
-public sealed class AppState
+public sealed class AppState : IJsonOnDeserialized
 {
-    public List<RecentFile> Recents { get; set; } = [];
+    private List<RecentFile> _recents = [];
+    public List<RecentFile> Recents
+    {
+        get => _recents;
+        set => _recents = value ?? [];
+    }
     public Dictionary<Guid, string> FavoriteFolders { get; set; } = [];
+
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        Recents.RemoveAll(r => string.IsNullOrWhiteSpace(r?.Path));
+        AdditionalWindows ??= [];
+        AdditionalWindows.RemoveAll(w => w is null);
+        FavoriteFolders ??= [];
+        Settings ??= new();
+        Session ??= new();
+        var windowIds = new HashSet<string>();
+        int slot = 0;
+        foreach (var session in AdditionalWindows.Prepend(Session))
+        {
+            // Older files contain an ordered list with no IDs. Independent readers of
+            // the same file must assign the same IDs until the next successful save.
+            if (string.IsNullOrEmpty(session.WindowId) || !windowIds.Add(session.WindowId))
+            {
+                do { session.WindowId = $"legacy-{slot++}"; } while (!windowIds.Add(session.WindowId));
+            }
+            session.OpenPaths ??= [];
+            string? active = session.OpenPaths.ElementAtOrDefault(session.ActiveIndex);
+            if (session.OpenPaths.RemoveAll(string.IsNullOrWhiteSpace) > 0)
+                session.ActiveIndex = session.OpenPaths.IndexOf(active ?? "");
+            foreach (var path in session.Positions.Where(p => p.Value == null).Select(p => p.Key).ToList())
+                session.Positions.Remove(path);
+        }
+        foreach (var row in Recents)
+        {
+            row.Bookmarks ??= [];
+            row.Bookmarks.RemoveAll(b => b is null);
+            row.OtherVersionBookmarks ??= [];
+            foreach (var (key, entries) in row.OtherVersionBookmarks.ToArray())
+            {
+                if (entries is null) row.OtherVersionBookmarks.Remove(key);
+                else entries.RemoveAll(b => b is null);
+            }
+        }
+    }
+
+    public bool FolderNameTaken(Guid? existing, string name) =>
+        FavoriteFolders.Any(p => p.Key != existing && string.Equals(p.Value, name, StringComparison.OrdinalIgnoreCase));
+
+    public bool TrySetFolderName(Guid? existing, string name, out Guid folder)
+    {
+        folder = existing ?? Guid.NewGuid();
+        name = name.Trim();
+        if (existing.HasValue && !FavoriteFolders.ContainsKey(folder) || name.Length == 0 || FolderNameTaken(existing, name))
+            return false;
+        FavoriteFolders[folder] = name;
+        return true;
+    }
 
     public bool CanDropFavorite(string path, Guid? destination)
     {
@@ -253,6 +331,17 @@ public sealed class AppState
     public RecentFile? FindRecent(string path) =>
         Recents.FirstOrDefault(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase));
 
+    public void StoreCopyBookmarks(string path, string digest, List<BookmarkEntry> bookmarks)
+    {
+        var entry = FindRecent(path);
+        if (entry is null)
+        {
+            Remember(path, System.IO.Path.GetFileName(path), 0, 0, 0, 0);
+            entry = FindRecent(path)!;
+        }
+        entry.StoreBookmarks(digest, bookmarks, saved: true);
+    }
+
     /// <summary>Records/updates a file's position and moves it to the top of recents.</summary>
     public void Remember(string path, string displayName, int pageIndex, double zoom, int rotation, double scrollFraction,
         bool? twoPage = null, bool? sidebarOpen = null, int? pageColumns = null)
@@ -276,6 +365,8 @@ public sealed class AppState
             PageColumns = columns,
             IsLibraryCopy = existing?.IsLibraryCopy ?? false,
             Bookmarks = existing?.Bookmarks ?? [],
+            BookmarkDigest = existing?.BookmarkDigest,
+            OtherVersionBookmarks = existing?.OtherVersionBookmarks ?? [],
             IsFavorite = existing?.IsFavorite ?? false,
             FavoriteFolderId = existing?.FavoriteFolderId,
         });
@@ -316,8 +407,16 @@ public sealed class AppState
     public void ForgetAllRecents()
     {
         Recents.Clear();
+        var windowIds = new HashSet<string>();
+        int slot = 0;
         foreach (var session in AdditionalWindows.Prepend(Session))
         {
+            // Older files contain an ordered list with no IDs. Independent readers of
+            // the same file must assign the same IDs until the next successful save.
+            if (string.IsNullOrEmpty(session.WindowId) || !windowIds.Add(session.WindowId))
+            {
+                do { session.WindowId = $"legacy-{slot++}"; } while (!windowIds.Add(session.WindowId));
+            }
             session.OpenPaths.Clear();
             session.Positions.Clear();
             session.ActiveIndex = -1;
@@ -376,7 +475,7 @@ public sealed class AppStateStore
         return fresh;
     }
 
-    public void Save(AppState state)
+    public bool Save(AppState state)
     {
         try
         {
@@ -388,59 +487,159 @@ public sealed class AppStateStore
             try
             {
                 string? disk = File.Exists(_path) ? File.ReadAllText(_path) : null;
-                if (disk is not null && disk != _lastJson)
+                var candidate = state;
+                if (disk is not null && disk != _lastJson &&
+                    JsonSerializer.Deserialize<AppState>(disk, Options) is { } latest)
                 {
-                    var latest = JsonSerializer.Deserialize<AppState>(disk, Options);
-                    if (latest is not null)
-                        MergeRecents(state, latest);
+                    candidate = JsonSerializer.SerializeToNode(state, Options)!.Deserialize<AppState>(Options)!;
+                    MergeState(candidate, latest);
                 }
-                string json = JsonSerializer.Serialize(state, Options);
+                string json = JsonSerializer.Serialize(candidate, Options);
                 File.WriteAllText(_path + ".tmp", json);
                 File.Move(_path + ".tmp", _path, overwrite: true);
+                if (candidate != state)
+                {
+                    state.Settings = candidate.Settings;
+                    state.Recents = candidate.Recents;
+                    state.FavoriteFolders = candidate.FavoriteFolders;
+                    state.Session = candidate.Session;
+                    state.AdditionalWindows = candidate.AdditionalWindows;
+                }
                 _lastJson = json;
+                return true;
             }
             finally { mutex.ReleaseMutex(); }
         }
         catch (Exception ex)
         {
             ErrorLog.Default.Write("Save user state", ex);
+            return false;
         }
     }
 
-    private void MergeRecents(AppState state, AppState latest)
+    // Apply only the properties this instance changed since its last read.
+    private static T MergeFields<T>(T baseline, T local, T disk) where T : class
+    {
+        static JsonNode? Merge(JsonNode? before, JsonNode? current, JsonNode? latest)
+        {
+            if (JsonNode.DeepEquals(before, current)) return latest?.DeepClone();
+            if (current is JsonObject localObject && latest is JsonObject savedObject)
+            {
+                var oldObject = before as JsonObject;
+                var result = (JsonObject)savedObject.DeepClone();
+                foreach (string key in localObject.Select(p => p.Key).Union(oldObject?.Select(p => p.Key) ?? []))
+                {
+                    if (!localObject.ContainsKey(key)) result.Remove(key);
+                    else if (!JsonNode.DeepEquals(oldObject?[key], localObject[key]))
+                        result[key] = Merge(oldObject?[key], localObject[key], savedObject[key]);
+                }
+                return result;
+            }
+            return current?.DeepClone();
+        }
+
+        return Merge(JsonSerializer.SerializeToNode(baseline), JsonSerializer.SerializeToNode(local),
+            JsonSerializer.SerializeToNode(disk))!.Deserialize<T>()!;
+    }
+
+    private static Dictionary<string, Dictionary<int, string>> BookmarkVersions(RecentFile row)
+    {
+        static Dictionary<int, string> Index(IEnumerable<BookmarkEntry> entries) =>
+            entries.GroupBy(entry => entry.PageIndex).ToDictionary(group => group.Key, group => group.Last().Name);
+        var versions = row.OtherVersionBookmarks.ToDictionary(pair => pair.Key, pair => Index(pair.Value));
+        versions[row.BookmarkDigest ?? ""] = Index(row.Bookmarks);
+        return versions;
+    }
+
+    private static List<BookmarkEntry> Entries(Dictionary<int, string>? pages) =>
+        pages?.OrderBy(pair => pair.Key).Select(pair => new BookmarkEntry { PageIndex = pair.Key, Name = pair.Value }).ToList() ?? [];
+
+    private static SessionState MergeSession(SessionState before, SessionState local, SessionState disk)
+    {
+        var comparer = StringComparer.OrdinalIgnoreCase;
+        var merged = MergeFields(before, local, disk);
+        // A tab position is a single observation; keep its zoom, page and scroll together.
+        var positions = new Dictionary<string, TabPosition>(disk.Positions, comparer);
+        foreach (var path in before.Positions.Keys.Except(local.Positions.Keys, comparer))
+            positions.Remove(path);
+        foreach (var (path, position) in local.Positions)
+            if (before.Positions.GetValueOrDefault(path) != position) positions[path] = position;
+        merged.Positions = positions;
+
+        var selection = local.ActiveIndex != before.ActiveIndex || !local.OpenPaths.SequenceEqual(before.OpenPaths, comparer)
+            ? local : disk;
+        string? activePath = selection.OpenPaths.ElementAtOrDefault(selection.ActiveIndex);
+        merged.ActiveIndex = activePath is null ? -1 : merged.OpenPaths.FindIndex(path => comparer.Equals(path, activePath));
+        return merged;
+    }
+
+    private static void MergeWindows(AppState before, AppState local, AppState disk)
+    {
+        static List<SessionState> Windows(AppState state) => [state.Session, .. state.AdditionalWindows];
+        var original = Windows(before);
+        var current = Windows(local);
+        var latest = Windows(disk);
+        var baseline = original.ToDictionary(w => w.WindowId);
+        var saved = latest.ToDictionary(w => w.WindowId);
+        var edits = current.ToDictionary(w => w.WindowId);
+        var localOrder = current.Select(w => w.WindowId);
+        var diskOrder = latest.Select(w => w.WindowId);
+        var order = localOrder.SequenceEqual(original.Select(w => w.WindowId))
+            ? diskOrder.Union(localOrder) : localOrder.Union(diskOrder);
+        var merged = new List<SessionState>();
+        foreach (var id in order)
+        {
+            var here = edits.GetValueOrDefault(id);
+            var there = saved.GetValueOrDefault(id);
+            if (!baseline.TryGetValue(id, out var old))
+                merged.Add(here ?? there!);
+            else if (here != null && there != null)
+                merged.Add(MergeSession(old, here, there));
+        }
+        local.Session = merged.FirstOrDefault() ?? new SessionState { ActiveIndex = -1 };
+        local.AdditionalWindows = merged.Skip(1).ToList();
+    }
+
+    private void MergeState(AppState state, AppState latest)
     {
         var comparer = StringComparer.OrdinalIgnoreCase;
         var previous = _lastJson is null ? null : JsonSerializer.Deserialize<AppState>(_lastJson, Options);
-        var oldFolders = previous?.FavoriteFolders ?? [];
+        previous ??= new AppState();
+        previous.Settings.MigrateToolStyles();
+        latest.Settings.MigrateToolStyles();
+        state.Settings = MergeFields(previous.Settings, state.Settings, latest.Settings);
+        MergeWindows(previous, state, latest);
+        var oldFolders = previous.FavoriteFolders;
         foreach (var deleted in oldFolders.Keys.Except(state.FavoriteFolders.Keys))
             latest.FavoriteFolders.Remove(deleted);
         foreach (var (id, name) in state.FavoriteFolders)
             if (!oldFolders.TryGetValue(id, out var oldName) || (oldName != name && latest.FavoriteFolders.ContainsKey(id)))
                 latest.FavoriteFolders[id] = name;
         state.FavoriteFolders = latest.FavoriteFolders;
-        var before = (previous?.Recents ?? []).ToDictionary(r => r.Path, comparer);
-        var local = state.Recents.ToDictionary(r => r.Path, comparer);
-        var merged = latest.Recents.ToDictionary(r => r.Path, comparer);
+        Dictionary<string, RecentFile> IndexRecents(IEnumerable<RecentFile> rows) =>
+            rows.Where(r => !string.IsNullOrWhiteSpace(r?.Path))
+                .OrderByDescending(r => r.LastOpenedUtc)
+                .DistinctBy(r => r.Path, comparer)
+                .ToDictionary(r => r.Path, comparer);
+        var before = IndexRecents(previous?.Recents ?? []);
+        var local = IndexRecents(state.Recents);
+        var merged = IndexRecents(latest.Recents);
         foreach (string removed in before.Keys.Except(local.Keys, comparer))
             merged.Remove(removed);
         foreach (var row in local.Values)
         {
-            if (before.TryGetValue(row.Path, out var baseline) && merged.TryGetValue(row.Path, out var saved))
+            if (merged.TryGetValue(row.Path, out var saved))
             {
-                // A reading-position save must preserve a star changed in another window.
-                bool localFavoriteChanged = row.IsFavorite != baseline.IsFavorite || row.FavoriteFolderId != baseline.FavoriteFolderId;
-                bool favorite = localFavoriteChanged ? row.IsFavorite : saved.IsFavorite;
-                var folder = localFavoriteChanged ? row.FavoriteFolderId : saved.FavoriteFolderId;
-                baseline.IsFavorite = row.IsFavorite;
-                baseline.FavoriteFolderId = row.FavoriteFolderId;
-                if (JsonSerializer.Serialize(baseline, Options) == JsonSerializer.Serialize(row, Options))
-                {
-                    saved.IsFavorite = favorite;
-                    saved.FavoriteFolderId = folder;
-                    continue;
-                }
-                row.IsFavorite = favorite;
-                row.FavoriteFolderId = folder;
+                var baseline = before.GetValueOrDefault(row.Path) ?? new RecentFile { Path = row.Path };
+                var result = MergeFields(baseline, row, saved);
+                var versions = MergeFields(BookmarkVersions(baseline), BookmarkVersions(row), BookmarkVersions(saved));
+                string primary = result.BookmarkDigest ?? "";
+                result.Bookmarks = Entries(versions.GetValueOrDefault(primary));
+                versions.Remove(primary);
+                result.OtherVersionBookmarks = versions.Where(pair => pair.Key.Length > 0)
+                    .ToDictionary(pair => pair.Key, pair => Entries(pair.Value));
+                merged[row.Path] = result;
+                continue;
             }
             if (!before.TryGetValue(row.Path, out var old) ||
                 JsonSerializer.Serialize(old, Options) != JsonSerializer.Serialize(row, Options))

@@ -80,7 +80,7 @@ public sealed partial class PdfViewer : UserControl
     // left-align the canvas ("page stuck to the left"). Instead, remember the
     // intent and apply it on the first real SizeChanged.
     private bool _pendingFit;
-    private (double Zoom, int Rotation, double Fraction)? _pendingRestore;
+    private (double Zoom, int Rotation, double Fraction, FitMode Mode, int? Page, (PageAnchor Anchor, Point Focus)? Location)? _pendingRestore;
 
     // ScrollViewer.ViewportWidth/Height are refreshed during the ScrollViewer's
     // OWN arrange pass, which runs *after* its SizeChanged event. Reading them
@@ -213,6 +213,7 @@ public sealed partial class PdfViewer : UserControl
         get => _activeTool;
         set
         {
+            if (_document?.IsReadOnlySnapshot == true && value != AnnotationTool.None) return;
             if (_activeTool == value)
             {
                 return;
@@ -429,13 +430,15 @@ public sealed partial class PdfViewer : UserControl
 
     private void Viewer_UnloadedHandler(object sender, RoutedEventArgs e)
     {
+        CancelScreenshot();
         _hadVisibleViewport = false;
         _mouseViewportPoint = null;
         CancelEraser();
         CancelStampDrag();
         ClearStampDragPreview();
+        KillFormFocus();
         _schedulerStopped = true;
-        _scheduler.Dispose();
+        _scheduler.StopAfterInteractiveWork();
     }
 
     private void Viewer_LoadedHandler(object sender, RoutedEventArgs e)
@@ -569,6 +572,7 @@ public sealed partial class PdfViewer : UserControl
     /// <summary>Shows a document (ownership stays with the caller) or clears the view.</summary>
     public void SetDocument(PdfDocument? document)
     {
+        CancelScreenshot();
         CancelEraser();
         if (IsEditingText) CloseTextEditor();
         ClearObjectSelection();
@@ -638,19 +642,40 @@ public sealed partial class PdfViewer : UserControl
         HistoryChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    internal (PageAnchor Anchor, Point Focus)? CaptureReadingLocation(int page)
+    {
+        if (_layout is null || (uint)page >= _layout.PageCount) return null;
+        var offset = _pendingZoomOffset ?? new Point(Scroller.HorizontalOffset, Scroller.VerticalOffset);
+        var viewport = new DipRect(offset.X, offset.Y, Scroller.ViewportWidth, Scroller.ViewportHeight);
+        var anchor = ZoomAnchor.CaptureReadingLocation(_layout, page, viewport, out var focus);
+        return (anchor, new Point(focus.X, focus.Y));
+    }
+
     /// <summary>Restores a saved reading position after the layout is ready.</summary>
-    public void RestoreView(double zoom, int rotation, double scrollFraction)
+    public void RestoreView(double zoom, int rotation, double scrollFraction, FitMode mode = FitMode.None, int? page = null,
+        (PageAnchor Anchor, Point Focus)? location = null)
     {
         if (!ViewportReady)
         {
-            _pendingRestore = (zoom, rotation, scrollFraction);
+            _pendingRestore = (zoom, rotation, scrollFraction, mode, page, location);
             _pendingFit = false;
             return; // replayed on the first real SizeChanged
         }
         _rotation = ViewRotationMath.Normalize(rotation);
-        _fitMode = FitMode.None;
-        SetZoom(zoom <= 0 ? 1.0 : zoom);
-        if (_layout is not null)
+        _fitMode = mode;
+        if (mode == FitMode.None) SetZoom(zoom <= 0 ? 1.0 : zoom);
+        else ApplyFitMode(page);
+        if (page is int target && location is { } reading)
+        {
+            ScrollToAnchor(reading.Anchor with { PageIndex = target }, reading.Focus);
+            UpdateCurrentPage();
+        }
+        else if (page.HasValue)
+        {
+            Scroller.UpdateLayout();
+            GoToPage(page.Value);
+        }
+        else if (_layout is not null)
         {
             Scroller.ChangeView(null, scrollFraction * _layout.TotalHeight, null, disableAnimation: true);
         }
@@ -792,7 +817,7 @@ public sealed partial class PdfViewer : UserControl
         UpdateDesiredTiles();
     }
 
-    private void ApplyFitMode()
+    private void ApplyFitMode(int? pageToFit = null)
     {
         if (_document is null || _pageSizes.Length == 0)
         {
@@ -808,7 +833,7 @@ public sealed partial class PdfViewer : UserControl
         double usableHeight = ViewportH - 2 * PageLayout.Margin;
 
         int columns = PageColumns;
-        int current = Math.Clamp(_currentPage, 0, _pageSizes.Length - 1);
+        int current = Math.Clamp(pageToFit ?? _currentPage, 0, _pageSizes.Length - 1);
         int first = _fitMode == FitMode.FitPage ? current / columns * columns : 0;
         int end = _fitMode == FitMode.FitPage ? first + 1 : _pageSizes.Length;
         double zoom = double.PositiveInfinity;
@@ -956,6 +981,7 @@ public sealed partial class PdfViewer : UserControl
 
     private void RebuildLayout()
     {
+        CancelScreenshot();
         if (_isDrawingInk) EndPointerGesture(_activePointer, null, cancelled: true);
         _pendingZoomOffset = null;
         _zoomReadingPosition = null;
@@ -1045,7 +1071,7 @@ public sealed partial class PdfViewer : UserControl
         {
             _pendingRestore = null;
             _pendingFit = false;
-            RestoreView(restore.Zoom, restore.Rotation, restore.Fraction);
+            RestoreView(restore.Zoom, restore.Rotation, restore.Fraction, restore.Mode, restore.Page, restore.Location);
             return true;
         }
         if (!_pendingFit && _layout != null) return false;
@@ -1275,6 +1301,7 @@ public sealed partial class PdfViewer : UserControl
     /// <inheritdoc cref="MarkupSelection(MarkupKind)"/>
     public async void MarkupSelection(MarkupKind kind, Color color, byte alpha)
     {
+        if (_document?.IsReadOnlySnapshot == true) return;
         if (_document is null || _selection is not { Count: > 0 } selection)
         {
             return;
@@ -1484,6 +1511,7 @@ public sealed partial class PdfViewer : UserControl
         UpdateDesiredTiles();
     }
 
+    internal event Action<MenuFlyout, int>? PageMenuOpening;
     internal event Action<int>? OrganizeRequested;
     internal event Action? CompressionRequested;
 
@@ -1502,7 +1530,7 @@ public sealed partial class PdfViewer : UserControl
 
         var menu = new MenuFlyout();
 
-        if (_selection is { Count: > 0 } sel && sel.PageIndex == page)
+        if (!document.IsReadOnlySnapshot && _selection is { Count: > 0 } sel && sel.PageIndex == page)
         {
             AddMenuItem(menu, "Highlight", Symbol.Highlight, () => MarkupSelection(MarkupKind.Highlight));
             AddMenuItem(menu, "Underline", Symbol.Underline, () => MarkupSelection(MarkupKind.Underline));
@@ -1529,7 +1557,7 @@ public sealed partial class PdfViewer : UserControl
                 () => TryDeleteSelectedObject());
         }
 
-        if (TextFieldAt(page, localX, localY) is { } field)
+        if (!document.IsReadOnlySnapshot && TextFieldAt(page, localX, localY) is { } field)
         {
             AddMenuItem(menu, "Text appearance…", Symbol.Font,
                 () => RequestFieldAppearance(page, field.Name));
@@ -1553,7 +1581,7 @@ public sealed partial class PdfViewer : UserControl
         {
             return;
         }
-        if (hit is not null)
+        if (!document.IsReadOnlySnapshot && hit is not null)
         {
             if (hit.IsNote) return;
             if (_activeTool == AnnotationTool.None && hit.Subtype == StampSubtype && !string.IsNullOrEmpty(hit.Contents))
@@ -1568,8 +1596,9 @@ public sealed partial class PdfViewer : UserControl
         {
             menu.Items.Add(new MenuFlyoutSeparator());
         }
-        AddMenuItem(menu, UiText.Current.OrganizePages, Symbol.AllApps, () => OrganizeRequested?.Invoke(page));
-        AddMenuItem(menu, UiText.Current.CompressExport, Symbol.Download, () => CompressionRequested?.Invoke());
+        PageMenuOpening?.Invoke(menu, page);
+        if (!document.IsReadOnlySnapshot) AddMenuItem(menu, UiText.Current.OrganizePages, Symbol.AllApps, () => OrganizeRequested?.Invoke(page));
+        if (!document.IsReadOnlySnapshot) AddMenuItem(menu, UiText.Current.CompressExport, Symbol.Download, () => CompressionRequested?.Invoke());
         menu.ShowAt(DocumentExtent, position);
     }
 
@@ -1765,7 +1794,7 @@ public sealed partial class PdfViewer : UserControl
         e.Handled = true;
         try
         {
-            if (!await EditTextStampAtAsync(point) && _document == document && _activeTool == AnnotationTool.None)
+            if ((document?.IsReadOnlySnapshot == true || !await EditTextStampAtAsync(point)) && _document == document && _activeTool == AnnotationTool.None)
                 SelectWordAt(point);
         }
         catch (ObjectDisposedException) { }
@@ -1968,7 +1997,7 @@ public sealed partial class PdfViewer : UserControl
     private void Canvas_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         var point = e.GetCurrentPoint(Canvas);
-        bool penEraser = IsPenEraser(point) && point.IsInContact;
+        bool penEraser = _document?.IsReadOnlySnapshot != true && IsPenEraser(point) && point.IsInContact;
         if (_eraserPointerId is not null || (penEraser && _gestureOwned))
         {
             e.Handled = true;
@@ -2040,7 +2069,7 @@ public sealed partial class PdfViewer : UserControl
 
         // A placed signature is grabbed before anything else claims the press,
         // so dragging one never turns into a text selection through it.
-        if (TryHandleStampPress(docPoint, e.Pointer, IsTouch(e)))
+        if (_document?.IsReadOnlySnapshot != true && TryHandleStampPress(docPoint, e.Pointer, IsTouch(e)))
         {
             e.Handled = true;
             return;
@@ -2048,7 +2077,7 @@ public sealed partial class PdfViewer : UserControl
 
         // Form fields come before links and selection: a widget sitting on top
         // of page text must take the click, not start a drag-select inside it.
-        if (TryHandleFormPress(docPoint, IsTouch(e)))
+        if (_document?.IsReadOnlySnapshot != true && TryHandleFormPress(docPoint, IsTouch(e)))
         {
             // The gesture is taken so the moves that select the field's text
             // keep arriving even when the pointer wanders outside the widget,
@@ -2282,6 +2311,7 @@ public sealed partial class PdfViewer : UserControl
         ((TextBlock)panel.FindName("Body")).Text = string.IsNullOrWhiteSpace(note.Contents) ? UiText.Current.EmptyNote : note.Contents;
         var flyout = new Flyout { Content = panel };
         var delete = (Button)panel.FindName("Delete");
+        delete.Visibility = document.IsReadOnlySnapshot ? Visibility.Collapsed : Visibility.Visible;
         delete.Click += async (_, _) =>
         {
             flyout.Hide();
@@ -2293,7 +2323,7 @@ public sealed partial class PdfViewer : UserControl
         flyout.ShowAt(DocumentExtent, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = position });
     }
 
-    private async Task RemoveAnnotationAsync(PdfDocument document, int page, int annotationIndex, string label, AnnotationInfo? expectedNote = null)
+    private async Task<bool> RemoveAnnotationAsync(PdfDocument document, int page, int annotationIndex, string label, AnnotationInfo? expectedNote = null, TextBoxContent? expectedText = null)
     {
         (bool Removed, AnnotationSpec? Spec) result;
         try
@@ -2304,16 +2334,17 @@ public sealed partial class PdfViewer : UserControl
                     return (false, (AnnotationSpec?)null);
                 // Capture before removing so undo can rebuild it.
                 var captured = document.CaptureAnnotation(page, annotationIndex);
-                return (document.RemoveAnnotation(page, annotationIndex), captured);
+                return (captured is not null && (expectedText is null || captured.Text == expectedText)
+                    && document.RemoveAnnotation(page, annotationIndex), captured);
             });
         }
         catch
         {
-            return;
+            return false;
         }
         if (!result.Removed || _document != document)
         {
-            return;
+            return false;
         }
 
         InvalidatePage(page);
@@ -2327,14 +2358,15 @@ public sealed partial class PdfViewer : UserControl
                 // A stamp's spec carries its pixels; markup and ink carry only
                 // geometry, so they cost the undo stack's memory cap nothing.
                 SnapshotBytes = spec.Stamp?.ByteCount ?? 0,
-                UndoAction = d => d.AddAnnotationFromSpec(spec),
-                // Undo re-adds by appending, so what redo has to remove is the
-                // LAST annotation, not the index the erase originally hit. Redo
-                // only ever runs after an undo, so this is always the right one,
-                // and it is what the right-click delete has always done.
-                RedoAction = d => d.RemoveLastAnnotation(page),
+                UndoAction = d => d.RestoreDeletedAnnotation(spec, annotationIndex),
+                RedoAction = d =>
+                {
+                    if (!d.RemoveAnnotation(page, annotationIndex))
+                        throw new InvalidOperationException("Could not delete the annotation.");
+                },
             });
         }
+        return true;
     }
 
     /// <summary>
@@ -2444,14 +2476,8 @@ public sealed partial class PdfViewer : UserControl
             InkPages = pages,
             SnapshotBytes = specs.Sum(spec => (spec.Footprint?.Loops.Sum(loop => loop.LongLength * sizeof(double)) ?? 0)
                 + spec.InkStrokes.Sum(path => (long)path.Count * 2 * sizeof(float))),
-            UndoAction = pdf =>
-            {
-                for (int i = specs.Count - 1; i >= 0; i--) pdf.RemoveLastAnnotation(specs[i].PageIndex);
-            },
-            RedoAction = pdf =>
-            {
-                foreach (var spec in specs) pdf.AddAnnotationFromSpec(spec);
-            },
+            UndoAction = pdf => pdf.ReplayInkStroke(specs, undo: true),
+            RedoAction = pdf => pdf.ReplayInkStroke(specs, undo: false),
         });
     }
 
@@ -2830,9 +2856,11 @@ public sealed partial class PdfViewer : UserControl
 
             var (pagePxW, pagePxH) = _document.GetPagePixelSize(i, scale, _rotation);
             var (cols, rows) = TileMath.GridFor(pagePxW, pagePxH);
-            for (int row = 0; row < rows; row++)
+            var (firstRow, endRow) = TileMath.VisibleRange(region.Y - pageRect.Y, region.Bottom - pageRect.Y, rasterScale, rows);
+            var (firstCol, endCol) = TileMath.VisibleRange(region.X - pageRect.X, region.Right - pageRect.X, rasterScale, cols);
+            for (int row = firstRow; row < endRow; row++)
             {
-                for (int col = 0; col < cols; col++)
+                for (int col = firstCol; col < endCol; col++)
                 {
                     var key = new TileKey(i, scaleKey, _rotation, row, col, IsPreview: false);
                     if (_tiles.TryGetValue(key, out var entry))
@@ -3051,10 +3079,11 @@ public sealed partial class PdfViewer : UserControl
             var pageRect = _layout.GetPageRect(i);
             var (pagePxW, pagePxH) = _document.GetPagePixelSize(i, scale, _rotation);
             var (cols, rows) = TileMath.GridFor(pagePxW, pagePxH);
-
-            for (int row = 0; row < rows; row++)
+            var (firstRow, endRow) = TileMath.VisibleRange(extended.Y - pageRect.Y, extended.Bottom - pageRect.Y, DisplayScale, rows);
+            var (firstCol, endCol) = TileMath.VisibleRange(extended.X - pageRect.X, extended.Right - pageRect.X, DisplayScale, cols);
+            for (int row = firstRow; row < endRow; row++)
             {
-                for (int col = 0; col < cols; col++)
+                for (int col = firstCol; col < endCol; col++)
                 {
                     var (srcX, srcY, w, h) = TileMath.TileWindow(pagePxW, pagePxH, row, col);
                     var tileRect = new DipRect(

@@ -33,9 +33,61 @@ public sealed class FileAccessAdapter : IDisposable
     private IntPtr _nativeStruct;
 
     /// <summary>Pointer to pass to FPDF_LoadCustomDocument.</summary>
+    internal Microsoft.Win32.SafeHandles.SafeFileHandle FileHandle => _stream.SafeFileHandle;
     public IntPtr NativePointer => _nativeStruct;
-    public (long Length, DateTime LastWriteUtc) FileVersion =>
-        (_stream.Length, File.GetLastWriteTimeUtc(_stream.SafeFileHandle));
+    public static (long Length, DateTime LastWriteUtc, string Digest) ReadVersion(FileStream stream)
+    {
+        long position = stream.Position;
+        try
+        {
+            stream.Position = 0;
+            string digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+            return (stream.Length, File.GetLastWriteTimeUtc(stream.SafeFileHandle), digest);
+        }
+        finally { stream.Position = position; }
+    }
+
+    public (long Length, DateTime LastWriteUtc, string Digest) FileVersion => ReadVersion(_stream);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FileBasicInfo
+    {
+        public long Creation, Access, Write, Change;
+        public uint Attributes;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FileIdInfo
+    {
+        public ulong Volume, Low, High;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx")]
+    private static extern bool GetBasicInfo(Microsoft.Win32.SafeHandles.SafeFileHandle handle,
+        int infoClass, out FileBasicInfo info, uint size);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetFileInformationByHandleEx")]
+    private static extern bool GetFileId(Microsoft.Win32.SafeHandles.SafeFileHandle handle,
+        int infoClass, out FileIdInfo info, uint size);
+
+    // The key describes the same open file that PDFium reads, even after a path replacement.
+    public static string ReadThumbnailVersion(FileStream stream)
+    {
+        var handle = stream.SafeFileHandle;
+        if (GetBasicInfo(handle, 0, out var basic, (uint)Marshal.SizeOf<FileBasicInfo>()) && basic.Change != 0 &&
+            GetFileId(handle, 18, out var id, (uint)Marshal.SizeOf<FileIdInfo>()) && (id.Low | id.High) != 0)
+            return $"{id.Volume:X16}{id.Low:X16}{id.High:X16}-{basic.Change:X16}-{basic.Write:X16}-{stream.Length:X}";
+        return ReadVersion(stream).Digest;
+    }
+
+    public void CopyTo(Stream destination)
+    {
+        long position = _stream.Position;
+        try { _stream.Position = 0; _stream.CopyTo(destination); }
+        finally { _stream.Position = position; }
+    }
+
+    public string ThumbnailVersion => ReadThumbnailVersion(_stream);
 
     public FileAccessAdapter(string path)
     {

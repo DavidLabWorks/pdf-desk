@@ -37,8 +37,15 @@ public static class TileMath
         {
             return (1, 1);
         }
-        return ((pageWidthPx + TileSizePx - 1) / TileSizePx,
-                (pageHeightPx + TileSizePx - 1) / TileSizePx);
+        return ((int)(((long)pageWidthPx + TileSizePx - 1) / TileSizePx),
+                (int)(((long)pageHeightPx + TileSizePx - 1) / TileSizePx));
+    }
+
+    public static (int First, int End) VisibleRange(double startDip, double endDip, double rasterScale, int count)
+    {
+        double scale = rasterScale / TileSizePx;
+        return ((int)Math.Clamp(Math.Floor(startDip * scale), 0, count),
+                (int)Math.Clamp(Math.Ceiling(endDip * scale), 0, count));
     }
 
     /// <summary>Pixel window of a tile within its page.</summary>

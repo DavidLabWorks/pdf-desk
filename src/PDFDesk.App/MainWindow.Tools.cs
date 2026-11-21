@@ -721,6 +721,7 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task PickAndArmImageAsync()
     {
+        if (CurrentView?.IsReadOnlyView != false) return;
         var picked = await FilePickerHost.PickOpenAsync(
             WinRT.Interop.WindowNative.GetWindowHandle(this),
             ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff");

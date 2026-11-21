@@ -645,7 +645,12 @@ public sealed partial class PdfViewer
     /// the in-progress value in the focused widget, so committing late means
     /// the user's last keystrokes are silently discarded.
     /// </summary>
-    public void KillFormFocus()
+    private Task _formCommit = Task.CompletedTask;
+    public bool HasPendingFormEdit => IsFormFieldFocused || !_formCommit.IsCompleted;
+
+    public void KillFormFocus() => _ = CommitFormFocusAsync();
+
+    public Task CommitFormFocusAsync()
     {
         int page = _formFocusPage;
         _formPointerDown = false;
@@ -658,10 +663,10 @@ public sealed partial class PdfViewer
 
         if (page < 0 || _document is not { HasFillableForm: true } document)
         {
-            return;
+            return _formCommit;
         }
 
-        _ = DispatchKillFocus(document, page);
+        return _formCommit = DispatchKillFocus(document, page);
     }
 
     private async Task DispatchKillFocus(PdfDocument document, int page)
@@ -674,14 +679,15 @@ public sealed partial class PdfViewer
                 return true;
             });
         }
-        catch
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
         {
-            return;
+            document.FormKillFocus();
         }
 
         if (_document == document)
         {
             InvalidateFormFields(page);
+            DocumentEdited?.Invoke(this, EventArgs.Empty);
         }
     }
 

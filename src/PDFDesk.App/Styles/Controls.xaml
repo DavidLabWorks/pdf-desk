@@ -71,6 +71,8 @@
     </Style>
 
     <Style x:Key="PageLayoutSegmentStyle" TargetType="RadioButton">
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="Padding" Value="0" />
         <Setter Property="Height" Value="{StaticResource TouchTargetMin}" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="IsEnabled" Value="False" />
@@ -109,7 +111,8 @@
                         </VisualStateManager.VisualStateGroups>
                         <Border x:Name="Surface" CornerRadius="{TemplateBinding CornerRadius}" />
                         <Border x:Name="Feedback" CornerRadius="{TemplateBinding CornerRadius}" Background="{ThemeResource HomeTextBrush}" Opacity="0" />
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    Margin="{TemplateBinding Padding}" VerticalAlignment="Center">
                             <Path x:Name="PageIcon" Width="20" Height="16" VerticalAlignment="Center"
                                   Data="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"
                                   StrokeThickness="1.4" Stroke="{ThemeResource HomeTextBrush}" />

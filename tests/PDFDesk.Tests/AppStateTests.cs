@@ -5,6 +5,119 @@ namespace PDFDesk.Tests;
 public class AppStateTests
 {
     [Fact]
+    public void LegacyWindowsMergeProgressWithConcurrentAddCloseAndPromotion()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir.FullName, "PDFDesk.json"),
+                """{"Session":{"OpenPaths":["main.pdf"]},"AdditionalWindows":[{"OpenPaths":["a.pdf"]},{"OpenPaths":["closed.pdf"]}]}""");
+            var first = new AppStateStore(dir.FullName);
+            var second = new AppStateStore(dir.FullName);
+            var a = first.Load();
+            var b = second.Load();
+            var primary = a.Session;
+            a.Session = a.AdditionalWindows[0];
+            a.AdditionalWindows = [primary, new() { OpenPaths = ["new.pdf"] }];
+            Assert.True(first.Save(a));
+            b.AdditionalWindows[0].Positions["a.pdf"] = new(7, 1, 0, 0, true, 1);
+            Assert.True(second.Save(b));
+            var result = first.Load();
+            Assert.Equal("a.pdf", Assert.Single(result.Session.OpenPaths));
+            Assert.Equal(7, result.Session.Positions["a.pdf"].PageIndex);
+            Assert.Equal(new[] { "main.pdf", "new.pdf" }, result.AdditionalWindows.Select(w => Assert.Single(w.OpenPaths)));
+        }
+        finally { dir.Delete(true); }
+    }
+
+    [Fact]
+    public void TwoStoresRetainIndependentSessionPositions()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            var a = new AppStateStore(dir.FullName);
+            var b = new AppStateStore(dir.FullName);
+            var local = a.Load();
+            local.Session.OpenPaths = ["a.pdf", "b.pdf"];
+            var start = new TabPosition(0, 1, 0, 0, true, 1);
+            local.Session.Positions["a.pdf"] = local.Session.Positions["b.pdf"] = start;
+            Assert.True(a.Save(local));
+            var remote = b.Load();
+            local.Session.Positions["a.pdf"] = start with { PageIndex = 3 };
+            remote.Session.Positions["b.pdf"] = start with { PageIndex = 7 };
+            Assert.True(a.Save(local));
+            Assert.True(b.Save(remote));
+            var result = a.Load().Session;
+            Assert.Equal(3, result.Positions["a.pdf"].PageIndex);
+            Assert.Equal(7, result.Positions["b.pdf"].PageIndex);
+        }
+        finally { dir.Delete(true); }
+    }
+
+    [Fact]
+    public void FailedMergeDoesNotTurnRemoteSettingsIntoLocalEdits()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            var a = new AppStateStore(dir.FullName);
+            var b = new AppStateStore(dir.FullName);
+            var local = a.Load();
+            Assert.True(a.Save(local));
+            var remote = b.Load();
+            local.Settings.Theme = "Dark";
+            Assert.True(a.Save(local));
+            remote.Settings.RecentUsesList = true;
+            var blocked = dir.CreateSubdirectory("PDFDesk.json.tmp");
+            Assert.False(b.Save(remote));
+            blocked.Delete();
+            local.Settings.Theme = "Light";
+            Assert.True(a.Save(local));
+            Assert.True(b.Save(remote));
+            var result = a.Load().Settings;
+            Assert.Equal("Light", result.Theme);
+            Assert.True(result.RecentUsesList);
+        }
+        finally { dir.Delete(true); }
+    }
+
+    [Fact]
+    public void InvalidRowsAreDroppedWithoutLosingValidSessionAndRecents()
+    {
+        var state = System.Text.Json.JsonSerializer.Deserialize<AppState>(
+            """{"Recents":[null,{"Path":"book.pdf"}],"AdditionalWindows":null,"Session":{"OpenPaths":[null,"book.pdf"],"ActiveIndex":1}}""")!;
+        Assert.Equal("book.pdf", Assert.Single(state.Recents).Path);
+        Assert.Equal("book.pdf", Assert.Single(state.Session.OpenPaths));
+        Assert.Equal(0, state.Session.ActiveIndex);
+        Assert.Empty(state.AdditionalWindows);
+    }
+
+    [Fact]
+    public void FolderCommitRejectsAConcurrentDuplicateAndDeletedTarget()
+    {
+        var state = new AppState();
+        Assert.True(state.TrySetFolderName(null, "Reports", out var reports));
+        Assert.False(state.TrySetFolderName(null, " reports ", out _));
+        Assert.True(state.TrySetFolderName(null, "Notes", out var notes));
+        Assert.False(state.TrySetFolderName(notes, "Reports", out _));
+        state.RemoveFavoriteFolder(reports);
+        Assert.False(state.TrySetFolderName(reports, "Renamed", out _));
+        Assert.Equal("Notes", Assert.Single(state.FavoriteFolders).Value);
+    }
+
+    [Fact]
+    public void NullRecentsPreservesOtherSettingsAndAcceptsNewDocuments()
+    {
+        var state = System.Text.Json.JsonSerializer.Deserialize<AppState>(
+            """{"Recents":null,"Session":{"ActiveIndex":2}}""")!;
+        Assert.Empty(state.Recents);
+        Assert.Equal(2, state.Session.ActiveIndex);
+        state.Remember("book.pdf", "book", 1, 1, 0, 0);
+        Assert.Equal("book.pdf", Assert.Single(state.Recents).Path);
+    }
+
+    [Fact]
     public void WindowSessionsRestoreSeparatePositionsForTheSameFile()
     {
         const string path = "sample.pdf";
@@ -324,5 +437,37 @@ public class AppStateTests
 
         Assert.Empty(state.Recents);
         Assert.Empty(state.Session.OpenPaths);
+    }
+    [Fact]
+    public void IndependentStoresMergePositionSettingsAndBookmarks()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            var first = new AppStateStore(dir.FullName);
+            var second = new AppStateStore(dir.FullName);
+            var a = first.Load();
+            const string path = "sample.pdf";
+            a.Remember(path, "sample", 0, 1, 0, 0);
+            Assert.True(first.Save(a));
+            var b = second.Load();
+            a.Recents[0].StoreBookmarks("version", [new() { PageIndex = 1, Name = "First" }], true);
+            a.Settings.RestoreSession = false;
+            Assert.True(first.Save(a));
+            b.Remember(path, "sample", 4, 1, 0, 0);
+            b.Settings.Theme = "Dark";
+            Assert.True(second.Save(b));
+            var saved = first.Load();
+            Assert.False(saved.Settings.RestoreSession);
+            Assert.Equal("Dark", saved.Settings.Theme);
+            Assert.Equal(4, saved.Recents[0].PageIndex);
+            Assert.Equal("First", Assert.Single(saved.Recents[0].BookmarksFor("version")).Name);
+            saved.Recents[0].Bookmarks[0].Name = "Renamed";
+            b.Recents[0].Bookmarks.Add(new() { PageIndex = 2, Name = "Second" });
+            Assert.True(first.Save(saved));
+            Assert.True(second.Save(b));
+            Assert.Equal(new[] { "Renamed", "Second" }, first.Load().Recents[0].Bookmarks.Select(x => x.Name));
+        }
+        finally { dir.Delete(true); }
     }
 }

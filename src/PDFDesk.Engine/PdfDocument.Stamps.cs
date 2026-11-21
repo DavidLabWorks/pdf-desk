@@ -50,12 +50,13 @@ public sealed partial class PdfDocument
         int pageIndex, double x, double y, double widthPt, double heightPt,
         byte[] bgra, int pixelWidth, int pixelHeight)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pixelWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pixelHeight);
 
-        if (bgra.Length < pixelWidth * pixelHeight * 4 || widthPt <= 0 || heightPt <= 0)
+        if (!PdfiumNative.FitsBgraBuffer(bgra, pixelWidth, pixelHeight) || widthPt <= 0 || heightPt <= 0)
         {
             return null; // nothing sensible to place; leave IsDirty alone
         }
@@ -100,6 +101,11 @@ public sealed partial class PdfDocument
                         Contents: string.Empty,
                         Stamp: stamp);
                 }
+                catch
+                {
+                    PdfiumNative.RemoveAnnot(page, PdfiumNative.GetAnnotCount(page) - 1);
+                    throw;
+                }
                 finally
                 {
                     PdfiumNative.CloseAnnot(annot);
@@ -136,6 +142,7 @@ public sealed partial class PdfDocument
     public (float L, float B, float R, float T)? MoveAnnotation(
         int pageIndex, int annotIndex, double x, double y)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
         ArgumentOutOfRangeException.ThrowIfNegative(annotIndex);
@@ -322,6 +329,7 @@ public sealed partial class PdfDocument
     public (int NewIndex, AnnotationSpec Before)? ResizeStamp(
         int pageIndex, int annotIndex, double x, double y, double widthPt, double heightPt)
     {
+        RequireWritable();
         ArgumentOutOfRangeException.ThrowIfNegative(pageIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(pageIndex, PageCount);
         ArgumentOutOfRangeException.ThrowIfNegative(annotIndex);
@@ -337,7 +345,7 @@ public sealed partial class PdfDocument
         {
             return null;
         }
-        if (GetAnnotations(pageIndex).ElementAtOrDefault(annotIndex) is not { } original
+        if (GetAnnotations(pageIndex).FirstOrDefault(a => a.Index == annotIndex) is not { } original
             || original.Subtype != PdfiumNative.AnnotStamp)
         {
             return null;
@@ -354,20 +362,19 @@ public sealed partial class PdfDocument
             Contents: string.Empty,
             Stamp: image);
 
-        if (!RemoveAnnotation(pageIndex, annotIndex))
+        if (AddStamp(pageIndex, x, y, widthPt, heightPt, image.Bgra, image.Width, image.Height) is null)
         {
             return null;
         }
 
-        if (AddStamp(pageIndex, x, y, widthPt, heightPt, image.Bgra, image.Width, image.Height) is null)
+        if (!RemoveAnnotation(pageIndex, annotIndex))
         {
-            // Put the original back rather than leaving the page a stamp short.
-            AddAnnotationFromSpec(before);
+            RemoveLastAnnotation(pageIndex);
             return null;
         }
 
         // Re-creating appends, so the stamp is now last.
-        return (GetAnnotations(pageIndex).Count - 1, before);
+        return (GetAnnotations(pageIndex)[^1].Index, before);
     }
 
     /// <summary>Page-local top-left box → PDF page space, outside the PDFium lock.</summary>
@@ -518,6 +525,7 @@ public sealed partial class PdfDocument
     /// </summary>
     public bool RestoreAnnotationRect(int pageIndex, int annotIndex, (float L, float B, float R, float T) rect)
     {
+        RequireWritable();
         lock (PdfiumLibrary.Lock)
         {
             ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
@@ -627,7 +635,8 @@ public sealed partial class PdfDocument
             // to the target corner.
             PdfiumNative.TransformPageObject(image, r - l, 0, 0, t - b, l, b);
 
-            PdfiumNative.AppendAnnotObject(annot, image);
+            if (!PdfiumNative.AppendAnnotObject(annot, image))
+                throw new PdfiumException("Could not append the stamp image.", 1);
             placed = true;
         }
         finally

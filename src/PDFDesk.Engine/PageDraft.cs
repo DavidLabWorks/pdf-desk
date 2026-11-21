@@ -42,7 +42,8 @@ public sealed class PageDraft(int pageCount)
         var step = new Step(kind, pages, destination);
         _history.RemoveRange(_cursor, _history.Count - _cursor);
         _history.Add(step);
-        Redo();
+        Apply(step);
+        _cursor++;
     }
 
     private void Apply(Step step)
@@ -58,34 +59,58 @@ public sealed class PageDraft(int pageCount)
         if (moved is not null) _order.InsertRange(step.Destination, moved);
     }
 
-    public void Undo()
+    public IReadOnlyList<int> Undo()
     {
-        if (!CanUndo) return;
+        if (!CanUndo) return [];
         _cursor--;
         _order.Clear();
         _order.AddRange(Enumerable.Range(0, pageCount));
         for (int i = 0; i < _cursor; i++) Apply(_history[i]);
+        return _history[_cursor].Pages;
     }
 
-    public void Redo()
+    public IReadOnlyList<int> Redo()
     {
-        if (CanRedo) Apply(_history[_cursor++]);
+        if (!CanRedo) return [];
+        var step = _history[_cursor++];
+        Apply(step);
+        return step.Kind == Kind.Remove ? [] : Enumerable.Range(step.Destination, step.Pages.Length).ToArray();
     }
 
     public PdfDocument Save(PdfDocument source)
     {
         if (source.PageCount != pageCount) throw new InvalidOperationException("The document changed while organizing pages.");
-        return source.SaveEditedCopy(copy =>
+        return source.SaveEditedCopy(ApplyToDocument);
+    }
+
+    public string SaveAs(PdfDocument source, string path)
+    {
+        WindowsFileIdentity.RequireDifferentFile(source.FilePath, path);
+        if (source.PageCount != pageCount) throw new InvalidOperationException("The document changed while organizing pages.");
+        using var copy = source.CreateEditedCopy(ApplyToDocument);
+        return copy.SaveDraftCopy(path, source.FilePath);
+    }
+
+    public List<Services.BookmarkEntry> MapBookmarks(IEnumerable<Services.BookmarkEntry> bookmarks)
+    {
+        var positions = OriginalPositions();
+        List<Services.BookmarkEntry> mapped = [];
+        foreach (var entry in bookmarks)
+            if ((uint)entry.PageIndex < positions.Length && positions[entry.PageIndex] is int page)
+                mapped.Add(new() { PageIndex = page, Name = entry.Name });
+        return mapped.OrderBy(b => b.PageIndex).ToList();
+    }
+
+    private void ApplyToDocument(PdfDocument copy)
+    {
+        foreach (var step in _history.Take(_cursor))
         {
-            foreach (var step in _history.Take(_cursor))
+            switch (step.Kind)
             {
-                switch (step.Kind)
-                {
-                    case Kind.Move: copy.MovePages(step.Pages, step.Destination); break;
-                    case Kind.Remove: copy.DeletePages(step.Pages); break;
-                    case Kind.Copy: copy.InsertPages(copy.ExportPages(step.Pages), step.Destination); break;
-                }
+                case Kind.Move: copy.MovePages(step.Pages, step.Destination); break;
+                case Kind.Remove: copy.DeletePages(step.Pages); break;
+                case Kind.Copy: copy.DuplicatePages(step.Pages, step.Destination); break;
             }
-        });
+        }
     }
 }

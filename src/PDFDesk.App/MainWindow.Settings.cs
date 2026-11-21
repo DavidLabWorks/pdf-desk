@@ -128,11 +128,13 @@ public sealed partial class MainWindow
         RootGrid.Language = UiText.Current.LanguageTag;
         if (previousLanguage != UiText.Current.LanguageTag)
         {
+            RefreshSnapshotBars();
             foreach (var view in AllDocumentViews()) view.RefreshBookmarkLabels();
             HideToolOptions();
             _toolPanels.Clear();
             _signatureList = null;
         }
+        SyncCaptureTools();
         UpdateQuickToolsToggleLabel();
         UpdateFocusReadingControls();
     }

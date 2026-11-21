@@ -137,10 +137,9 @@ public sealed partial class CompressionDialog : ContentDialog
     {
         string suffix = Preset.SelectedItem == Smallest ? Local("smallest", "极致压缩")
             : Preset.SelectedItem == Quality ? Local("high-quality", "高质量") : Local("balanced", "均衡压缩");
-        string stem = _baseName + "-" + suffix;
-        string name = stem + ".pdf";
+        string name = PdfLibrary.FitFileName(_baseName, $"-{suffix}.pdf");
         for (int n = 2; Path.Exists(Path.Combine(DirectoryText.Text, name)) || _isReserved(Path.Combine(DirectoryText.Text, name)); n++)
-            name = $"{stem} ({n}).pdf";
+            name = PdfLibrary.FitFileName(_baseName, $"-{suffix} ({n}).pdf");
         CopyPath = Path.Combine(DirectoryText.Text, name);
         CopyName.Text = name;
         ToolTipService.SetToolTip(DirectoryText, DirectoryText.Text);

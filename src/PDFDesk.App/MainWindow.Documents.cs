@@ -13,54 +13,19 @@ public sealed partial class MainWindow
 {
     // ---------------------------------------------------------------- tabs
 
-    private void AddTab(string path, RecentFile? restore, bool select, int? index = null)
+    private DocumentView AddTab(string path, RecentFile? restore, bool select, int? index = null, bool readOnly = false, DocumentView? existing = null, WindowsFileIdentity.NavigationKey? key = null)
     {
-        var view = new DocumentView(path);
+        key ??= existing?.NavigationKey ?? new WindowsFileIdentity.NavigationKey(path);
+        var view = existing ?? new DocumentView(key, readOnly || MatchingTabs(key).Any(t => !t.View.IsReadOnlyView));
+        view.HostWindow = this;
         _pendingRestore[view] = restore;
         view.Viewer.LinkActivated += Viewer_LinkActivated;
         view.Viewer.NightMode = _state.Settings.NightMode;
         SeedToolStyles(view.Viewer);
-        view.Viewer.CompressionRequested += () => _ = CompressExportAsync(view.FilePath);
-        view.Viewer.DocumentEdited += (_, _) => UpdateDirtyIndicator(view);
-        view.Viewer.ActiveToolChanged += (_, tool) =>
-        {
-            if (view.Viewer == _activeViewer) SyncToolButtons(tool);
-        };
-        view.Viewer.StampPlaced += (_, placement) =>
-        {
-            if (placement.Tool == AnnotationTool.Image)
-            {
-                _state.Settings.ImageWidthPt = placement.WidthPt;
-            }
-            else
-            {
-                _state.Settings.SignatureWidthPt = placement.WidthPt;
-            }
-            _store.Save(_state);
-        };
-        view.SignaturesRead += (_, _) => UpdateToolbarForActive();
         view.Viewer.NoteRequested += Viewer_NoteRequested;
         view.Viewer.FormAppearanceRequested += Viewer_FormAppearanceRequested;
         AttachTextTool(view.Viewer);
-        view.BookmarksChanged += (_, _) => PersistBookmarks(view);
-        view.PagesEdited += (_, _) =>
-        {
-            UpdateDirtyIndicator(view);
-            if (view == CurrentView)
-            {
-                UpdateToolbarForActive(); // page count / current page changed
-            }
-        };
-        view.PageOpFailed += (_, message) => ShowError(message);
-        view.ExtractRequested += (_, _) => _ = ExtractPagesAsync(view);
-        view.UndoStateChanged += (_, _) =>
-        {
-            if (view == CurrentView)
-            {
-                UpdateUndoButtons();
-            }
-        };
-        view.Loaded2 += (_, _) => { if (view == CurrentView) { UpdateToolbarForActive(); } };
+        if (existing == null) AttachSessionEvents(view);
 
         // Tabs are strip-only (they live in the title bar); the view itself
         // is swapped into DocHost on selection. Tag carries the association.
@@ -85,76 +50,178 @@ public sealed partial class MainWindow
         {
             Tabs.SelectedItem = tab;
         }
+        UpdateDirtyIndicator(view);
+        RefreshSnapshotBars();
+        return view;
     }
 
-    /// <summary>Opens a path in a new tab, or activates the existing tab if already open.</summary>
-    private void OpenOrActivate(string path)
+    private static void AttachSessionEvents(DocumentView view)
     {
-        foreach (var obj in Tabs.TabItems)
+        view.Viewer.ScreenshotModeChanged += () => { if (view == view.HostWindow.CurrentView) view.HostWindow.SyncCaptureTools(); };
+        view.Viewer.CompressionRequested += () => _ = view.HostWindow.CompressExportAsync(view.FilePath);
+        view.Viewer.DocumentEdited += (_, _) => view.HostWindow.UpdateDirtyIndicator(view);
+        view.Viewer.ActiveToolChanged += (_, tool) =>
         {
-            if (obj is TabViewItem { Tag: DocumentView v } tabItem &&
-                string.Equals(v.FilePath, path, StringComparison.OrdinalIgnoreCase))
+            if (view.Viewer == view.HostWindow._activeViewer) view.HostWindow.SyncToolButtons(tool);
+        };
+        view.Viewer.StampPlaced += (_, placement) =>
+        {
+            if (placement.Tool == AnnotationTool.Image)
             {
-                Tabs.SelectedItem = tabItem;
-                return;
+                view.HostWindow._state.Settings.ImageWidthPt = placement.WidthPt;
             }
-        }
+            else
+            {
+                view.HostWindow._state.Settings.SignatureWidthPt = placement.WidthPt;
+            }
+            _store.Save(view.HostWindow._state);
+        };
+        view.SignaturesRead += (_, _) => view.HostWindow.UpdateToolbarForActive();
+        view.SearchInvalidated += () => { if (view == view.HostWindow.CurrentView) view.HostWindow.FindBar.ResetResults(); };
+        view.SearchRefreshRequested += () => { if (view == view.HostWindow.CurrentView) view.HostWindow.FindBar.RefreshSearch(); };
+        view.BookmarksChanged += (_, saved) => view.HostWindow.PersistBookmarks(view, saved);
+        view.DraftCopySaved += (copyPath, digest, bookmarks) =>
+        {
+            view.HostWindow._state.StoreCopyBookmarks(copyPath, digest, bookmarks);
+            view.HostWindow.SaveBookmarkState(view, copyPath, pdfSaved: true, successTitle: UiText.Translate("Copy saved"));
+        };
+        view.PagesEdited += (_, _) =>
+        {
+            view.HostWindow.UpdateDirtyIndicator(view);
+            if (view == view.HostWindow.CurrentView)
+            {
+                view.HostWindow.UpdateToolbarForActive(); // page count / current page changed
+            }
+        };
+        view.PageOpFailed += (_, message) => view.HostWindow.ShowError(message);
+        view.ExtractRequested += (_, _) => _ = view.HostWindow.ExtractPagesAsync(view);
+        view.UndoStateChanged += (_, _) =>
+        {
+            if (view == view.HostWindow.CurrentView)
+            {
+                view.HostWindow.UpdateUndoButtons();
+            }
+        };
+        view.Loaded2 += (_, _) =>
+        {
+            RefreshSnapshotBars();
+            if (view == view.HostWindow.CurrentView) view.HostWindow.UpdateToolbarForActive();
+        };
+    }
 
-        AddTab(path, _state.FindRecent(path), select: true);
+    private static IEnumerable<(MainWindow Window, TabViewItem Tab, DocumentView View)> MatchingTabs(WindowsFileIdentity.NavigationKey key) =>
+        from window in App.Readers
+        from tab in window.Tabs.TabItems.OfType<TabViewItem>()
+        let view = tab.Tag as DocumentView
+        where view != null && view.NavigationKey.Matches(key)
+        select (window, tab, view);
+
+    internal static bool HasOtherEditor(DocumentView view) =>
+        MatchingTabs(view.NavigationKey).Any(t => t.View != view && !t.View.IsReadOnlyView);
+
+    private static void RefreshSavedLocation(DocumentView writer)
+    {
+        var previous = writer.NavigationKey;
+        var replacement = new WindowsFileIdentity.NavigationKey(writer.FilePath);
+        foreach (var (_, _, view) in MatchingTabs(previous).ToList())
+            view.NavigationKey = view.NavigationKey.RecheckAfterReplacement(replacement);
+    }
+
+    private static void RefreshSnapshotBars()
+    {
+        foreach (var view in App.Readers.SelectMany(w => w.AllDocumentViews()).Where(v => v.IsReadOnlyView))
+        {
+            view.RefreshSnapshotBar();
+            if (view.HostWindow.CurrentView == view) view.HostWindow.UpdateSnapshotActions(view);
+        }
+    }
+
+    private DocumentView OpenOrActivate(string path)
+    {
+        var key = new WindowsFileIdentity.NavigationKey(path);
+        var target = MatchingTabs(key).OrderBy(t => t.View.IsReadOnlyView).FirstOrDefault();
+        if (target.View == null) return AddTab(path, _state.FindRecent(path), true, key: key);
+        target.Window.RestoreWindow();
+        target.Window.Tabs.SelectedItem = target.Tab;
+        return target.View;
+    }
+
+    internal async Task ReloadSnapshotAsync(DocumentView view, bool edit)
+    {
+        if (!view.IsReadOnlyView || !_savingViews.Add(view)) return;
+        DocumentView? replacement = null;
+        try
+        {
+            var matches = MatchingTabs(view.NavigationKey).ToList();
+            if (edit && matches.Any(t => !t.View.IsReadOnlyView)) { OpenOrActivate(view.FilePath); return; }
+            var old = matches.Single(t => t.View == view).Tab;
+            var restore = PositionOf(view)?.ForPath(view.FilePath);
+            replacement = AddTab(view.FilePath, restore, false, Tabs.TabItems.IndexOf(old), readOnly: !edit);
+            await replacement.EnsureLoadedAsync(restore);
+            if (replacement.LoadError != null) throw new IOException(replacement.LoadError);
+            if (!App.Readers.Contains(this) || !Tabs.TabItems.Contains(old)) return;
+            var tab = Tabs.TabItems.OfType<TabViewItem>().Single(t => ReferenceEquals(t.Tag, replacement));
+            if (CurrentView == view) Tabs.SelectedItem = tab;
+            CloseTab(old);
+            replacement = null;
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+        finally
+        {
+            if (replacement != null && Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(t => ReferenceEquals(t.Tag, replacement)) is { } failed)
+                CloseTab(failed);
+            _savingViews.Remove(view);
+        }
+    }
+
+    private void UpdateSnapshotActions(DocumentView view)
+    {
+        bool hasEditor = HasOtherEditor(view);
+        FocusEditor.Content = hasEditor ? UiText.Current.GoToEditor : UiText.Current.StartEditing;
+        FocusEditor.IsEnabled = hasEditor || view.IsDocumentLoaded || view.LoadError != null;
+        CopySnapshot.IsEnabled = view.IsDocumentLoaded;
+    }
+
+    private async void FocusEditor_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentView is { IsReadOnlyView: true } view) await ReloadSnapshotAsync(view, true);
+    }
+
+    private async void CopySnapshot_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentView is { IsReadOnlyView: true }) await SaveAsActiveAsync();
     }
 
     private async Task OpenTabInWindowAsync(TabViewItem tab, DocumentView view, bool move)
     {
         if (!_savingViews.Add(view)) return;
-        MainWindow? destination = null;
-        TabViewItem? createdTab = null;
-        bool editedDuringTransfer = false;
-        void OnEdit(object? sender, EventArgs args) => editedDuringTransfer = true;
         try
         {
-            if (move && view.IsDocumentLoaded)
+            await view.EnsureLoadedAsync(_pendingRestore.GetValueOrDefault(view));
+            if (move) await view.CommitPendingEditsAsync();
+            if (!Tabs.TabItems.Contains(tab)) return;
+            if ((move && (view.HasPendingOperation || _compressionTasks.ContainsKey(view.FilePath))) || view.LoadError != null)
+                throw new IOException(view.LoadError ?? UiText.Current.SourceChangedDuringMove);
+            var restore = PositionOf(view)?.ForPath(view.FilePath);
+            var destination = App.CreateReaderWindow();
+            if (move)
             {
-                await view.Viewer.FinishEraserAsync();
-                await view.Viewer.CommitTextAsync();
-                if (view.Viewer.IsEditingText) throw new IOException(UiText.Current.TextCommitFailed);
-                if (view.Viewer.IsFormFieldFocused) view.Viewer.KillFormFocus();
+                int index = Tabs.TabItems.IndexOf(tab);
+                CloseTab(tab, transfer: true);
+                try { destination.AddTab(view.FilePath, restore, true, existing: view); }
+                catch
+                {
+                    if (destination.Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault(t => ReferenceEquals(t.Tag, view)) is { } partial)
+                        destination.CloseTab(partial, transfer: true);
+                    AddTab(view.FilePath, restore, true, index, existing: view);
+                    throw;
+                }
             }
-            if (move && view.IsDirty)
-            {
-                var choice = await PromptSaveChangesAsync([view.DisplayName]);
-                if (choice is null) return;
-                if (choice.Value) await view.SaveInPlaceAsync();
-            }
-            CaptureState(view);
-            view.Viewer.DocumentEdited += OnEdit;
-            destination = App.CreateReaderWindow();
-            destination.AddTab(view.FilePath, PositionOf(view)?.ForPath(view.FilePath), select: true);
-            createdTab = (TabViewItem)destination.Tabs.SelectedItem;
-            var copy = (DocumentView)createdTab.Tag;
-            await copy.EnsureLoadedAsync(null);
-            if (!App.Readers.Contains(destination) || !destination.Tabs.TabItems.Contains(createdTab)) return;
-            if (!copy.IsDocumentLoaded || copy.LoadError is not null)
-                throw new IOException(copy.LoadError ?? view.FilePath);
-            if (move && App.Readers.Contains(this) && Tabs.TabItems.Contains(tab))
-            {
-                if (editedDuringTransfer || view.Viewer.IsEditingText || view.Viewer.IsFormFieldFocused)
-                    throw new IOException(UiText.Current.SourceChangedDuringMove);
-                CloseTab(tab);
-            }
+            else destination.AddTab(view.FilePath, restore, true, readOnly: true);
             SaveWindowSessions();
         }
-        catch (Exception ex)
-        {
-            if (destination != null && App.Readers.Contains(destination))
-            {
-                if (createdTab != null && destination.Tabs.TabItems.Contains(createdTab)) destination.CloseTab(createdTab);
-                if (destination.Tabs.TabItems.Count == 0) { destination._closeApproved = true; destination.Close(); }
-            }
-            if (!App.Readers.Contains(this)) return;
-            RestoreWindow();
-            ShowError(ex.Message);
-        }
-        finally { view.Viewer.DocumentEdited -= OnEdit; _savingViews.Remove(view); }
+        catch (Exception ex) { ShowError(ex.Message); }
+        finally { _savingViews.Remove(view); }
     }
 
     // Children owns a control immediately, even before WinUI updates its Parent.
@@ -200,9 +267,9 @@ public sealed partial class MainWindow
             SetActiveTool(AnnotationTool.None);
         UpdateStartPageVisibility();
 
+        UpdateToolbarForActive();
         if (!_restoringSession && CurrentView is { } view)
         {
-            UpdateToolbarForActive();
             await LoadTabAsync(view);
         }
     }
@@ -215,7 +282,8 @@ public sealed partial class MainWindow
 
         if (view.LoadError is null)
         {
-            view.LoadBookmarks(_state.FindRecent(view.FilePath)?.Bookmarks ?? []);
+            if (view.Viewer.Document is { } document)
+                view.LoadBookmarks(_state.FindRecent(view.FilePath)?.BookmarksFor(document.SavedDigest) ?? []);
             if (firstLoad && view.IsDocumentLoaded)
             {
                 if (CurrentView == view || _state.FindRecent(view.FilePath) == null) CaptureState(view);
@@ -234,7 +302,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>Writes a view's bookmarks into the recents entry (creating one if needed) and saves.</summary>
-    private void PersistBookmarks(DocumentView view)
+    private void PersistBookmarks(DocumentView view, bool saved)
     {
         var entry = _state.FindRecent(view.FilePath);
         if (entry is null)
@@ -242,13 +310,51 @@ public sealed partial class MainWindow
             CaptureState(view); // creates the recents entry with the current position
             entry = _state.FindRecent(view.FilePath);
         }
-        if (entry is not null)
+        if (entry is not null && view.Viewer.Document is { } document)
         {
-            entry.Bookmarks = view.GetBookmarks();
+            var bookmarks = view.BookmarksForPersistence();
+            string digest = document.SavedDigest;
+            if (saved) RefreshSavedLocation(view);
+            entry.StoreBookmarks(digest, bookmarks, saved);
             foreach (var other in App.Readers.SelectMany(w => w.AllDocumentViews()))
-                if (other != view && other.IsDocumentLoaded && string.Equals(other.FilePath, view.FilePath, StringComparison.OrdinalIgnoreCase))
-                    other.LoadBookmarks(entry.Bookmarks, refresh: true);
-            _store.Save(_state);
+                if (other != view && other.Viewer.Document?.SavedDigest == digest && other.NavigationKey.Matches(view.NavigationKey))
+                    other.LoadBookmarks(bookmarks, refresh: true);
+            if (saved)
+            {
+                foreach (var (_, _, snapshot) in MatchingTabs(view.NavigationKey).Where(t => t.View.IsReadOnlyView))
+                    snapshot.LatestSavedDigest = digest;
+                RefreshSnapshotBars();
+            }
+            SaveBookmarkState(view, view.FilePath, pdfSaved: saved);
+        }
+    }
+
+    private static Microsoft.UI.Dispatching.DispatcherQueueTimer? _bookmarkRetry;
+
+    private void SaveBookmarkState(DocumentView view, string path, bool pdfSaved, string? successTitle = null)
+    {
+        if (_store.Save(_state))
+        {
+            _bookmarkRetry?.Stop();
+            if (successTitle is not null) view.ShowNotice(successTitle, path, InfoBarSeverity.Success);
+            return;
+        }
+
+        var heading = UiText.Translate(pdfSaved ? "PDF saved, bookmarks pending" : "Bookmarks not saved");
+        view.ShowNotice(heading, UiText.Translate("Bookmarks will be saved automatically when storage is available."), InfoBarSeverity.Warning);
+        if (_bookmarkRetry is null)
+        {
+            _bookmarkRetry = DispatcherQueue.CreateTimer();
+            _bookmarkRetry.Tick += (timer, _) =>
+            {
+                if (_store.Save(SharedState)) timer.Stop();
+                else timer.Interval = TimeSpan.FromSeconds(Math.Min(60, timer.Interval.TotalSeconds * 2));
+            };
+        }
+        if (!_bookmarkRetry.IsRunning)
+        {
+            _bookmarkRetry.Interval = TimeSpan.FromSeconds(2);
+            _bookmarkRetry.Start();
         }
     }
 
@@ -271,6 +377,14 @@ public sealed partial class MainWindow
 
     private async Task CloseTabWithPromptAsync(TabViewItem tab)
     {
+        if (tab.Tag is DocumentView view)
+        {
+            if (_savingViews.Contains(view)) return;
+            if (!await view.CloseOrganizerAsync()) return;
+            await view.Viewer.CommitFormFocusAsync();
+            await view.Viewer.CommitTextAsync();
+            if (view.Viewer.IsEditingText) return;
+        }
         if (tab.Tag is DocumentView { IsDirty: true } dirtyView)
         {
             var choice = await PromptSaveChangesAsync([dirtyView.DisplayName]);
@@ -316,7 +430,7 @@ public sealed partial class MainWindow
         };
     }
 
-    private void CloseTab(TabViewItem tab)
+    private void CloseTab(TabViewItem tab, bool transfer = false)
     {
         if (tab.Tag is DocumentView view)
         {
@@ -325,12 +439,13 @@ public sealed partial class MainWindow
             view.Viewer.NoteRequested -= Viewer_NoteRequested;
             view.Viewer.FormAppearanceRequested -= Viewer_FormAppearanceRequested;
             DetachTextTool(view.Viewer);
-            view.Close();
+            if (!transfer) view.Close();
             _pendingRestore.Remove(view);
             _detachedPositions.Remove(view);
         }
         Tabs.TabItems.Remove(tab);
         tab.Tag = null;
+        RefreshSnapshotBars();
         UpdateStartPageVisibility();
     }
 

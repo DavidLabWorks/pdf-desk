@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using PDFDesk.Engine;
+using PDFDesk.PdfiumInterop;
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 
@@ -8,7 +9,7 @@ namespace PDFDesk.Services;
 
 /// <summary>
 /// Renders and disk-caches first-page thumbnails for the recent-documents
-/// homepage. Cache key is sha256(path|mtime) so a modified file re-renders.
+/// homepage. The path groups entries for eviction and file metadata identifies each version when available.
 /// Everything runs on background threads; results are returned as encoded PNG
 /// bytes the caller turns into a bitmap on the UI thread.
 /// </summary>
@@ -18,6 +19,10 @@ public sealed class ThumbnailCache : IDisposable
     private const int MaxCachedFiles = 24;
 
     private readonly string _dir;
+    private static readonly object CacheLock = new();
+    // Only in-flight requests need tokens. Removing an entry invalidates its writers.
+    private static readonly Dictionary<string, PendingReads> Pending = new(StringComparer.OrdinalIgnoreCase);
+    private sealed class PendingReads { public int Count; }
 
     /// <summary>
     /// A serialized PDFium thread of this cache's own. Homepage thumbnails open
@@ -35,6 +40,13 @@ public sealed class ThumbnailCache : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "PDFDesk", "thumbnails");
         Directory.CreateDirectory(_dir);
+        // Old names were a single irreversible hash of path and timestamp.
+        lock (CacheLock)
+        {
+            foreach (var file in new DirectoryInfo(_dir).EnumerateFiles("*.png"))
+                if (file.Name.Length == 28 && file.Name[..24].All(Uri.IsHexDigit))
+                    TryDelete(file);
+        }
     }
 
     /// <summary>
@@ -43,30 +55,53 @@ public sealed class ThumbnailCache : IDisposable
     /// </summary>
     public async Task<byte[]?> GetAsync(string pdfPath)
     {
+        string key = PathKey(pdfPath);
+        PendingReads reads;
+        lock (CacheLock)
+        {
+            if (!Pending.TryGetValue(key, out var existing)) Pending[key] = existing = new();
+            reads = existing;
+            reads.Count++;
+        }
         return await Task.Run(async () =>
         {
             try
             {
-                if (!File.Exists(pdfPath))
+                string version;
+                using (var source = new FileStream(pdfPath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
+                    version = FileAccessAdapter.ReadThumbnailVersion(source);
+                lock (CacheLock)
                 {
-                    return null;
+                    if (Pending.GetValueOrDefault(key) != reads) return null;
+                    string prefix = $"{key}-{version}-";
+                    foreach (var file in new DirectoryInfo(_dir).EnumerateFiles(prefix + "*.png"))
+                    {
+                        byte[] bytes = File.ReadAllBytes(file.FullName);
+                        string checksum = Convert.ToHexString(SHA256.HashData(bytes));
+                        if (file.Name == prefix + checksum + ".png") return bytes;
+                        TryDelete(file);
+                    }
                 }
 
-                string key = CacheKey(pdfPath);
-                string cachePath = Path.Combine(_dir, key + ".png");
-                if (File.Exists(cachePath))
+                var image = await _pdfThread.RunAsync(PdfWorkPriority.Thumbnail, () => RenderRaw(pdfPath));
+                byte[] png = EncodePng(image);
+                lock (CacheLock)
                 {
-                    return await File.ReadAllBytesAsync(cachePath);
+                    if (Pending.GetValueOrDefault(key) != reads) return null;
+                    string checksum = Convert.ToHexString(SHA256.HashData(png));
+                    File.WriteAllBytes(Path.Combine(_dir, $"{key}-{image.Version}-{checksum}.png"), png);
+                    TrimCache();
                 }
-
-                byte[] png = EncodePng(await _pdfThread.RunAsync(PdfWorkPriority.Thumbnail, () => RenderRaw(pdfPath)));
-                await File.WriteAllBytesAsync(cachePath, png);
-                TrimCache();
                 return png;
             }
             catch
             {
                 return null;
+            }
+            finally
+            {
+                lock (CacheLock)
+                    if (--reads.Count == 0 && Pending.GetValueOrDefault(key) == reads) Pending.Remove(key);
             }
         });
     }
@@ -80,37 +115,33 @@ public sealed class ThumbnailCache : IDisposable
     /// </summary>
     public void Forget(string pdfPath)
     {
-        try
+        RemoveCachedFiles(PathKey(pdfPath));
+    }
+
+    public void ForgetAll() => RemoveCachedFiles(null);
+
+    private void RemoveCachedFiles(string? key)
+    {
+        lock (CacheLock)
         {
-            string cachePath = Path.Combine(_dir, CacheKey(pdfPath) + ".png");
-            if (File.Exists(cachePath))
-            {
-                File.Delete(cachePath);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A locked file just stays cached; it is only a render of page 1.
+            if (key is null) Pending.Clear(); else Pending.Remove(key);
+            string pattern = key is null ? "*.png" : key + "-*.png";
+            foreach (var file in new DirectoryInfo(_dir).EnumerateFiles(pattern))
+                TryDelete(file);
         }
     }
 
-    /// <summary>Deletes every cached thumbnail.</summary>
-    public void ForgetAll()
+    private static void TryDelete(FileInfo file)
     {
-        try
-        {
-            foreach (var file in new DirectoryInfo(_dir).GetFiles("*.png"))
-            {
-                try { file.Delete(); } catch (IOException) { }
-            }
-        }
+        try { file.Delete(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            ErrorLog.Default.Write(nameof(ThumbnailCache), ex);
         }
     }
 
     /// <summary>Raw BGRA pixels detached from the pooled render buffer, safe to hand off the PDFium thread.</summary>
-    private readonly record struct RawImage(byte[] Pixels, int Width, int Height);
+    private readonly record struct RawImage(byte[] Pixels, int Width, int Height, string Version);
 
     /// <summary>Runs on the PDFium thread. PNG encoding deliberately does not — it needs no PDFium state.</summary>
     private static RawImage RenderRaw(string pdfPath)
@@ -124,7 +155,7 @@ public sealed class ThumbnailCache : IDisposable
             // The pooled buffer may be longer than the image; copy the exact bytes.
             var pixels = new byte[page.Stride * page.Height];
             Array.Copy(page.Pixels, pixels, pixels.Length);
-            return new RawImage(pixels, page.Width, page.Height);
+            return new RawImage(pixels, page.Width, page.Height, doc.ThumbnailVersion);
         }
         finally
         {
@@ -152,19 +183,10 @@ public sealed class ThumbnailCache : IDisposable
         return bytes;
     }
 
-    private static string CacheKey(string pdfPath)
+    private static string PathKey(string pdfPath)
     {
-        string stamp;
-        try
-        {
-            stamp = File.GetLastWriteTimeUtc(pdfPath).Ticks.ToString();
-        }
-        catch
-        {
-            stamp = "0";
-        }
-        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(pdfPath.ToLowerInvariant() + "|" + stamp));
-        return Convert.ToHexString(hash)[..24];
+        var path = Path.GetFullPath(pdfPath).ToUpperInvariant();
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(path)))[..24];
     }
 
     private void TrimCache()

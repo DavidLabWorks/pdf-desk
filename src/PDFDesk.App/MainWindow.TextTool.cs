@@ -71,14 +71,17 @@ public sealed partial class MainWindow
         viewer.TextCommitFailed += Viewer_TextCommitFailed;
         // Placing a box is a one-shot action, like a sticky note: the tool drops
         // after it commits rather than arming the next click as another box.
-        viewer.TextCommitted += (_, _) => SetActiveTool(AnnotationTool.None);
+        viewer.TextCommitted += Viewer_TextCommitted;
     }
 
     private void DetachTextTool(PdfViewer viewer)
     {
+        viewer.TextCommitted -= Viewer_TextCommitted;
         viewer.TextEditingChanged -= Viewer_TextEditingChanged;
         viewer.TextCommitFailed -= Viewer_TextCommitFailed;
     }
+
+    private void Viewer_TextCommitted(object? sender, EventArgs args) => SetActiveTool(AnnotationTool.None);
 
     private void Viewer_TextCommitFailed(object? sender, EventArgs e) =>
         ShowError(UiText.Current.TextCommitFailed);

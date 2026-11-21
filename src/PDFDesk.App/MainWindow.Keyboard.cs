@@ -63,6 +63,7 @@ public sealed partial class MainWindow
         // Escape peels off one layer at a time, outermost first.
         AddAccelerator(VirtualKey.Escape, VirtualKeyModifiers.None, () =>
         {
+            if (_activeViewer?.CancelScreenshot() == true) return;
             if (_presentationWindow != null)
             {
                 ExitPresentation();
@@ -321,11 +322,11 @@ public sealed partial class MainWindow
             .GetKeyStateForCurrentThread(key)
             .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
-    private void CloseCurrentTab()
+    private async void CloseCurrentTab()
     {
         if (Tabs.SelectedItem is TabViewItem tab)
         {
-            CloseTab(tab);
+            await CloseTabWithPromptAsync(tab);
         }
     }
 

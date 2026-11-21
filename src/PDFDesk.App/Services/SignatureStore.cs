@@ -166,7 +166,7 @@ public sealed class SignatureStore
     /// <summary>Saves straight BGRA as a PNG and returns its path.</summary>
     public async Task<string> SaveAsync(byte[] bgra, int width, int height)
     {
-        string path = System.IO.Path.Combine(_dir, $"sig-{DateTime.UtcNow:yyyyMMdd-HHmmssfff}.png");
+        string path = System.IO.Path.Combine(_dir, $"sig-{Guid.NewGuid():N}.png");
 
         using var memory = new InMemoryRandomAccessStream();
         var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, memory);
@@ -185,9 +185,13 @@ public sealed class SignatureStore
         // Write-then-rename so a crash mid-write can't leave a truncated PNG,
         // matching AppStateStore.Save.
         string tmp = path + ".tmp";
-        await File.WriteAllBytesAsync(tmp, bytes);
-        File.Move(tmp, path, overwrite: true);
-        return path;
+        try
+        {
+            await File.WriteAllBytesAsync(tmp, bytes);
+            File.Move(tmp, path);
+            return path;
+        }
+        finally { File.Delete(tmp); }
     }
 
     public void Delete(string path)

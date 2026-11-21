@@ -56,6 +56,16 @@ public sealed partial class DocumentFindBar : UserControl
             return;
         }
         Visibility = Visibility.Collapsed;
+        ResetResults();
+    }
+
+    internal void RefreshSearch()
+    {
+        if (Visibility == Visibility.Visible) RunSearch();
+    }
+
+    internal void ResetResults()
+    {
         CancelSearch();
         _viewer?.ClearSearch();
         _searchHits = [];

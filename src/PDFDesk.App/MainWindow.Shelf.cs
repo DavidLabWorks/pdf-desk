@@ -220,6 +220,7 @@ public sealed partial class MainWindow
                     ShowError(UiText.Translate("That PDF already has a shelf entry. Choose the original document."));
                     return;
                 }
+                _thumbnails.Forget(card.Path);
                 entry.Path = file.Path;
                 entry.DisplayName = file.Name;
                 entry.IsLibraryCopy = _library.Contains(file.Path);
@@ -258,7 +259,7 @@ public sealed partial class MainWindow
         if (bookmarks > 0)
         {
             forget.Text = bookmarks == 1
-                ? "Remove from list (discards 1 bookmark)"
+                ? UiText.Translate("Remove from list (discards 1 bookmark)")
                 : UiText.Format("Remove from list (discards {0} bookmarks)", bookmarks);
         }
         forget.Click += (_, _) =>
