@@ -418,6 +418,7 @@ public sealed partial class MainWindow
             ContentTemplate = (DataTemplate)RootGrid.Resources["UnsavedDocumentsTemplate"],
             PrimaryButtonText = names.Length == 1 ? UiText.Current.Save : UiText.Current.SaveAllChanges,
             SecondaryButtonText = UiText.Current.DiscardChanges,
+            SecondaryButtonStyle = (Style)Application.Current.Resources["DestructiveDialogButtonStyle"],
             CloseButtonText = UiText.Current.Cancel,
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = Content.XamlRoot,

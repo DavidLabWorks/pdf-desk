@@ -41,7 +41,9 @@ public sealed partial class MainWindow
         var paths = _state.Recents.Where(entry => entry.IsFavorite &&
                 (filter == null || (entry.FavoriteFolderId ?? Guid.Empty) == filter))
             .Select(entry => entry.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        FavoriteThumbs.ItemsSource = RecentThumbs.Items.OfType<RecentCard>().Where(card => paths.Contains(card.Path)).ToList();
+        FavoriteThumbs.ItemsSource = new System.Collections.ObjectModel.ObservableCollection<RecentCard>(
+            RecentThumbs.Items.OfType<RecentCard>().Where(card => paths.Contains(card.Path)));
+        FavoriteList.ItemsSource = FavoriteThumbs.ItemsSource;
     }
 
     private void SaveFolderChanges()
@@ -62,6 +64,7 @@ public sealed partial class MainWindow
     private static MenuFlyoutItem FolderMenuItem(string label, Symbol icon, Action action)
     {
         var item = new MenuFlyoutItem { Text = label, Icon = new SymbolIcon(icon) };
+        if (icon is Symbol.Delete or Symbol.UnPin) PDFDesk.Styles.DestructiveAction.SetIsEnabled(item, true);
         item.Click += (_, _) => action();
         return item;
     }
@@ -111,6 +114,11 @@ public sealed partial class MainWindow
     private void FolderLocation_Changed(object sender, SelectionChangedEventArgs args)
     {
         if (_refreshingLocations || FolderLocations.SelectedItem is not FavoriteLocation location) return;
+        if (_folderFilter != location.Id)
+        {
+            SetRecentSelection(false);
+            AlsoDeleteRecentFiles.IsChecked = false;
+        }
         _folderFilter = location.Id;
         FavoritesTab.IsChecked = true;
         SaveFolderChanges();
@@ -196,7 +204,7 @@ public sealed partial class MainWindow
         {
             if (node is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase button)
             {
-                if (button is Button source && button.DataContext is RecentCard card && button.Tag as string == "ShelfDocument")
+                if (button is Button source && button.DataContext is RecentCard { CanSelect: false } card && button.Tag as string == "ShelfDocument")
                 {
                     _dragSource = source;
                     _dragPointer = e.Pointer.PointerId;
@@ -454,25 +462,11 @@ public sealed partial class MainWindow
 
     private void NewFavoriteFolder_Click(object sender, RoutedEventArgs args) => _ = EditFolderAsync(null);
 
-    private static ContentDialog FavoriteDialog(string title, string glyph, string primary)
-    {
-        var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-        heading.Children.Add(new FontIcon { Glyph = glyph, FontSize = 22, VerticalAlignment = VerticalAlignment.Center });
-        heading.Children.Add(new TextBlock { Text = title, FontSize = 22, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        var dialog = new ContentDialog
-        {
-            Title = heading, PrimaryButtonText = primary, CloseButtonText = UiText.Current.Cancel,
-            DefaultButton = ContentDialogButton.Primary,
-        };
-        AutomationProperties.SetName(dialog, title);
-        return dialog;
-    }
-
     private (StackPanel Panel, TextBox Box) FolderNameEditor(ContentDialog dialog, Guid? id)
     {
         var ui = UiText.Current;
-        var box = new TextBox { Header = ui.FolderName, PlaceholderText = ui.FolderNameExample, MaxLength = 80,
-            Text = id.HasValue ? _state.FavoriteFolders[id.Value] : "" };
+        var box = new TextBox { Header = ui.FolderName, PlaceholderText = ui.FolderNameExample, MaxLength = 80 };
+        if (id.HasValue) box.Text = _state.FavoriteFolders[id.Value];
         var error = new TextBlock { Text = ui.FolderNameTaken, Visibility = Visibility.Collapsed,
             TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["ValidationErrorTextStyle"] };
         AutomationProperties.SetLiveSetting(error, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
@@ -488,14 +482,12 @@ public sealed partial class MainWindow
 
     private async Task EditFolderAsync(Guid? id)
     {
-        var ui = UiText.Current;
         if (id.HasValue && !_state.FavoriteFolders.ContainsKey(id.Value)) return;
-        var dialog = FavoriteDialog(id.HasValue ? ui.RenameFolder : ui.NewFavoriteFolder, FolderGlyph, id.HasValue ? ui.Save : ui.Create);
+        var dialog = new FolderNameDialog(id.HasValue);
         var (panel, box) = FolderNameEditor(dialog, id);
-        dialog.Content = panel;
-        dialog.IsPrimaryButtonEnabled = false;
-        dialog.Opened += (_, _) => { box.Focus(FocusState.Programmatic); box.SelectAll(); };
-        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary) return;
+        dialog.SetEditor(panel, box);
+        await ShowDialogAsync(dialog);
+        if (!dialog.Submitted) return;
         if (!TrySaveFolderName(id, box.Text, out Guid folder)) return;
         _folderFilter = folder;
         FavoritesTab.IsChecked = true;
@@ -513,42 +505,16 @@ public sealed partial class MainWindow
     private async Task ChooseFavoriteAsync(RecentCard card)
     {
         var ui = UiText.Current;
-        var dialog = FavoriteDialog(card.IsFavorite ? ui.MoveFavorite : ui.AddToFavorites, "\uE734", ui.Save);
-        if (card.IsFavorite) dialog.SecondaryButtonText = ui.Unfavorite;
         var current = _state.FindRecent(card.Path)?.FavoriteFolderId ?? Guid.Empty;
-        var rows = Locations(false);
-        var create = new FavoriteLocation(null, ui.NewFavoriteFolder, "\uE710", "");
-        rows.Add(create);
-        var list = new ListView
-        {
-            ItemsSource = rows, SelectedItem = rows.FirstOrDefault(r => r.Id == current) ?? rows[0],
-            ItemTemplate = (DataTemplate)RootGrid.Resources["FavoriteLocationTemplate"],
-            ItemContainerStyle = (Style)RootGrid.Resources["FavoriteLocationStyle"],
-            MaxHeight = 260, CornerRadius = new CornerRadius(6)
-        };
-        AutomationProperties.SetName(list, ui.FavoriteFoldersLabel);
+        var dialog = new FavoritePickerDialog(card, Locations(false), current,
+            (DataTemplate)RootGrid.Resources["FavoriteLocationTemplate"]);
         var (editor, box) = FolderNameEditor(dialog, null);
-        editor.Visibility = Visibility.Collapsed;
-        list.SelectionChanged += (_, _) =>
-        {
-            bool creating = Equals(list.SelectedItem, create);
-            editor.Visibility = creating ? Visibility.Visible : Visibility.Collapsed;
-            if (creating)
-            {
-                box.Text = "";
-                box.Focus(FocusState.Programmatic);
-            }
-            dialog.IsPrimaryButtonEnabled = !creating;
-        };
-        var filename = new TextBlock { Text = card.DisplayName, TextTrimming = TextTrimming.CharacterEllipsis,
-            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"] };
-        ToolTipService.SetToolTip(filename, card.DisplayName);
-        dialog.Content = new StackPanel { MinWidth = 310, Spacing = 12, Children = { filename, list, editor } };
-        var result = await ShowDialogAsync(dialog);
-        if (result == ContentDialogResult.Secondary) SetFavorite(card, false, null);
-        if (result != ContentDialogResult.Primary || list.SelectedItem is not FavoriteLocation location) return;
-        Guid? folder = location.Id;
-        if (location == create)
+        dialog.SetNameEditor(editor, box);
+        await ShowDialogAsync(dialog);
+        if (dialog.Choice == ContentDialogResult.Secondary) SetFavorite(card, false, null);
+        if (dialog.Choice != ContentDialogResult.Primary) return;
+        Guid? folder = dialog.Location?.Id;
+        if (dialog.Creating)
         {
             if (!TrySaveFolderName(null, box.Text, out var created)) return;
             folder = created;
@@ -570,6 +536,7 @@ public sealed partial class MainWindow
             Title = ui.DeleteFolder,
             Content = ui.ConfirmDeleteFolder(name),
             PrimaryButtonText = ui.Delete,
+            PrimaryButtonStyle = (Style)Application.Current.Resources["DestructiveDialogButtonStyle"],
             CloseButtonText = ui.Cancel,
             DefaultButton = ContentDialogButton.Close,
         };

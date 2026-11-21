@@ -4,6 +4,12 @@
 
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="FieldSurfaceBrush" Color="#FCFCFD" />
+            <SolidColorBrush x:Key="FieldOutlineBrush" Color="#B8BAC0" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFF" />
+            <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="FieldSurfaceBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="FieldOutlineBrush" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="AccentTextFillColorPrimaryBrush" />
             <SolidColorBrush x:Key="ShelfFolderIconBrush" Color="#D99A00" />
             <x:Double x:Key="FolderSelectedOpacity">0.12</x:Double>
             <x:Double x:Key="FolderHoverOpacity">0.17</x:Double>
@@ -38,6 +44,12 @@
             <Color x:Key="HomeCardHoverTextColor">#202020</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="FieldSurfaceBrush" Color="#292B2E" />
+            <SolidColorBrush x:Key="FieldOutlineBrush" Color="#73767D" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#242528" />
+            <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="FieldSurfaceBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="FieldOutlineBrush" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="AccentTextFillColorPrimaryBrush" />
             <SolidColorBrush x:Key="ShelfFolderIconBrush" Color="#EAC474" />
             <x:Double x:Key="FolderSelectedOpacity">0.18</x:Double>
             <x:Double x:Key="FolderHoverOpacity">0.23</x:Double>
@@ -72,6 +84,12 @@
             <Color x:Key="HomeCardHoverTextColor">#F2F2F2</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="FieldSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="FieldOutlineBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{ThemeResource SystemColorWindowColor}" />
+            <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="FieldSurfaceBrush" />
+            <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="FieldOutlineBrush" />
+            <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="SystemColorHighlightColorBrush" />
             <SolidColorBrush x:Key="ShelfFolderIconBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <x:Double x:Key="FolderSelectedOpacity">0.12</x:Double>
             <x:Double x:Key="FolderHoverOpacity">0.17</x:Double>

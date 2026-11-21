@@ -10,7 +10,7 @@
     <Product>PDF Desk</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\pdfdesk.ico</ApplicationIcon>
-    <Version>0.0.45</Version>
+    <Version>0.0.46</Version>
     <Platforms>x64;ARM64</Platforms>
     <!-- The RID must follow Platform, or a multi-arch Store bundle builds the
          ARM64 leg with win-x64 and fails (NETSDK1032). -->

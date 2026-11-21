@@ -263,6 +263,29 @@ public sealed class UiText : INotifyPropertyChanged
     public string RemoveBackground => Chinese ? "移除背景" : "Remove background";
     public string RemoveFromFavorites => Chinese ? "取消收藏" : "Remove from favorites";
     public string Unfavorite => Chinese ? "取消收藏" : "Unfavorite";
+    public string ShelfSort => Chinese ? "排序" : "Sort";
+    public string ShelfSortName => Chinese ? "名称" : "Name";
+    public string ShelfSortDirection(bool byName, bool ascending) => (byName, ascending) switch
+    {
+        (true, true) => Chinese ? "名称升序（A 到 Z）" : "Name (A to Z)",
+        (true, false) => Chinese ? "名称降序（Z 到 A）" : "Name (Z to A)",
+        (false, true) => Chinese ? "最早在前" : "Oldest first",
+        (false, false) => Chinese ? "最新在前" : "Newest first"
+    };
+    public string ManageRecent => Chinese ? "批量选择" : "Select multiple files";
+    public string RemoveRecentHint => Chinese ? "移除记录会一并清除其收藏、阅读位置和书签。PDF 文件会保留。" :
+        "Removing entries clears their favorites, reading positions and bookmarks. The PDF files are kept.";
+    public string AlsoDeleteFiles => Chinese ? "同时删除文件" : "Also delete files";
+    public string DeleteFiles => Chinese ? "删除文件" : "Delete files";
+    public string MoveToRecycleBin => Chinese ? "移到回收站" : "Move to Recycle Bin";
+    public string ConfirmDeleteRecentFiles(int count) => Chinese ? $"将 {count} 个文件移到回收站？" :
+        count == 1 ? "Move this file to the Recycle Bin?" : $"Move {count} files to the Recycle Bin?";
+    public string RecycleRecentHint => Chinese ? "删除源文件后，对应记录将同时从「最近」和「收藏」移除，阅读位置和书签也会被清除。" :
+        "Deleting the source files removes their entries from both Recent and Favorites, along with their reading positions and bookmarks.";
+    public string RecyclePermanentHint => Chinese ? "如果文件无法回收，Windows 会在永久删除前再次询问。" :
+        "If a file cannot be recycled, Windows will ask before permanently deleting it.";
+    public string ClosePdfFirst => Chinese ? "请先关闭已打开的 PDF。" : "Close the open PDF first.";
+    public string RecentSelectedCount(int count) => Chinese ? $"已选 {count} 项" : $"{count} selected";
     public string RemoveFromList => Chinese ? "从列表中移除" : "Remove from list";
     public string RemoveThePaperBackground => Chinese ? "移除纸张背景" : "Remove the paper background";
     public string Rename => Chinese ? "重命名" : "Rename";

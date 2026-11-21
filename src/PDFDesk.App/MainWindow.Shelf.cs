@@ -1,7 +1,9 @@
+using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using PDFDesk.Controls;
 using PDFDesk.Engine;
 using PDFDesk.Services;
@@ -46,6 +48,7 @@ public sealed partial class MainWindow
     private void ShelfSection_Checked(object sender, RoutedEventArgs args)
     {
         if (StartPage?.IsLoaded != true) return;
+        RecentSelectionMode.IsChecked = false;
         bool favorites = ReferenceEquals(sender, FavoritesTab);
         if (_state.Settings.FavoritesTabSelected != favorites)
         {
@@ -55,13 +58,256 @@ public sealed partial class MainWindow
         UpdateShelfSection();
     }
 
+    private IEnumerable<RecentCard> RecentCards => RecentThumbs.Items.OfType<RecentCard>();
+
+    private IEnumerable<RecentCard> VisibleShelfCards => FavoritesTab.IsChecked == true
+        ? FavoriteThumbs.Items.OfType<RecentCard>() : RecentCards;
+
+    private void RecentSelectionMode_Click(object sender, RoutedEventArgs args) => UpdateShelfSection();
+
+    private void RecentSelection_Click(object sender, RoutedEventArgs args)
+    {
+        if (sender is not CheckBox { DataContext: RecentCard card } box) return;
+        card.IsSelected = box.IsChecked == true;
+        UpdateRecentSelectionBar();
+    }
+
+    private void AllRecent_Click(object sender, RoutedEventArgs args) =>
+        SetRecentSelection(VisibleShelfCards.Any(card => !card.IsSelected));
+
+    private void SetRecentSelection(bool selected)
+    {
+        foreach (var card in VisibleShelfCards) card.IsSelected = selected;
+        UpdateRecentSelectionBar();
+    }
+
+    private void AlsoDeleteRecentFiles_Click(object sender, RoutedEventArgs args) => UpdateRecentRemovalLabel();
+
+    private void UpdateRecentRemovalLabel()
+    {
+        bool files = AlsoDeleteRecentFiles.IsChecked == true;
+        var ui = UiText.Current;
+        bool favorites = FavoritesTab.IsChecked == true;
+        PDFDesk.Styles.DestructiveAction.SetIsEnabled(RemoveSelectedRecent, files || !favorites);
+        RecentRemovalLabel.Text = files ? ui.DeleteFiles : favorites ? ui.Unfavorite : ui.RemovePages;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(RemoveSelectedRecent, files ? ui.DeleteFiles : favorites ? ui.Unfavorite : ui.RemoveFromList);
+        ToolTipService.SetToolTip(RemoveSelectedRecent, files ? ui.DeleteFiles : favorites ? ui.Unfavorite : ui.RemoveRecentHint);
+    }
+
+    private async void RemoveSelectedRecent_Click(object sender, RoutedEventArgs args)
+    {
+        var cards = VisibleShelfCards.Where(card => card.IsSelected).ToArray();
+        if (cards.Length == 0) return;
+        if (AlsoDeleteRecentFiles.IsChecked != true)
+        {
+            if (FavoritesTab.IsChecked == true) UnfavoriteCards(cards);
+            else ForgetCards(cards);
+            return;
+        }
+
+        var ui = UiText.Current;
+        var dialog = new RecycleFilesDialog(cards);
+        await ShowDialogAsync(dialog);
+        if (!dialog.Confirmed) return;
+        var removed = new List<RecentCard>();
+        var failed = new List<string>();
+        foreach (var card in cards)
+        {
+            try
+            {
+                if (MatchingTabs(new WindowsFileIdentity.NavigationKey(card.Path)).Any())
+                    throw new IOException(ui.ClosePdfFirst);
+                if (!RecycleBin.DeletePdf(card.Path, WinRT.Interop.WindowNative.GetWindowHandle(this))) break;
+                removed.Add(card);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                failed.Add($"{card.Path} — {ex.Message}");
+            }
+        }
+        AlsoDeleteRecentFiles.IsChecked = false;
+        UpdateRecentRemovalLabel();
+        if (removed.Count > 0) ForgetCards(removed);
+        if (failed.Count > 0) ShowError(string.Join(Environment.NewLine, failed));
+    }
+
+    private void UpdateRecentSelectionBar()
+    {
+        int count = VisibleShelfCards.Count(card => card.IsSelected);
+        RemoveSelectedRecent.IsEnabled = AlsoDeleteRecentFiles.IsEnabled = count > 0;
+        if (count == 0) AlsoDeleteRecentFiles.IsChecked = false;
+        UpdateRecentRemovalLabel();
+        AllRecentBox.IsChecked = count == 0 ? false : count == VisibleShelfCards.Count() ? true : null;
+        RecentSelectionCount.Text = UiText.Current.RecentSelectedCount(count);
+        SetSelectionBarExpanded(RecentSelectionMode.IsChecked == true);
+    }
+
+    private bool _selectionBarExpanded;
+    private Storyboard? _selectionBarMotion;
+
+    private void SetSelectionBarExpanded(bool expanded)
+    {
+        if (_selectionBarExpanded == expanded) return;
+        _selectionBarExpanded = expanded;
+        var reveal = RecentSelectionReveal;
+        double width = reveal.ActualWidth;
+        double opacity = reveal.Visibility == Visibility.Visible ? reveal.Opacity : 0;
+        _selectionBarMotion?.Stop();
+        _selectionBarMotion = null;
+        reveal.Visibility = Visibility.Visible;
+        RecentSelectionBar.IsHitTestVisible = expanded;
+        void Finish()
+        {
+            reveal.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+            reveal.Width = expanded ? double.NaN : 0;
+            reveal.Opacity = 1;
+        }
+        if (!reveal.IsLoaded || !new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        {
+            Finish();
+            return;
+        }
+
+        RecentSelectionBar.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var motion = new Storyboard();
+        void Animate(string property, double from, double to, int milliseconds)
+        {
+            var animation = new DoubleAnimation
+            {
+                From = from, To = to, Duration = TimeSpan.FromMilliseconds(milliseconds),
+                EnableDependentAnimation = property == "Width",
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(animation, reveal);
+            Storyboard.SetTargetProperty(animation, property);
+            motion.Children.Add(animation);
+        }
+        Animate("Width", width, expanded ? RecentSelectionBar.DesiredSize.Width : 0, expanded ? 190 : 150);
+        Animate("Opacity", opacity, expanded ? 1 : 0, expanded ? 180 : 95);
+        _selectionBarMotion = motion;
+        motion.Completed += (_, _) =>
+        {
+            if (_selectionBarMotion != motion) return;
+            motion.Stop();
+            _selectionBarMotion = null;
+            Finish();
+        };
+        motion.Begin();
+    }
+
+    private void UnfavoriteCards(IReadOnlyList<RecentCard> cards)
+    {
+        var paths = cards.Select(card => card.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in _state.Recents.Where(entry => paths.Contains(entry.Path)))
+        {
+            entry.IsFavorite = false;
+            entry.FavoriteFolderId = null;
+        }
+        _store.Save(_state);
+        foreach (var window in App.Readers)
+        {
+            foreach (var card in window.RecentCards.Where(card => paths.Contains(card.Path)))
+                card.IsFavorite = false;
+            window.RemoveShelfCards(window.FavoriteThumbs, paths);
+            window.UpdateShelfSection();
+        }
+    }
+
+    private void ForgetCards(IReadOnlyList<RecentCard> cards)
+    {
+        foreach (var card in cards)
+        {
+            _state.ForgetRecent(card.Path);
+            _thumbnails.Forget(card.Path);
+        }
+        _store.Save(_state);
+        var paths = cards.Select(card => card.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var window in App.Readers)
+        {
+            window.RemoveShelfCards(window.RecentThumbs, paths);
+            window.RemoveShelfCards(window.FavoriteThumbs, paths);
+            window.UpdateShelfSection();
+        }
+    }
+
+    private void RemoveShelfCards(ListViewBase view, HashSet<string> paths)
+    {
+        if (view.ItemsSource is not ObservableCollection<RecentCard> items) return;
+        for (int i = items.Count - 1; i >= 0; i--)
+            if (paths.Contains(items[i].Path)) items.RemoveAt(i);
+    }
+
     private void PopulateRecents()
     {
+        var selected = RecentCards.Where(card => card.IsSelected).Select(card => card.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var cards = _state.Recents
-            .Select(r => new RecentCard(r.Path, r.DisplayName, r.LastOpenedUtc, r.IsFavorite)).ToList();
-        RecentThumbs.ItemsSource = cards;
+            .Select(r => new RecentCard(r.Path, r.DisplayName, r.LastOpenedUtc, r.IsFavorite) { IsSelected = selected.Contains(r.Path) }).ToList();
+        RecentThumbs.ItemsSource = new ObservableCollection<RecentCard>(OrderShelfCards(cards));
+        ShelfList.ItemsSource = RecentThumbs.ItemsSource;
         FilterFavorites();
         UpdateShelfSection();
+    }
+
+    private void ShelfSortMenu_Opening(object sender, object args)
+    {
+        var settings = _state.Settings;
+        SortName.IsChecked = settings.ShelfListSortByName;
+        SortOpened.IsChecked = !SortName.IsChecked;
+        SortAscending.IsChecked = settings.ShelfListSortAscending;
+        SortDescending.IsChecked = !SortAscending.IsChecked;
+        SortAscending.Text = UiText.Current.ShelfSortDirection(SortName.IsChecked, true);
+        SortDescending.Text = UiText.Current.ShelfSortDirection(SortName.IsChecked, false);
+    }
+
+    private void ShelfSort_Click(object sender, RoutedEventArgs args)
+    {
+        var settings = _state.Settings;
+        if (ReferenceEquals(sender, SortName) || ReferenceEquals(sender, SortOpened))
+        {
+            bool byName = ReferenceEquals(sender, SortName);
+            if (settings.ShelfListSortByName == byName) return;
+            settings.ShelfListSortByName = byName;
+            settings.ShelfListSortAscending = byName;
+        }
+        else
+        {
+            bool ascending = ReferenceEquals(sender, SortAscending);
+            if (settings.ShelfListSortAscending == ascending) return;
+            settings.ShelfListSortAscending = ascending;
+        }
+        _store.Save(_state);
+        foreach (var window in App.Readers)
+        {
+            window.ApplyShelfOrder(window.RecentThumbs);
+            window.ApplyShelfOrder(window.FavoriteThumbs);
+            bool favorites = window.FavoritesTab.IsChecked == true;
+            ListViewBase view = window.ShelfListMode.IsChecked == true
+                ? (favorites ? window.FavoriteList : window.ShelfList)
+                : (favorites ? window.FavoriteThumbs : window.RecentThumbs);
+            if (window.StartPage.Visibility == Visibility.Visible && view.Items.Count > 0)
+            {
+                view.UpdateLayout();
+                view.ScrollIntoView(view.Items[0], ScrollIntoViewAlignment.Leading);
+            }
+        }
+    }
+
+    private IEnumerable<RecentCard> OrderShelfCards(IEnumerable<RecentCard> source)
+    {
+        var settings = _state.Settings;
+        var comparer = StringComparer.CurrentCultureIgnoreCase;
+        var ordered = settings.ShelfListSortByName
+            ? (settings.ShelfListSortAscending ? source.OrderBy(c => c.DisplayName, comparer) : source.OrderByDescending(c => c.DisplayName, comparer))
+            : (settings.ShelfListSortAscending ? source.OrderBy(c => c.LastOpenedUtc) : source.OrderByDescending(c => c.LastOpenedUtc));
+        return ordered.ThenBy(c => c.Path, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void ApplyShelfOrder(ListViewBase view)
+    {
+        if (view.ItemsSource is not ObservableCollection<RecentCard> items) return;
+        var desired = OrderShelfCards(items).ToArray();
+        for (int i = 0; i < desired.Length; i++)
+            if (items[i] != desired[i]) items.Move(items.IndexOf(desired[i]), i);
     }
 
     private void UpdateShelfSection()
@@ -69,6 +315,16 @@ public sealed partial class MainWindow
         bool any = RecentThumbs.Items.Count > 0;
         bool favorites = FavoritesTab.IsChecked == true;
         bool list = favorites ? _state.Settings.FavoritesUseList : _state.Settings.RecentUsesList;
+        var scope = VisibleShelfCards.ToHashSet();
+        RecentSelectionGroup.Visibility = scope.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (scope.Count == 0) RecentSelectionMode.IsChecked = false;
+        bool selecting = RecentSelectionMode.IsChecked == true;
+        foreach (var card in RecentCards)
+        {
+            card.CanSelect = selecting && scope.Contains(card);
+            if (!card.CanSelect) card.IsSelected = false;
+        }
+        UpdateRecentSelectionBar();
         FolderBar.Visibility = favorites ? Visibility.Visible : Visibility.Collapsed;
         if (favorites) RefreshFolderLocations();
         (list ? ShelfListMode : ShelfCardMode).IsChecked = true;
@@ -80,8 +336,7 @@ public sealed partial class MainWindow
         bool showFavoriteList = favorites && list;
         ShelfListSurface.Visibility = showRecentList || _retainedRecentView == ShelfListSurface ? Visibility.Visible : Visibility.Collapsed;
         FavoriteListSurface.Visibility = showFavoriteList ? Visibility.Visible : Visibility.Collapsed;
-        if (showRecentList) ShelfList.ItemsSource = RecentThumbs.ItemsSource;
-        if (showFavoriteList) FavoriteList.ItemsSource = FavoriteThumbs.ItemsSource;
+        ShelfSortButton.IsEnabled = (favorites ? FavoriteThumbs.Items.Count : RecentThumbs.Items.Count) > 1;
         if (favorites && FavoriteThumbs.Items.Count == 0)
         {
             bool filtered = _folderFilter.HasValue;
@@ -199,6 +454,12 @@ public sealed partial class MainWindow
         if (_capturedDrag != null) return;
         if (sender is Button { DataContext: RecentCard card })
         {
+            if (card.CanSelect)
+            {
+                card.IsSelected = !card.IsSelected;
+                UpdateRecentSelectionBar();
+                return;
+            }
             if (File.Exists(card.Path))
             {
                 OpenOrActivate(card.Path);
@@ -252,7 +513,8 @@ public sealed partial class MainWindow
         var copy = new MenuFlyoutItem { Text = UiText.Current.CopyFilePath, Icon = new SymbolIcon(Symbol.Copy) };
         copy.Click += (_, _) => _ = CopyFilePathAsync(card.Path);
 
-        var forget = new MenuFlyoutItem { Text = UiText.Current.RemoveFromList, Icon = new FontIcon { Glyph = "\uECC9" } }; // RemoveFrom
+        var forget = new MenuFlyoutItem { Text = UiText.Current.RemoveFromList, Icon = new SymbolIcon(Symbol.Delete) };
+        PDFDesk.Styles.DestructiveAction.SetIsEnabled(forget, true);
         // Bookmarks hang off the recent entry, so forgetting the file forgets
         // them. Say so rather than discovering it later.
         int bookmarks = _state.FindRecent(card.Path)?.Bookmarks.Count ?? 0;
@@ -262,13 +524,7 @@ public sealed partial class MainWindow
                 ? UiText.Translate("Remove from list (discards 1 bookmark)")
                 : UiText.Format("Remove from list (discards {0} bookmarks)", bookmarks);
         }
-        forget.Click += (_, _) =>
-        {
-            _state.ForgetRecent(card.Path);
-            _thumbnails.Forget(card.Path);
-            _store.Save(_state);
-            PopulateRecents();
-        };
+        forget.Click += (_, _) => ForgetCards([card]);
 
         flyout.Items.Clear();
         AddFavoriteActions(flyout, card);

@@ -1,0 +1,91 @@
+<ContentDialog
+    x:Class="PDFDesk.Controls.FavoritePickerDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Style="{StaticResource DefaultContentDialogStyle}" CornerRadius="{StaticResource ReaderToolbarRadius}"
+    KeyDown="Dialog_KeyDown" Opened="Dialog_Opened" Closed="Dialog_Closed">
+    <ContentDialog.Resources>
+        <StaticResource x:Key="ContentDialogMaxHeight" ResourceKey="FavoritePickerMaxHeight" />
+        <Thickness x:Key="ContentDialogPadding">0</Thickness>
+    </ContentDialog.Resources>
+    <Grid x:Name="Body" Padding="24" Width="{StaticResource FavoritePickerWidth}" RowDefinitions="Auto,*,Auto" RowSpacing="{StaticResource SpaceL}">
+        <StackPanel Spacing="{StaticResource SpaceS}">
+            <TextBlock x:Name="Heading" Style="{StaticResource SubtitleTextBlockStyle}" AutomationProperties.HeadingLevel="Level2" />
+            <TextBlock x:Name="DocumentName" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                       Style="{StaticResource BodyTextBlockStyle}" Foreground="{ThemeResource HomeSecondaryTextBrush}" />
+        </StackPanel>
+        <Grid Grid.Row="1" RowDefinitions="Auto,*,Auto" RowSpacing="{StaticResource SpaceS}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding FavoriteFoldersLabel, Source={StaticResource UiText}}" />
+                <Button x:Name="NewFolder" Grid.Column="1" Padding="12,6" Click="NewFolder_Click"
+                        AutomationProperties.Name="{Binding NewFavoriteFolder, Source={StaticResource UiText}}">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource SpaceS}">
+                        <FontIcon Glyph="&#xE8F4;" FontSize="{StaticResource IconGlyphSize}" />
+                        <TextBlock Text="{Binding NewFavoriteFolder, Source={StaticResource UiText}}" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Border Grid.Row="1" Style="{StaticResource ReaderSideGroupStyle}" Padding="4">
+                <ListView x:Name="LocationsList" SelectionMode="Single" ScrollViewer.VerticalScrollBarVisibility="Auto" SelectionChanged="Location_Changed"
+                          AutomationProperties.Name="{Binding FavoriteFoldersLabel, Source={StaticResource UiText}}">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="UseSystemFocusVisuals" Value="True" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListViewItem">
+                                        <Grid Height="{StaticResource HeaderHeight}" Background="Transparent">
+                                            <VisualStateManager.VisualStateGroups>
+                                                <VisualStateGroup x:Name="CommonStates">
+                                                    <VisualState x:Name="Normal" />
+                                                    <VisualState x:Name="PointerOver">
+                                                        <VisualState.Setters><Setter Target="Hover.Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" /></VisualState.Setters>
+                                                    </VisualState>
+                                                    <VisualState x:Name="Pressed">
+                                                        <VisualState.Setters><Setter Target="Hover.Background" Value="{ThemeResource SubtleFillColorTertiaryBrush}" /></VisualState.Setters>
+                                                    </VisualState>
+                                                    <VisualState x:Name="Selected">
+                                                        <VisualState.Setters>
+                                                            <Setter Target="Tint.Opacity" Value="{ThemeResource FolderSelectedOpacity}" />
+                                                            <Setter Target="Tick.Visibility" Value="Visible" />
+                                                        </VisualState.Setters>
+                                                    </VisualState>
+                                                    <VisualState x:Name="PointerOverSelected">
+                                                        <VisualState.Setters>
+                                                            <Setter Target="Tint.Opacity" Value="{ThemeResource FolderHoverOpacity}" />
+                                                            <Setter Target="Tick.Visibility" Value="Visible" />
+                                                        </VisualState.Setters>
+                                                    </VisualState>
+                                                    <VisualState x:Name="PressedSelected">
+                                                        <VisualState.Setters>
+                                                            <Setter Target="Tint.Opacity" Value="{ThemeResource FolderPressedOpacity}" />
+                                                            <Setter Target="Tick.Visibility" Value="Visible" />
+                                                        </VisualState.Setters>
+                                                    </VisualState>
+                                                </VisualStateGroup>
+                                            </VisualStateManager.VisualStateGroups>
+                                            <Border x:Name="Hover" CornerRadius="{StaticResource RadiusMedium}" />
+                                            <Border x:Name="Tint" Opacity="0" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="{StaticResource RadiusMedium}" />
+                                            <ContentPresenter Margin="8,0,36,0" VerticalAlignment="Center" HorizontalContentAlignment="Stretch"
+                                                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+                                            <FontIcon x:Name="Tick" Visibility="Collapsed" HorizontalAlignment="Right" Margin="0,0,12,0"
+                                                      Glyph="&#xE73E;" FontSize="{StaticResource IconGlyphSize}" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                        </Grid>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                </ListView>
+            </Border>
+            <ContentPresenter Grid.Row="2" x:Name="NameEditor" Visibility="Collapsed" Margin="0,4,0,0" />
+        </Grid>
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="{StaticResource SpaceS}">
+            <Button x:Name="Unfavorite" HorizontalAlignment="Left" Style="{ThemeResource SubtleButtonStyle}" Click="Unfavorite_Click"
+                    Content="{Binding Unfavorite, Source={StaticResource UiText}}" />
+            <Button Grid.Column="1" Click="Cancel_Click" Padding="16,6" Content="{Binding Cancel, Source={StaticResource UiText}}" />
+            <Button Grid.Column="2" x:Name="SaveLocation" Style="{StaticResource AccentButtonStyle}" Padding="16,6"
+                    IsEnabled="{x:Bind IsPrimaryButtonEnabled, Mode=OneWay}" Click="Save_Click" Content="{Binding Save, Source={StaticResource UiText}}" />
+        </Grid>
+    </Grid>
+</ContentDialog>

@@ -1374,6 +1374,7 @@ public sealed partial class DocumentView : UserControl
     private static void AddMenuAction(MenuFlyout menu, string text, Symbol icon, Action action)
     {
         var item = new MenuFlyoutItem { Text = text, Icon = new SymbolIcon(icon) };
+        if (icon is Symbol.Delete or Symbol.UnPin) PDFDesk.Styles.DestructiveAction.SetIsEnabled(item, true);
         item.Click += (_, _) => action();
         menu.Items.Add(item);
     }
@@ -1525,6 +1526,7 @@ public sealed partial class DocumentView : UserControl
         var rename = new MenuFlyoutItem { Text = UiText.Current.Rename, Icon = new SymbolIcon(Symbol.Rename) };
         rename.Click += async (_, _) => await RenameBookmarkAsync(item);
         var delete = new MenuFlyoutItem { Text = UiText.Current.Delete, Icon = new SymbolIcon(Symbol.Delete) };
+        PDFDesk.Styles.DestructiveAction.SetIsEnabled(delete, true);
         delete.Click += (_, _) => RemoveBookmark(item);
         menu.Items.Add(rename);
         menu.Items.Add(delete);

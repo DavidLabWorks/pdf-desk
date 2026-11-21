@@ -1,7 +1,9 @@
 <Application
     x:Class="PDFDesk.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:controls="using:PDFDesk.Controls"
     xmlns:local="using:PDFDesk"
+    xmlns:styles="using:PDFDesk.Styles"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
         <ResourceDictionary>
@@ -11,8 +13,25 @@
                 <ResourceDictionary Source="ms-appx:///Styles/Controls.xaml" />
                 <ResourceDictionary Source="ms-appx:///Styles/Home.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <StaticResource x:Key="GridViewItemCheckBoxCornerRadius" ResourceKey="SelectionBoxRadius" />
+            <StaticResource x:Key="ListViewItemCheckBoxCornerRadius" ResourceKey="SelectionBoxRadius" />
+            <Style x:Key="RoundedCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource DefaultCheckBoxStyle}">
+                <Setter Property="CornerRadius" Value="{StaticResource SelectionBoxRadius}" />
+            </Style>
+            <Style TargetType="CheckBox" BasedOn="{StaticResource RoundedCheckBoxStyle}" />
+            <Style TargetType="controls:ShelfSelectionCheckBox" BasedOn="{StaticResource RoundedCheckBoxStyle}" />
             <DataTemplate x:Key="StickyNoteGlyph"><PathIcon Width="16" Height="16" Data="F0 M5,1 H16 C18,1 19,2 19,4 V12 L12,19 H5 C2.5,19 1,17.5 1,15 V5 C1,2.5 2.5,1 5,1 Z M5,2.6 C3.5,2.6 2.6,3.5 2.6,5 V15 C2.6,16.5 3.5,17.4 5,17.4 H11 V14 C11,12 12,11 14,11 H17.4 V4 C17.4,3 17,2.6 16,2.6 Z M12.6,16.2 L16.2,12.6 H14 C13,12.6 12.6,13 12.6,14 Z M5,6 H14 V7.5 H5 Z M5,9.5 H10 V11 H5 Z" /></DataTemplate>
             <local:UiText x:Key="UiText" />
+            <Thickness x:Key="TextControlBorderThemeThicknessFocused">2</Thickness>
+            <Style x:Key="AppTextFieldStyle" TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
+                <Setter Property="Background" Value="{ThemeResource FieldSurfaceBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource FieldOutlineBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="{StaticResource FieldRadius}" />
+                <Setter Property="Padding" Value="10,6" />
+                <Setter Property="MinHeight" Value="{StaticResource TouchTargetMin}" />
+            </Style>
+            <Style TargetType="TextBox" BasedOn="{StaticResource AppTextFieldStyle}" />
             <DataTemplate x:Key="ReportProblemContent">
                 <StackPanel Width="418" Spacing="14">
                     <TextBlock Text="{Binding ReportProblemInstructions, Source={StaticResource UiText}}" TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" />
@@ -76,9 +95,9 @@
                         </Button.Resources>
                         <Image x:Name="Sample" Stretch="Uniform" />
                     </Button>
-                    <Button x:Name="Remove" Grid.Column="1" Style="{ThemeResource SubtleButtonStyle}"
+                    <Button x:Name="Remove" styles:DestructiveAction.IsEnabled="True" Grid.Column="1" Style="{ThemeResource SubtleButtonStyle}"
                             Width="32" Height="32" Padding="0" VerticalAlignment="Center">
-                        <FontIcon Glyph="&#xE74D;" FontSize="14" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                        <FontIcon Glyph="&#xE74D;" FontSize="14" />
                     </Button>
                 </Grid>
             </DataTemplate>
@@ -122,11 +141,11 @@
                                   HorizontalScrollBarVisibility="Disabled">
                         <TextBlock x:Name="Body" TextWrapping="Wrap" IsTextSelectionEnabled="True" LineHeight="21" />
                     </ScrollViewer>
-                    <Button x:Name="Delete" Grid.Row="2" Style="{ThemeResource SubtleButtonStyle}" HorizontalAlignment="Right"
+                    <Button x:Name="Delete" styles:DestructiveAction.IsEnabled="True" Grid.Row="2" Style="{ThemeResource SubtleButtonStyle}" HorizontalAlignment="Right"
                             AutomationProperties.Name="{Binding DeleteNote, Source={StaticResource UiText}}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="&#xE74D;" FontSize="14" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
-                            <TextBlock Text="{Binding DeleteNote, Source={StaticResource UiText}}" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                            <TextBlock Text="{Binding DeleteNote, Source={StaticResource UiText}}" />
                         </StackPanel>
                     </Button>
                 </Grid>

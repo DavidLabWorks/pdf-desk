@@ -1605,6 +1605,7 @@ public sealed partial class PdfViewer : UserControl
     private static void AddMenuItem(MenuFlyout menu, string text, Symbol icon, Action action)
     {
         var item = new MenuFlyoutItem { Text = UiText.Translate(text), Icon = new SymbolIcon(icon) };
+        if (icon is Symbol.Delete or Symbol.UnPin) PDFDesk.Styles.DestructiveAction.SetIsEnabled(item, true);
         item.Click += (_, _) => action();
         menu.Items.Add(item);
     }

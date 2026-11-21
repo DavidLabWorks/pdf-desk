@@ -1,6 +1,7 @@
 <ContentDialog
     x:Class="PDFDesk.Controls.PageOrganizer"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:styles="using:PDFDesk.Styles"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:PDFDesk.Controls"
     Style="{StaticResource DefaultContentDialogStyle}"
@@ -61,7 +62,7 @@
                                         AutomationProperties.Name="{Binding DuplicatePages, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding DuplicatePagesShortcut, Source={StaticResource UiText}}">
                                     <FontIcon Glyph="&#xE8C8;" FontSize="{StaticResource IconGlyphSize}" />
                                 </Button>
-                                <Button x:Name="Remove" Style="{StaticResource IconButtonStyle}" Click="Command_Click"
+                                <Button x:Name="Remove" styles:DestructiveAction.IsEnabled="True" Style="{StaticResource IconButtonStyle}" Click="Command_Click"
                                         AutomationProperties.Name="{Binding RemovePages, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding RemovePagesShortcut, Source={StaticResource UiText}}">
                                     <FontIcon Glyph="&#xE74D;" FontSize="{StaticResource IconGlyphSize}" />
                                 </Button>
@@ -154,7 +155,7 @@
                           Background="{ThemeResource HomeCardBrush}">
                         <Button x:Name="ConfirmSave" Content="{Binding Save, Source={StaticResource UiText}}" Style="{StaticResource AccentButtonStyle}"
                                 HorizontalAlignment="Stretch" Click="ConfirmSave_Click" />
-                        <Button x:Name="ConfirmDiscard" Grid.Column="1" Content="{Binding DiscardChanges, Source={StaticResource UiText}}"
+                        <Button x:Name="ConfirmDiscard" styles:DestructiveAction.IsEnabled="True" Grid.Column="1" Content="{Binding DiscardChanges, Source={StaticResource UiText}}"
                                 HorizontalAlignment="Stretch" Click="ConfirmDiscard_Click" />
                         <Button x:Name="ConfirmCancel" Grid.Column="2" Content="{Binding Cancel, Source={StaticResource UiText}}"
                                 HorizontalAlignment="Stretch" Click="ConfirmCancel_Click" />

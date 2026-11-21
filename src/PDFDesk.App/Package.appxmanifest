@@ -10,7 +10,7 @@
   <Identity
     Name="DavidLabWorks.PDFDesk"
     Publisher="CN=DavidLabWorks"
-    Version="0.0.45.0" />
+    Version="0.0.46.0" />
 
   <Properties>
     <DisplayName>PDF Desk</DisplayName>

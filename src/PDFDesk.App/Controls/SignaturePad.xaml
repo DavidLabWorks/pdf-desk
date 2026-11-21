@@ -1,6 +1,7 @@
 <UserControl
     x:Class="PDFDesk.Controls.SignaturePad"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:styles="using:PDFDesk.Styles"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <StackPanel Width="420" Spacing="12">
@@ -85,7 +86,7 @@
                     <Button x:Name="BlueButton" Style="{StaticResource InkSwatchButtonStyle}" Click="BlueButton_Click"
                             AutomationProperties.Name="{Binding BlueInk, Source={StaticResource UiText}}" ToolTipService.ToolTip="{Binding Blue, Source={StaticResource UiText}}" />
                 </StackPanel>
-                <Button x:Name="ClearInk" HorizontalAlignment="Right" Style="{StaticResource SubtleButtonStyle}" Content="{Binding Clear, Source={StaticResource UiText}}" Click="ClearButton_Click" />
+                <Button x:Name="ClearInk" styles:DestructiveAction.IsEnabled="True" HorizontalAlignment="Right" Style="{StaticResource SubtleButtonStyle}" Content="{Binding Clear, Source={StaticResource UiText}}" Click="ClearButton_Click" />
             </Grid>
             <TextBlock x:Name="Caption" Grid.Row="1" TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </Grid>

@@ -102,6 +102,8 @@ public sealed class AppSettings
 
     public string Language { get; set; } = "System";
 
+    public bool ShelfListSortByName { get; set; }
+    public bool ShelfListSortAscending { get; set; }
     public bool RecentUsesList { get; set; }
     public bool FavoritesUseList { get; set; }
     public bool FavoritesTabSelected { get; set; }

@@ -1,0 +1,18 @@
+<ContentDialog
+    x:Class="PDFDesk.Controls.FolderNameDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Style="{StaticResource DefaultContentDialogStyle}" CornerRadius="{StaticResource ReaderToolbarRadius}">
+    <ContentDialog.Resources>
+        <Thickness x:Key="ContentDialogPadding">0</Thickness>
+    </ContentDialog.Resources>
+    <StackPanel Width="{StaticResource FolderNameFormWidth}" Padding="24" Spacing="{StaticResource SpaceL}">
+        <TextBlock x:Name="Heading" Style="{StaticResource SubtitleTextBlockStyle}" AutomationProperties.HeadingLevel="Level2" />
+        <ContentPresenter x:Name="EditorHost" HorizontalContentAlignment="Stretch" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{StaticResource SpaceS}">
+            <Button Padding="16,6" Content="{Binding Cancel, Source={StaticResource UiText}}" Click="Cancel_Click" />
+            <Button x:Name="Submit" Padding="16,6" Style="{StaticResource AccentButtonStyle}"
+                    IsEnabled="{x:Bind IsPrimaryButtonEnabled, Mode=OneWay}" Click="Submit_Click" />
+        </StackPanel>
+    </StackPanel>
+</ContentDialog>

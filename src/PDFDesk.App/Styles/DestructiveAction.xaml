@@ -1,0 +1,39 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <StaticResource x:Key="ButtonForeground" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="SubtleButtonForeground" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPointerOver" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPressed" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="SystemFillColorCriticalBrush" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Default">
+            <StaticResource x:Key="ButtonForeground" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="SubtleButtonForeground" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPointerOver" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPressed" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="SystemFillColorCriticalBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="SystemFillColorCriticalBrush" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <StaticResource x:Key="ButtonForeground" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="SubtleButtonForeground" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPointerOver" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="SubtleButtonForegroundPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="SystemColorButtonTextColorBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="SystemColorHighlightTextColorBrush" />
+            <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="SystemColorHighlightTextColorBrush" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

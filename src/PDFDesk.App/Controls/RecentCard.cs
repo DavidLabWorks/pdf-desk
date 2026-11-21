@@ -14,11 +14,37 @@ public sealed class RecentCard : INotifyPropertyChanged
 
     public string Path { get; }
     public string DisplayName { get; }
+    public string DirectoryName => System.IO.Path.GetDirectoryName(Path) ?? Path;
 
     private readonly string _lastOpenedForCard;
     public string Metadata => $"{_lastOpenedForCard} | {FileSize}";
     public string FileSize { get; private set; } = "—";
+    internal DateTime LastOpenedUtc { get; }
     public string LastOpened { get; }
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected == value) return;
+            _isSelected = value;
+            PropertyChanged?.Invoke(this, new(nameof(IsSelected)));
+        }
+    }
+
+    private bool _canSelect;
+    public bool CanSelect
+    {
+        get => _canSelect;
+        set
+        {
+            if (_canSelect == value) return;
+            _canSelect = value;
+            PropertyChanged?.Invoke(this, new(nameof(CanSelect)));
+        }
+    }
 
     private bool _isFavorite;
     public bool IsFavorite
@@ -38,6 +64,7 @@ public sealed class RecentCard : INotifyPropertyChanged
 
     public RecentCard(string path, string displayName, DateTime lastOpenedUtc, bool isFavorite)
     {
+        LastOpenedUtc = lastOpenedUtc;
         Path = path;
         DisplayName = displayName;
         _isFavorite = isFavorite;
