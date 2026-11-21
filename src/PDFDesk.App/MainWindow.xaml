@@ -498,6 +498,21 @@
                                             </StackPanel>
                                         </Button>
                                     </Grid>
+                                    <Border Height="1" Margin="0,4,0,2" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                    <TextBlock Text="{Binding PageManagement, Source={StaticResource UiText}}" Style="{StaticResource ViewPanelHeadingStyle}" />
+                                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="{StaticResource SpaceXS}">
+                                        <Button x:Name="OrganizePagesButton" Style="{StaticResource ReaderViewActionStyle}"
+                                                Click="OrganizePages_Click"
+                                                AutomationProperties.Name="{Binding OrganizePages, Source={StaticResource UiText}}"
+                                                ToolTipService.ToolTip="{Binding OrganizePages, Source={StaticResource UiText}}">
+                                            <StackPanel Spacing="{StaticResource SpaceS}">
+                                                <Border Style="{StaticResource ReaderViewTileIconStyle}">
+                                                    <FontIcon Glyph="&#xE179;" FontSize="20" />
+                                                </Border>
+                                                <TextBlock Text="{Binding OrganizePages, Source={StaticResource UiText}}" Style="{StaticResource ReaderViewTileLabelStyle}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
                                 </StackPanel>
                             </Flyout>
                         </Button.Flyout>

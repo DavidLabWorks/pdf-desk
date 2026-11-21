@@ -226,24 +226,15 @@ public sealed partial class PdfDocument
         }
         destIndex = Math.Clamp(destIndex, 0, PageCount - sorted.Count);
 
-        // order[newIdx] = originalIdx describes the CURRENT (post-move) order.
-        var map = BookmarkRemap.MovePermutation(PageCount, sorted, destIndex);
-        var order = new int[PageCount];
-        for (int oldIndex = 0; oldIndex < map.Length; oldIndex++)
+        // Restore leftward moves from the front and rightward moves from
+        // the back so each unprocessed page stays at its block position.
+        for (int i = 0; i < sorted.Count && sorted[i] < destIndex + i; i++)
         {
-            order[map[oldIndex]] = oldIndex;
+            MovePages([destIndex + i], sorted[i]);
         }
-
-        var current = new List<int>(order);
-        foreach (int original in sorted)
+        for (int i = sorted.Count - 1; i >= 0 && sorted[i] > destIndex + i; i--)
         {
-            int position = current.IndexOf(original);
-            if (position != original)
-            {
-                MovePages([position], original);
-                current.RemoveAt(position);
-                current.Insert(original, original);
-            }
+            MovePages([destIndex + i], sorted[i]);
         }
     }
 

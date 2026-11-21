@@ -25,10 +25,10 @@ public sealed class ThumbnailItem : INotifyPropertyChanged
     private double _boxHeight;
     private int _rotation;
 
-    public int PageIndex { get; }
+    public int PageIndex { get; private set; }
     public string Label => (PageIndex + 1).ToString();
-    public float PageWidthPt { get; }
-    public float PageHeightPt { get; }
+    public float PageWidthPt { get; private set; }
+    public float PageHeightPt { get; private set; }
 
     public ThumbnailItem(int pageIndex, float pageWidthPt, float pageHeightPt, int rotationQuarterTurns = 0)
     {
@@ -73,6 +73,19 @@ public sealed class ThumbnailItem : INotifyPropertyChanged
             _image = value;
             PropertyChanged?.Invoke(this, ImageChangedArgs);
         }
+    }
+
+    internal void UpdateSlot(int index, float width, float height, BitmapSource? image)
+    {
+        if (PageIndex != index)
+        {
+            PageIndex = index;
+            PropertyChanged?.Invoke(this, new(nameof(Label)));
+        }
+        PageWidthPt = width;
+        PageHeightPt = height;
+        BoxHeight = ComputeHeight();
+        if (!ReferenceEquals(Image, image)) Image = image;
     }
 
     public bool IsRendered => _image is not null;

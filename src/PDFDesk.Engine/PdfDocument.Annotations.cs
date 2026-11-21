@@ -645,6 +645,29 @@ public sealed partial class PdfDocument
         }
     }
 
+    // The live document and its undo history survive any edit or write failure.
+    internal PdfDocument SaveEditedCopy(Action<PdfDocument> edit)
+    {
+        string snapshot = Path.Combine(Path.GetTempPath(), $"pdfdesk-{Guid.NewGuid():N}.pdf");
+        PdfDocument? copy = null;
+        try
+        {
+            SaveAs(snapshot);
+            copy = Open(snapshot);
+            edit(copy);
+            copy.FilePath = FilePath;
+            copy._savedDiskVersion = _savedDiskVersion;
+            copy.SaveInPlace();
+            return copy;
+        }
+        catch
+        {
+            copy?.Dispose();
+            throw;
+        }
+        finally { TryDeleteSaveFile(snapshot); }
+    }
+
     /// <summary>Saves edits without closing the document used by the viewer.</summary>
     public void SaveInPlace()
     {

@@ -43,6 +43,7 @@ public sealed partial class DocumentView : UserControl
         FilePath = filePath;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         ThumbList.ItemsSource = _thumbnails;
+        ViewerControl.OrganizeRequested += page => OpenOrganizer([page]);
         BookmarkList.ItemsSource = _bookmarks;
 
         ViewerControl.CurrentPageChanged += (_, page) => SyncThumbnailSelection(page);
@@ -314,7 +315,7 @@ public sealed partial class DocumentView : UserControl
     }
 
     // Lazily render a thumbnail as its container is realized (list virtualization).
-    private void ThumbList_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    internal void ThumbList_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.InRecycleQueue || args.Item is not ThumbnailItem item || item.IsRendered || _document is null)
         {
@@ -328,13 +329,16 @@ public sealed partial class DocumentView : UserControl
     /// visible tiles always win, so scrolling the sidebar can't make the
     /// document stutter.
     /// </summary>
-    private async Task RenderThumbnailAsync(ThumbnailItem item)
+    private int _thumbnailGeneration;
+
+    internal async Task RenderThumbnailAsync(ThumbnailItem item)
     {
         if (_document is not { } document)
         {
             return;
         }
 
+        int generation = _thumbnailGeneration;
         int pageIndex = item.PageIndex;
         int rotation = Viewer.ViewRotation;
         try
@@ -350,7 +354,7 @@ public sealed partial class DocumentView : UserControl
                 return document.RenderPage(pageIndex, scale, rotation);
             });
             // Drop the result if the document or rotation moved on while we waited.
-            if (_document == document && Viewer.ViewRotation == rotation)
+            if (_document == document && Viewer.ViewRotation == rotation && generation == _thumbnailGeneration)
             {
                 item.Image = ToBitmap(bmp, Viewer.NightMode);
             }
@@ -586,6 +590,7 @@ public sealed partial class DocumentView : UserControl
         try
         {
             await Viewer.FinishEraserAsync();
+            _thumbnailGeneration++;
             Viewer.PreparePageMutation();
             await Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
             {
@@ -640,8 +645,7 @@ public sealed partial class DocumentView : UserControl
             return;
         }
 
-        Viewer.HandleDocumentMutated();
-        PopulateThumbnails(document);
+        RefreshEditedPages(document, remapBookmark);
         _ = PopulateOutlineAsync(document);
 
         if (remapBookmark is not null && _bookmarks.Count > 0)
@@ -663,6 +667,45 @@ public sealed partial class DocumentView : UserControl
         PagesEdited?.Invoke(this, EventArgs.Empty);
     }
 
+    private void RefreshEditedPages(PdfDocument document, Func<int, int?>? remap)
+    {
+        _thumbnailGeneration++;
+        Viewer.HandleDocumentMutated(remap);
+        if (remap is null)
+        {
+            PopulateThumbnails(document);
+            return;
+        }
+
+        // Capture the images before changing any slot. Keeping each existing
+        // item bound avoids GridView recycling or animating a row of cards.
+        var images = new BitmapSource?[document.PageCount];
+        foreach (var item in _thumbnails)
+            if (remap(item.PageIndex) is int index) images[index] = item.Image;
+
+        int rotation = Viewer.ViewRotation;
+        _syncingSelection = true;
+        try
+        {
+            while (_thumbnails.Count > document.PageCount)
+                _thumbnails.RemoveAt(_thumbnails.Count - 1);
+            for (int i = 0; i < document.PageCount; i++)
+            {
+                var size = document.GetPageSize(i);
+                if (i == _thumbnails.Count)
+                {
+                    _thumbnails.Add(new ThumbnailItem(i, size.Width, size.Height, rotation) { Image = images[i] });
+                    continue;
+                }
+                var slot = _thumbnails[i];
+                slot.UpdateSlot(i, size.Width, size.Height, images[i]);
+                if (!slot.IsRendered && ThumbList.ContainerFromIndex(i) is not null)
+                    _ = RenderThumbnailAsync(slot);
+            }
+        }
+        finally { _syncingSelection = false; }
+    }
+
     public async Task DeleteSelectedPagesAsync()
     {
         var pages = SelectedPageIndices();
@@ -679,7 +722,7 @@ public sealed partial class DocumentView : UserControl
     }
 
     /// <summary>Shared delete/cut: snapshots each victim page so undo re-inserts it at its original index.</summary>
-    private async Task DeletePagesWithUndoAsync(List<int> pages, bool cut)
+    internal async Task DeletePagesWithUndoAsync(List<int> pages, bool cut)
     {
         var deleted = pages.ToHashSet();
         var before = GetBookmarks();
@@ -705,12 +748,15 @@ public sealed partial class DocumentView : UserControl
             PageClipboard.Set(clipboardBytes, pages.Count);
         }
 
+        int? Forward(int page) => BookmarkRemap.AfterDelete(page, deleted);
         var origIndices = pages.ToList();
         var pageSnapshots = snapshots;
         PushEdit(new DocumentEdit
         {
             Label = pages.Count == 1 ? (cut ? "cut page" : "delete page") : $"{(cut ? "cut" : "delete")} {pages.Count} pages",
             IsPageMutation = true,
+            ForwardMap = Forward,
+            ReverseMap = InvertPageMap(_thumbnails.Count + pages.Count, _thumbnails.Count, Forward),
             SnapshotBytes = pageSnapshots.Sum(s => (long)s.Length),
             BookmarksBefore = before,
             BookmarksAfter = GetBookmarks(),
@@ -783,11 +829,68 @@ public sealed partial class DocumentView : UserControl
     }
 
     /// <summary>Insert a serialized PDF at an index with a matching undo (delete the inserted block).</summary>
-    private async Task<int> InsertBytesWithUndoAsync(byte[] bytes, int at, string verb)
+    private Task<int> InsertBytesWithUndoAsync(byte[] bytes, int at, string verb) =>
+        InsertWithUndoAsync(_ => bytes, at, verb);
+
+    internal Task<int> DuplicatePagesAsync(List<int> pages) =>
+        InsertWithUndoAsync(d => d.ExportPages(pages), pages[^1] + 1, "duplicate");
+
+    internal void OpenOrganizer(List<int>? selected = null)
     {
+        if (_document is null || _pageOpRunning || DialogHost.IsOpen(this)) return;
+        var dialog = new PageOrganizer(this, _thumbnails, selected ?? [Viewer.CurrentPage]);
+        _ = DialogHost.ShowAsync(this, dialog);
+    }
+
+    internal async Task SavePageDraftAsync(PageDraft draft)
+    {
+        if (_pageOpRunning || _document is not { } document)
+            throw new InvalidOperationException("The document is unavailable.");
+        _pageOpRunning = true;
+        try
+        {
+            if (_saveTask is { IsCompleted: false }) await _saveTask;
+            await Viewer.FinishEraserAsync();
+            await Viewer.CommitTextAsync();
+            if (Viewer.IsEditingText) throw new InvalidOperationException(UiText.Current.TextCommitFailed);
+            if (Viewer.IsFormFieldFocused) Viewer.KillFormFocus();
+            var positions = draft.OriginalPositions();
+            var bookmarks = GetBookmarks().Where(b => positions[b.PageIndex].HasValue).ToList();
+            var replacement = await RunPdfAsync(PdfWorkPriority.Interactive, () => draft.Save(document));
+            if (_closed)
+            {
+                await RunPdfAsync(PdfWorkPriority.Interactive, replacement.Dispose);
+                return;
+            }
+            double zoom = Viewer.Zoom, scroll = Viewer.ScrollFraction;
+            int rotation = Viewer.ViewRotation;
+            _document = replacement;
+            Viewer.SetDocument(replacement);
+            Viewer.RestoreView(zoom, rotation, scroll);
+            PopulateThumbnails(replacement);
+            SyncThumbnailSelection(Viewer.CurrentPage);
+            foreach (var b in bookmarks) b.PageIndex = positions[b.PageIndex]!.Value;
+            SetBookmarks(bookmarks);
+            BookmarksChanged?.Invoke(this, EventArgs.Empty);
+            ClearUndoHistory();
+            _ = PopulateOutlineAsync(replacement);
+            _ = ReadSignatureCountAsync(replacement);
+            PagesEdited?.Invoke(this, EventArgs.Empty);
+            await RunPdfAsync(PdfWorkPriority.Interactive, document.Dispose);
+        }
+        finally { _pageOpRunning = false; }
+    }
+
+    private async Task<int> InsertWithUndoAsync(Func<PdfDocument, byte[]> source, int at, string verb)
+    {
+        byte[] bytes = [];
         var before = GetBookmarks();
         int inserted = 0;
-        bool ok = await RunPageOpAsync(d => inserted = d.InsertPages(bytes, at),
+        bool ok = await RunPageOpAsync(d =>
+        {
+            bytes = source(d);
+            inserted = d.InsertPages(bytes, at);
+        },
             p => BookmarkRemap.AfterInsert(p, at, inserted));
         if (!ok || inserted == 0)
         {
@@ -799,6 +902,8 @@ public sealed partial class DocumentView : UserControl
         {
             Label = insertedCount == 1 ? $"{verb} page" : $"{verb} {insertedCount} pages",
             IsPageMutation = true,
+            ForwardMap = p => BookmarkRemap.AfterInsert(p, at, insertedCount),
+            ReverseMap = p => p < at ? p : p < at + insertedCount ? null : p - insertedCount,
             SnapshotBytes = bytes.Length,
             BookmarksBefore = before,
             BookmarksAfter = GetBookmarks(),
@@ -817,11 +922,21 @@ public sealed partial class DocumentView : UserControl
         public long SnapshotBytes { get; init; }
         public required Action<PdfDocument> UndoAction { get; init; }
         public required Action<PdfDocument> RedoAction { get; init; }
+        public Func<int, int?>? ForwardMap { get; init; }
+        public Func<int, int?>? ReverseMap { get; init; }
         public bool IsPageMutation { get; init; }
         public int PageIndex { get; init; } // annotation edits: the page to refresh
         public IReadOnlyList<int>? InkPages { get; init; }
         public IReadOnlyList<PDFDesk.Services.BookmarkEntry>? BookmarksBefore { get; init; }
         public IReadOnlyList<PDFDesk.Services.BookmarkEntry>? BookmarksAfter { get; init; }
+    }
+
+    private static Func<int, int?> InvertPageMap(int oldCount, int newCount, Func<int, int?> forward)
+    {
+        var inverse = new int?[newCount];
+        for (int i = 0; i < oldCount; i++)
+            if (forward(i) is int index) inverse[index] = i;
+        return i => inverse[i];
     }
 
     private readonly UndoStack<DocumentEdit> _undoStack = new();
@@ -850,7 +965,7 @@ public sealed partial class DocumentView : UserControl
         var edit = _undoStack.PopUndo();
         if (edit is not null)
         {
-            await ApplyEditAsync(edit, edit.UndoAction, edit.BookmarksBefore);
+            await ApplyEditAsync(edit, edit.UndoAction, edit.BookmarksBefore, edit.ReverseMap);
         }
     }
 
@@ -864,12 +979,12 @@ public sealed partial class DocumentView : UserControl
         var edit = _undoStack.PopRedo();
         if (edit is not null)
         {
-            await ApplyEditAsync(edit, edit.RedoAction, edit.BookmarksAfter);
+            await ApplyEditAsync(edit, edit.RedoAction, edit.BookmarksAfter, edit.ForwardMap);
         }
     }
 
     private async Task ApplyEditAsync(DocumentEdit edit, Action<PdfDocument> action,
-        IReadOnlyList<PDFDesk.Services.BookmarkEntry>? bookmarks)
+        IReadOnlyList<PDFDesk.Services.BookmarkEntry>? bookmarks, Func<int, int?>? remap)
     {
         if (_document is not { } document)
         {
@@ -880,6 +995,7 @@ public sealed partial class DocumentView : UserControl
         {
             if (edit.IsPageMutation)
             {
+                _thumbnailGeneration++;
                 Viewer.PreparePageMutation();
             }
             await Viewer.RunOnRenderThreadAsync(PdfWorkPriority.Interactive, () =>
@@ -890,8 +1006,7 @@ public sealed partial class DocumentView : UserControl
 
             if (edit.IsPageMutation)
             {
-                Viewer.HandleDocumentMutated();
-                PopulateThumbnails(document);
+                RefreshEditedPages(document, remap);
                 _ = PopulateOutlineAsync(document);
                 if (bookmarks is not null)
                 {
@@ -1001,6 +1116,12 @@ public sealed partial class DocumentView : UserControl
         var movedIndices = moved.Select(m => m.PageIndex).OrderBy(i => i).ToList();
         int destIndex = moved.Min(m => _thumbnails.IndexOf(m));
 
+        await MovePagesWithUndoAsync(movedIndices, destIndex);
+    }
+
+    internal async Task<bool> MovePagesWithUndoAsync(List<int> movedIndices, int destIndex)
+    {
+        if (_document is not { } document || movedIndices.Count == 0) return false;
         var map = BookmarkRemap.MovePermutation(document.PageCount, movedIndices, destIndex);
         bool isNoOp = true;
         for (int i = 0; i < map.Length && isNoOp; i++)
@@ -1009,7 +1130,7 @@ public sealed partial class DocumentView : UserControl
         }
         if (isNoOp)
         {
-            return;
+            return false;
         }
 
         var before = GetBookmarks();
@@ -1020,6 +1141,8 @@ public sealed partial class DocumentView : UserControl
             {
                 Label = movedIndices.Count == 1 ? "move page" : $"move {movedIndices.Count} pages",
                 IsPageMutation = true,
+                ForwardMap = p => map[p],
+                ReverseMap = InvertPageMap(map.Length, map.Length, p => map[p]),
                 SnapshotBytes = 0, // moves store no snapshot — the inverse is a permutation
                 BookmarksBefore = before,
                 BookmarksAfter = GetBookmarks(),
@@ -1027,6 +1150,7 @@ public sealed partial class DocumentView : UserControl
                 RedoAction = d => d.MovePages(movedIndices, destIndex),
             });
         }
+        return ok;
     }
 
     private void ThumbList_DragOver(object sender, DragEventArgs e)
@@ -1101,6 +1225,8 @@ public sealed partial class DocumentView : UserControl
         int insertAt = SelectedPageIndices() is { Count: > 0 } sel ? sel[^1] + 1 : _thumbnails.Count;
 
         var menu = new MenuFlyout();
+        AddMenuAction(menu, UiText.Current.OrganizePages, Symbol.AllApps, () => OpenOrganizer(SelectedPageIndices()));
+        menu.Items.Add(new MenuFlyoutSeparator());
         AddMenuAction(menu, UiText.Format("Copy {0}", pages), Symbol.Copy, () => _ = CopySelectedPagesAsync(cut: false));
         AddMenuAction(menu, UiText.Format("Cut {0}", pages), Symbol.Cut, () => _ = CopySelectedPagesAsync(cut: true));
         var paste = new MenuFlyoutItem

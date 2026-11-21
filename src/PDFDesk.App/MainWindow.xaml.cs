@@ -1058,6 +1058,12 @@ public sealed partial class MainWindow : Window
             DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, ShowPalette);
         }
     }
+    private void OrganizePages_Click(object sender, RoutedEventArgs e)
+    {
+        ViewActionsFlyout.Hide();
+        CurrentView?.OpenOrganizer();
+    }
+
     private void UndoButton_Click(object sender, RoutedEventArgs e) => _ = CurrentView?.UndoAsync();
     private void RedoButton_Click(object sender, RoutedEventArgs e) => _ = CurrentView?.RedoAsync();
 

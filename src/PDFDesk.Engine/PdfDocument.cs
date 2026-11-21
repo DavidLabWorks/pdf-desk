@@ -13,7 +13,7 @@ public sealed partial class PdfDocument : IDisposable
     private (float Width, float Height)[] _pageSizes;
     private (long Length, DateTime LastWriteUtc) _savedDiskVersion;
 
-    public string FilePath { get; }
+    public string FilePath { get; private set; }
     public int PageCount { get; private set; }
 
     private PdfDocument(string path, FileAccessAdapter fileAccess, IntPtr handle)

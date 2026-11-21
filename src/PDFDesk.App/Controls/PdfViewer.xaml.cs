@@ -1372,7 +1372,7 @@ public sealed partial class PdfViewer : UserControl
     /// inserted: sizes, layout (preserving the scroll fraction), tiles,
     /// previews, links, text maps, selection, and search are all stale.
     /// </summary>
-    internal void HandleDocumentMutated()
+    internal void HandleDocumentMutated(Func<int, int?>? remap = null)
     {
         if (_document is null)
         {
@@ -1386,7 +1386,14 @@ public sealed partial class PdfViewer : UserControl
         ClearSelectionState();
         _searchByPage.Clear();
         _activeHit = null;
+        // Hold valid page previews across the layout rebuild so the reader
+        // behind the organizer can draw immediately while new tiles arrive.
+        var retained = _previewLru.Reverse()
+            .Where(page => !_stalePreviews.Contains(page) && remap?.Invoke(page) is not null)
+            .Select(page => (Old: page, New: remap!(page)!.Value, Preview: _previews[page])).ToArray();
+        foreach (var entry in retained) _previews.Remove(entry.Old);
         ClearCaches();
+        foreach (var entry in retained) InsertPreview(entry.New, entry.Preview.ScaleKey, entry.Preview.Bitmap);
 
         double fraction = _layout is { TotalHeight: > 0 } ? Scroller.VerticalOffset / _layout.TotalHeight : 0;
         RebuildLayout();
@@ -1477,6 +1484,7 @@ public sealed partial class PdfViewer : UserControl
         UpdateDesiredTiles();
     }
 
+    internal event Action<int>? OrganizeRequested;
     internal event Action? CompressionRequested;
 
     private async void Canvas_RightTapped(object sender, RightTappedRoutedEventArgs e)
@@ -1560,6 +1568,7 @@ public sealed partial class PdfViewer : UserControl
         {
             menu.Items.Add(new MenuFlyoutSeparator());
         }
+        AddMenuItem(menu, UiText.Current.OrganizePages, Symbol.AllApps, () => OrganizeRequested?.Invoke(page));
         AddMenuItem(menu, UiText.Current.CompressExport, Symbol.Download, () => CompressionRequested?.Invoke());
         menu.ShowAt(DocumentExtent, position);
     }

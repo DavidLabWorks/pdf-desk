@@ -74,6 +74,22 @@ public class PageEditTests
         Assert.Contains("Page 1", doc.ExtractText(map[0]));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(5)]
+    public void RestoreMovedPages_RestoresScatteredSelection(int destination)
+    {
+        using var doc = PdfDocument.Open(CorpusPath("book-1000.pdf"));
+        int[] selected = [1, 4, 6];
+        var original = Enumerable.Range(0, 10).Select(i => doc.ExtractText(i)).ToArray();
+
+        doc.MovePages(selected, destination);
+        doc.RestoreMovedPages(selected, destination);
+
+        Assert.Equal(original, Enumerable.Range(0, 10).Select(i => doc.ExtractText(i)));
+    }
+
     [Fact]
     public void ExportPages_RoundTripsThroughInsert()
     {
