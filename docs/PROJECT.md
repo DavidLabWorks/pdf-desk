@@ -1,10 +1,10 @@
 # PDF Desk — Windows Project Reference
 
-For the macOS project, see [macos/](macos/) and the [cross-platform requirements](docs/macOS版产品需求与实现规格.md). Commands below run from the repository root.
+For the macOS project, see [macos/](../macos/) and the [cross-platform requirements](macOS版产品需求与实现规格.md). Commands below run from the repository root.
 
 PDFDesk is an open-source Windows application for reading and editing PDFs.
 It is developed at [DavidLabWorks/pdf-desk-windows](https://github.com/DavidLabWorks/pdf-desk-windows)
-and builds on [upstream work](README.md#credits-and-license) by Danial Javed and contributors.
+and builds on [upstream work](../README.md#credits-and-license) by Danial Javed and contributors.
 The sections from version history onward contain historical notes inherited from upstream.
 
 ---
@@ -159,7 +159,7 @@ docs/
   workflows/ci.yml      Build x64 + ARM64, run tests, permissions: contents: read
   ISSUE_TEMPLATE/       Bug and feature forms + a link to private vuln reporting
 PRIVACY.md              Required by the Store (live URL is checked at cert time)
-SECURITY.md             Where to report a parser bug, and the PDFium/PDFDesk boundary
+docs/SECURITY.md        Where to report a parser bug, and the PDFium/PDFDesk boundary
 THIRD-PARTY-NOTICES.md  Ships inside every binary (PDFium's licence requires it)
 ```
 
@@ -760,7 +760,7 @@ GitHub CI builds x64 and ARM64 and runs the tests on Windows.
 The repository uses `DavidLabWorks.PDFDesk` and `CN=DavidLabWorks` for the local
 package. For Store submission, associate the project with the PDFDesk product
 in Partner Center and use its assigned identity and publisher. Listing copy is
-in [docs/store-listing.md](docs/store-listing.md). Use `windows/tools/check-package.ps1`
+in [docs/store-listing.md](store-listing.md). Use `windows/tools/check-package.ps1`
 to check that the packaged app includes the .NET runtime.
 
 ---
