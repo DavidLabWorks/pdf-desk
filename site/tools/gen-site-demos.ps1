@@ -1,6 +1,6 @@
 # Turns captured frames into the looping demos the website serves.
 #
-# tools/capture-demo.ps1 records real frames of the running application. This
+# site/tools/capture-demo.ps1 records real frames of the running application. This
 # stacks a take into one vertical JPEG strip and writes the matching element
 # into site/index.html, where CSS walks the strip with steps(). No JavaScript,
 # no video element, no codec matrix, and the only binary media format on the
@@ -82,13 +82,13 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-$repo = Split-Path -Parent $PSScriptRoot
+$repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not $FramesRoot) { $FramesRoot = Join-Path $repo 'artifacts\demo' }
 $dest = Join-Path $repo 'site\img'
 $page = Join-Path $repo 'site\index.html'
 
 if (-not (Test-Path $FramesRoot)) {
-    throw "No captured frames at $FramesRoot. Record some first: tools\capture-demo.ps1 -Clip reorder -Pdf <the NASA handbook>"
+    throw "No captured frames at $FramesRoot. Record some first: site\tools\capture-demo.ps1 -Clip reorder -Pdf <the NASA handbook>"
 }
 if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
 if (-not (Test-Path $page)) { throw "Missing $page" }
@@ -239,7 +239,7 @@ foreach ($clip in $clips) {
 }
 
 if ($built.Count -eq 0) {
-    throw "Built nothing. Record a take first with tools\capture-demo.ps1."
+    throw "Built nothing. Record a take first with site\tools\capture-demo.ps1."
 }
 
 $total = ($built | ForEach-Object { $_.kb } | Measure-Object -Sum).Sum

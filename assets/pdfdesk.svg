@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- PDFDesk's app mark. tools/gen-icon.ps1 rasterizes this source plus the
+<!-- PDFDesk's app mark. windows/tools/gen-icon.ps1 rasterizes this source plus the
      small-size variant. Its SVG subset supports rectangles, filled and
      stroked paths, and a single vertical tile gradient. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">

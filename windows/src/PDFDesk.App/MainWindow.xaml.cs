@@ -23,7 +23,7 @@ public sealed partial class MainWindow : Window
     private const int MinimumWindowWidth = 640;
     private const int MinimumWindowHeight = 420;
 
-    // tools/capture-demo.ps1 points this at a throwaway directory through
+    // site/tools/capture-demo.ps1 points this at a throwaway directory through
     // PDFDESK_STATE_DIR, so a recording cannot pick up the user's own recents,
     // theme or session and paint their filenames into every frame. Unset in
     // normal use, the store uses the PDFDesk folder in Documents.

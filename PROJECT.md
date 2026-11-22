@@ -144,12 +144,14 @@ windows/tests/
   PDFDesk.Tests/           xUnit — 427 tests against a generated corpus (see §6)
 
 windows/tools/
+  gen-icon.ps1          Draws the PDFDesk icon + all MSIX assets
   check-package.ps1     Checks packaged runtimes
   windows-installer.iss Windows installer definition
 
-tools/
+tests/
   gen-corpus.ps1        Hand-authors the test PDFs (no PDF lib needed)
-  gen-icon.ps1          Draws the PDFDesk icon + all MSIX assets
+
+site/tools/
   gen-site-images.ps1   Store screenshots to resized JPEGs in site/img
   gen-site-shortcuts.ps1 Rewrites the shortcut table in site/features.html from
                         ShortcutCatalog.cs, so app and site cannot disagree
@@ -449,19 +451,19 @@ windows/src/PDFDesk.App/bin/x64/Debug/net10.0-windows10.0.19041.0/win-x64/PDFDes
 dotnet test windows/tests/PDFDesk.Tests/PDFDesk.Tests.csproj
 
 # Regenerate assets when needed
-powershell -File tools/gen-corpus.ps1     # test PDFs → tests/corpus/
-powershell -File tools/gen-icon.ps1       # icon + MSIX assets
+powershell -File tests/gen-corpus.ps1     # test PDFs → tests/corpus/
+powershell -File windows/tools/gen-icon.ps1       # icon + MSIX assets
 
 # Website assets
-powershell -File tools/gen-site-images.ps1     # store screenshots to site/img/*.jpg
-powershell -File tools/gen-site-shortcuts.ps1  # ShortcutCatalog.cs to features.html
+powershell -File site/tools/gen-site-images.ps1     # store screenshots to site/img/*.jpg
+powershell -File site/tools/gen-site-shortcuts.ps1  # ShortcutCatalog.cs to features.html
 
 # Website demos: record first, then composite. Needs a licence-safe document
 # (section 8b) and a FRESH powershell.exe, because DPI awareness latches once
 # per process.
-powershell -File tools/capture-demo.ps1 -Clip reorder -Pdf <handbook> -Probe
-powershell -File tools/capture-demo.ps1 -Clip reorder -Pdf <handbook> -Takes 3
-powershell -File tools/gen-site-demos.ps1 -Take @{ reorder = 2 }
+powershell -File site/tools/capture-demo.ps1 -Clip reorder -Pdf <handbook> -Probe
+powershell -File site/tools/capture-demo.ps1 -Clip reorder -Pdf <handbook> -Takes 3
+powershell -File site/tools/gen-site-demos.ps1 -Take @{ reorder = 2 }
 ```
 
 **Test corpus** (`tests/corpus/`, generated): `hello.pdf` (2pp smoke),
@@ -1138,7 +1140,7 @@ to check that the packaged app includes the .NET runtime.
   `{ThemeResource}` brushes (XAML); ~20 hardcoded `Opacity` values became real
   secondary/tertiary text brushes.
   **New logo**: the historical Raido symbol set on a document page, authored as
-  an SVG asset and rasterized by `tools/gen-icon.ps1` through WPF — plus
+  an SVG asset and rasterized by `windows/tools/gen-icon.ps1` through WPF — plus
   the full scale-100..400 asset set the Store recommends, where before there was
   only scale-200.
   **Fixed two long-standing viewer bugs** found by using the build:

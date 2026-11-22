@@ -1,7 +1,7 @@
 # Publishes site/ to GitHub Pages.
 #
 # There is no build step: the site is plain HTML and CSS, so this uploads the
-# folder as it stands. Nothing to install, nothing to keep patched.
+# public files, excluding maintenance scripts. Nothing to install, nothing to keep patched.
 #
 # REQUIRES a one-time repo setting: Settings -> Pages -> Source: "GitHub Actions".
 # Without it this workflow fails at the deploy step with a 404.
@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - '!site/tools/**'
       - '.github/workflows/pages.yml'
   # So the site can be republished without a content change.
   workflow_dispatch:
@@ -38,9 +39,12 @@ jobs:
 
       - uses: actions/configure-pages@v5
 
+      - name: Stage public website files
+        run: rsync -a --exclude=/tools/ site/ "$RUNNER_TEMP/pdfdesk-site/"
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: ${{ runner.temp }}/pdfdesk-site
 
       - id: deployment
         uses: actions/deploy-pages@v4

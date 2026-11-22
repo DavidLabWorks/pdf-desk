@@ -3,7 +3,7 @@
 # The site's showcase rows are stills, and two of PDFDesk's better moments are
 # motion: dragging page thumbnails to reorder a document, and the sidebar
 # sliding open before night mode inverts the page. This drives the real
-# application and grabs a timed frame sequence. tools/gen-site-demos.ps1 turns
+# application and grabs a timed frame sequence. site/tools/gen-site-demos.ps1 turns
 # those frames into the sprite sheets the site actually serves.
 #
 # The frames are real captures. index.html says "Every screenshot here is the
@@ -322,7 +322,7 @@ $VK_F9      = 0x78
 # before the application's handler runs, and it looks like the click did nothing.
 $DwellMs = 90
 
-$repo = Split-Path -Parent $PSScriptRoot
+$repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 # ---------------------------------------------------------------- helpers
 
@@ -903,5 +903,5 @@ if ($Probe) {
     ""
     "Look at the frames before compositing, especially frame 1: check the tab strip"
     "shows only the demo document, and that the window is not cropped."
-    "Then: tools\gen-site-demos.ps1 -Take @{ $Clip = <n> }"
+    "Then: site\tools\gen-site-demos.ps1 -Take @{ $Clip = <n> }"
 }

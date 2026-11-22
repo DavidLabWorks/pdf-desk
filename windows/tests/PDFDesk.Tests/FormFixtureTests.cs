@@ -4,7 +4,7 @@ namespace PDFDesk.Tests;
 
 /// <summary>
 /// Guards tests/corpus/form.pdf itself. The fixture is hand-assembled by
-/// tools/gen-corpus.ps1 with byte-accurate xref offsets, so a small edit there
+/// tests/gen-corpus.ps1 with byte-accurate xref offsets, so a small edit there
 /// can silently produce a file PDFium parses but reads as empty. Every form
 /// test downstream assumes these four widgets exist — assert it once, here.
 /// </summary>

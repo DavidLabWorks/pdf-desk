@@ -1,9 +1,9 @@
 # Generates the test-PDF corpus in tests/corpus/.
-# Run from the repo root:  powershell -File tools\gen-corpus.ps1
+# Run from the repo root:  powershell -File tests\gen-corpus.ps1
 # Hand-assembles PDFs (tracking xref byte offsets) so no PDF library is needed.
 
 $ErrorActionPreference = 'Stop'
-$corpusDir = Join-Path $PSScriptRoot '..\tests\corpus'
+$corpusDir = Join-Path $PSScriptRoot 'corpus'
 New-Item -ItemType Directory -Force $corpusDir | Out-Null
 
 # Serializes already-rendered object bodies (1-based, in order) into a complete

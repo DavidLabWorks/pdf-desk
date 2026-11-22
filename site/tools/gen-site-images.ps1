@@ -22,7 +22,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-$repo = Split-Path -Parent $PSScriptRoot
+$repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $src  = Join-Path $repo 'docs\store-screenshots'
 $dest = Join-Path $repo 'site\img'
 
