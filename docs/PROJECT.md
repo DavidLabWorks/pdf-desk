@@ -2,9 +2,7 @@
 
 For the macOS project, see [macos/](../macos/) and the [cross-platform requirements](macOS版产品需求与实现规格.md). Commands below run from the repository root.
 
-PDFDesk is an open-source Windows application for reading and editing PDFs.
-It is developed at [DavidLabWorks/pdf-desk-windows](https://github.com/DavidLabWorks/pdf-desk-windows)
-and builds on [upstream work](../README.md#credits-and-license) by Danial Javed and contributors.
+The Windows version of PDF Desk originated from [Rune](https://github.com/DanialJaved/rune), developed by Danial Javed and contributors. [DavidLabWorks](https://github.com/DavidLabWorks/pdf-desk-windows) now maintains PDF Desk. The macOS app uses SwiftUI and PDFKit.
 The sections from version history onward contain historical notes inherited from upstream.
 
 ---

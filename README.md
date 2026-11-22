@@ -101,6 +101,8 @@ Tests cover page layout, render scheduling, text search, annotation and form rou
 
 ## Credits and license
 
-PDF Desk builds on [Rune](https://github.com/DanialJaved/rune) by Danial Javed and contributors. It is licensed under the [GNU GPL v3](LICENSE). Licenses for bundled components are listed in the [third-party notices](THIRD-PARTY-NOTICES.md).
+The Windows version of PDF Desk originated from [Rune](https://github.com/DanialJaved/rune), developed by Danial Javed and contributors. DavidLabWorks now maintains PDF Desk. The native macOS app uses SwiftUI and PDFKit.
+
+PDF Desk is licensed under the [GNU GPL v3](LICENSE). Licenses for bundled components are listed in the [third-party notices](THIRD-PARTY-NOTICES.md).
 
 To report a problem, open a [GitHub issue](https://github.com/DavidLabWorks/pdf-desk-windows/issues) with steps to reproduce it, the app version, your Windows version, and system architecture. Redact private file names and paths from screenshots and logs before attaching them.

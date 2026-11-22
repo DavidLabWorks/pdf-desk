@@ -101,6 +101,8 @@ dotnet test windows/tests/PDFDesk.Tests/PDFDesk.Tests.csproj -c Release
 
 ## 来源与许可
 
-PDF Desk 基于 Danial Javed 和贡献者开发的 [Rune](https://github.com/DanialJaved/rune) 继续开发，采用 [GNU GPL v3](LICENSE)。随程序分发的组件及其许可见[第三方声明](THIRD-PARTY-NOTICES.md)。
+PDF Desk 的 Windows 版最初源自 Danial Javed 及贡献者开发的 [Rune](https://github.com/DanialJaved/rune)。PDF Desk 现由 DavidLabWorks 维护，macOS 版采用 SwiftUI 和 PDFKit 原生开发。
+
+PDF Desk 采用 [GNU GPL v3](LICENSE)。随程序分发的组件及其许可见[第三方声明](THIRD-PARTY-NOTICES.md)。
 
 如需反馈问题，可在 [GitHub Issues](https://github.com/DavidLabWorks/pdf-desk-windows/issues) 提交复现步骤，并附上应用版本、Windows 版本及系统架构。截图与日志如涉及私人文档，请先遮盖文件名和路径。
