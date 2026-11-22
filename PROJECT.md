@@ -1,4 +1,6 @@
-# PDFDesk — Project Reference
+# PDF Desk — Windows Project Reference
+
+For the macOS project, see [macos/](macos/) and the [cross-platform requirements](docs/macOS版产品需求与实现规格.md). Commands below run from the repository root.
 
 PDFDesk is an open-source Windows application for reading and editing PDFs.
 It is developed at [DavidLabWorks/pdf-desk-windows](https://github.com/DavidLabWorks/pdf-desk-windows)
@@ -30,10 +32,10 @@ PDFium for local rendering and document operations. The project uses GPL v3.
 
 ## 3. Solution layout
 
-`PDFDesk.slnx` (new `.slnx` solution format) with four projects:
+`windows/PDFDesk.slnx` (new `.slnx` solution format) with four projects:
 
 ```
-src/
+windows/src/
   PDFDesk.PdfiumInterop/   Thin P/Invoke bindings over pdfium.dll
     NativeMethods.cs      Raw [DllImport] signatures (fpdfview/doc/text/annot/edit/save)
     PdfiumNative.cs       Public facade so the engine never touches DllImports
@@ -138,13 +140,16 @@ src/
     Package.appxmanifest      Store identity + .pdf file-type association (§8b)
     Assets/                   pdfdesk.ico + MSIX visual assets (generated)
 
-tests/
+windows/tests/
   PDFDesk.Tests/           xUnit — 427 tests against a generated corpus (see §6)
+
+windows/tools/
+  check-package.ps1     Checks packaged runtimes
+  windows-installer.iss Windows installer definition
 
 tools/
   gen-corpus.ps1        Hand-authors the test PDFs (no PDF lib needed)
   gen-icon.ps1          Draws the PDFDesk icon + all MSIX assets
-  check-package.ps1     Asserts the .NET runtime is actually inside an MSIX
   gen-site-images.ps1   Store screenshots to resized JPEGs in site/img
   gen-site-shortcuts.ps1 Rewrites the shortcut table in site/features.html from
                         ShortcutCatalog.cs, so app and site cannot disagree
@@ -435,13 +440,13 @@ label on 20-odd icon-only buttons.
 
 ```powershell
 # Build
-dotnet build src/PDFDesk.App/PDFDesk.App.csproj -p:Platform=x64
+dotnet build windows/src/PDFDesk.App/PDFDesk.App.csproj -p:Platform=x64
 
 # Run (accepts an optional PDF path; also --page N --zoom Z for scripted tests)
-src/PDFDesk.App/bin/x64/Debug/net10.0-windows10.0.19041.0/win-x64/PDFDesk.exe [file.pdf]
+windows/src/PDFDesk.App/bin/x64/Debug/net10.0-windows10.0.19041.0/win-x64/PDFDesk.exe [file.pdf]
 
 # Test (427 tests)
-dotnet test tests/PDFDesk.Tests/PDFDesk.Tests.csproj
+dotnet test windows/tests/PDFDesk.Tests/PDFDesk.Tests.csproj
 
 # Regenerate assets when needed
 powershell -File tools/gen-corpus.ps1     # test PDFs → tests/corpus/
@@ -739,7 +744,7 @@ session scratchpad (`shot.ps1` / `drive-pdfdesk.ps1`).
   one of them was ever tested locally: the portable zip is `dotnet publish` with
   the self-contained flag **on the command line** and worked; the MSIX is
   `dotnet build`, which passed nothing. Both properties now live in the csproj so
-  neither path can carry it alone, and `tools/check-package.ps1` asserts the
+  neither path can carry it alone, and `windows/tools/check-package.ps1` asserts the
   runtime is actually inside the built package.
   **A dev machine cannot reproduce this** — it has the runtime, so the app starts
   either way. The evidence is the artifact: a self-contained package contains
@@ -770,13 +775,13 @@ session scratchpad (`shot.ps1` / `drive-pdfdesk.ps1`).
 Build a portable distribution from the Windows x64 publish folder:
 
 ```powershell
-dotnet publish src/PDFDesk.App/PDFDesk.App.csproj -c Release -r win-x64 --self-contained -p:Platform=x64 -p:WindowsPackageType=None -o artifacts/portable/win-x64
+dotnet publish windows/src/PDFDesk.App/PDFDesk.App.csproj -c Release -r win-x64 --self-contained -p:Platform=x64 -p:WindowsPackageType=None -o artifacts/portable/win-x64
 Compress-Archive -Path artifacts/portable/win-x64/* -DestinationPath artifacts/pdfdesk-win-x64.zip
 ```
 
 Build ARM64 with `win-arm64` and `Platform=ARM64`. Keep the version in
 `PDFDesk.App.csproj` and `Package.appxmanifest` in sync. Include `LICENSE`,
-`THIRD-PARTY-NOTICES.md` and `third_party/WindowsAppSDK-NOTICE.txt` in distributions.
+`THIRD-PARTY-NOTICES.md` and `windows/third_party/WindowsAppSDK-NOTICE.txt` in distributions.
 GitHub CI builds x64 and ARM64 and runs the tests on Windows.
 
 ## 8b. MSIX and Store preparation
@@ -784,7 +789,7 @@ GitHub CI builds x64 and ARM64 and runs the tests on Windows.
 The repository uses `DavidLabWorks.PDFDesk` and `CN=DavidLabWorks` for the local
 package. For Store submission, associate the project with the PDFDesk product
 in Partner Center and use its assigned identity and publisher. Listing copy is
-in [docs/store-listing.md](docs/store-listing.md). Use `tools/check-package.ps1`
+in [docs/store-listing.md](docs/store-listing.md). Use `windows/tools/check-package.ps1`
 to check that the packaged app includes the .NET runtime.
 
 ---
@@ -802,7 +807,7 @@ to check that the packaged app includes the .NET runtime.
   locally — the MSIX is a plain `dotnet build` that passed nothing. Nothing in
   the build, the upload or certification notices, and a dev machine cannot
   reproduce it, because a dev machine has the runtime. The property now lives in
-  the csproj where both paths get it, `tools/check-package.ps1` asserts the
+  the csproj where both paths get it, `windows/tools/check-package.ps1` asserts the
   runtime is in the artifact, and §8b makes running it a required step before
   upload. The bundle roughly doubles to ~135 MB, which is where it was at v0.4.1
   before the ML runtime came out.
@@ -1195,7 +1200,7 @@ releases, a Store certification each time, and every local test — because the
 build that gets tested locally is the portable zip, and the portable zip is the
 one whose command line happened to carry `--self-contained`. The MSIX never did.
 **When two build paths produce the same app, assume they disagree until
-something checks.** The check is `tools/check-package.ps1`, and it looks inside
+something checks.** The check is `windows/tools/check-package.ps1`, and it looks inside
 the artifact rather than at the source, because the source looked fine.
 
 **Worth repeating, because it hid a real bug for three releases:** the
@@ -1352,7 +1357,7 @@ thread's *lifetime* before suspecting the render.
 - **Neither artifact is current.** The Store bundle
   for version 0.8.0.0 (x64 and ARM64) (141 MB) was
   built on 16 Aug, **before** the touch commit, so it is stale and has to be
-  rebuilt and re-checked with `tools/check-package.ps1` before it goes anywhere.
+  rebuilt and re-checked with `windows/tools/check-package.ps1` before it goes anywhere.
   There is **no portable zip for 0.8.0 at all**; `artifacts/` stops at
   the v0.6.0 portable x64 archive, and §8 makes that zip the only GitHub artifact.
 - **Store screenshots are still the v0.6.0 set**, 10 of 10 at 1920×1080. The
@@ -1382,7 +1387,7 @@ Neither of these can be done from the repo; both are the user's.
 2. **Publish, once the user says so.** PR #13 has to merge first. What is left
    after that: rebuild **both** artifacts for 0.8.0 (§8), since the Store bundle
    on disk predates the touch commit and there is no portable zip at all; run
-   `tools/check-package.ps1` on the bundle; tag **v0.8.0**; `gh release create`;
+   `windows/tools/check-package.ps1` on the bundle; tag **v0.8.0**; `gh release create`;
    then the bundle and the screenshots to Partner Center. **GitHub Releases is
    still at v0.4.0** while the Store shipped 0.5.0: 0.4.1, 0.5.0, 0.5.1, 0.6.0
    and 0.7.0 were never tagged, so the notes have to say plainly that the

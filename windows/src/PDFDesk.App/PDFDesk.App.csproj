@@ -40,7 +40,7 @@
 
          So it lives HERE, unconditionally, rather than on either command line —
          neither path can carry it alone, and Debug builds what Release ships.
-         `tools/check-package.ps1` asserts the runtime actually made it into the
+         `windows/tools/check-package.ps1` asserts the runtime actually made it into the
          package, because this failure is otherwise completely silent. -->
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
@@ -58,10 +58,10 @@
     </Content>
     <!-- License + third-party attributions must ship with every binary
          distribution (PDFium BSD-3-Clause/Apache-2.0 requirement). -->
-    <Content Include="..\..\LICENSE" Link="LICENSE.txt">
+    <Content Include="..\..\..\LICENSE" Link="LICENSE.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md">
+    <Content Include="..\..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\third_party\WindowsAppSDK-NOTICE.txt" Link="WindowsAppSDK-NOTICE.txt">

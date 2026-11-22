@@ -1,7 +1,7 @@
 # Rasterizes PDFDesk's app mark from assets/pdfdesk.svg (and pdfdesk-small.svg below
 # 32px) into every icon asset the app and the Store need:
-#   src/PDFDesk.App/Assets/pdfdesk.ico   (16/24/32/48/64/256, PNG-compressed entries)
-#   src/PDFDesk.App/Assets/*.png      (MSIX visual assets, scale-100..400)
+#   windows/src/PDFDesk.App/Assets/pdfdesk.ico   (16/24/32/48/64/256, PNG-compressed entries)
+#   windows/src/PDFDesk.App/Assets/*.png      (MSIX visual assets, scale-100..400)
 # Run from repo root:  powershell -File tools\gen-icon.ps1
 #
 # The SVG is the design source of truth; edit it, not this script. What follows
@@ -15,7 +15,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase, System.Drawing
 
 $root = Join-Path $PSScriptRoot '..'
-$assets = Join-Path $root 'src\PDFDesk.App\Assets'
+$assets = Join-Path $root 'windows\src\PDFDesk.App\Assets'
 New-Item -ItemType Directory -Force $assets | Out-Null
 
 function ConvertTo-Brush {

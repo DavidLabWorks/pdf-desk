@@ -63,7 +63,7 @@ foreach ($file in Get-ChildItem $src -Filter *.png | Sort-Object Name) {
 }
 
 # The app icon doubles as the site's logo and favicon source.
-$logo = Join-Path $repo 'src\PDFDesk.App\Assets\Square44x44Logo.targetsize-256.png'
+$logo = Join-Path $repo 'windows\src\PDFDesk.App\Assets\Square44x44Logo.targetsize-256.png'
 if (Test-Path $logo) {
     Copy-Item $logo (Join-Path $dest 'pdfdesk-256.png') -Force
     "pdfdesk-256.png copied from the app's own icon assets"

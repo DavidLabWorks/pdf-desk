@@ -1,9 +1,16 @@
 <div align="center">
   <img src="assets/pdfdesk.svg" width="72" alt="PDF Desk icon">
   <h1>PDF Desk</h1>
-  <p>A local PDF reader and editor for Windows.</p>
+  <p>A local PDF desktop app for Windows and macOS.</p>
   <p><strong>English</strong> · <a href="README.zh-CN.md" lang="zh-CN">简体中文</a></p>
 </div>
+
+| Platform | Project | Current capabilities |
+| --- | --- | --- |
+| Windows | [Visual Studio solution](windows/PDFDesk.slnx) | Bookshelf, reading, annotation, forms, page editing, compression and printing. |
+| macOS | [Xcode project](macos/PDFDesk.xcodeproj) | Read-only PDF viewer built with SwiftUI and PDFKit. On macOS 13 or later, open the project with Xcode, run PDFDesk, and use File → Open to read a PDF. |
+
+Both projects use the [product requirements](docs/macOS版产品需求与实现规格.md), [PDF test files](tests/corpus/) and [design skill](skills/pdfdesk-design/SKILL.md). The Windows guide below covers the released application.
 
 Keep frequently used PDFs on a bookshelf and open them in tabs to read, annotate, fill out forms, or assemble a new document from selected pages. PDF Desk processes documents on your computer and works without an account. The interface is available in English and Simplified Chinese.
 
@@ -53,29 +60,29 @@ PDF Desk uses **C#, .NET 10, WinUI 3, Win2D, and PDFium**. The UI handles mouse,
 
 | Feature | Implementation and source |
 | --- | --- |
-| Large documents | File access callbacks read PDF data on demand. The viewer requests tiles for the visible area and draws them on a Win2D virtual canvas. A scheduler prioritizes rendering and background work, while a cache keeps page handles available for reuse. [File access](src/PDFDesk.PdfiumInterop/FileAccessAdapter.cs) · [Scheduler](src/PDFDesk.Engine/RenderScheduler.cs) · [Page cache](src/PDFDesk.Engine/PdfDocument.PageCache.cs) |
-| Layout, zoom, and search | The layout engine calculates each page’s bounds. Rotation transforms map document coordinates to the screen, zoom uses an anchor to preserve the reading position, and search uses extracted text and character positions. [Layout](src/PDFDesk.Engine/PageLayout.cs) · [Zoom anchor](src/PDFDesk.Engine/ZoomAnchor.cs) · [Search](src/PDFDesk.Engine/DocumentSearch.cs) |
-| Ink, highlights, and notes | The engine writes standard PDF ink, text markup, and text annotations. It splits cross-page strokes at page boundaries, clips ink along the eraser’s path, and stores sticky-note text in the annotation’s `/Contents` entry. [Annotations](src/PDFDesk.Engine/PdfDocument.Annotations.cs) · [Cross-page ink](src/PDFDesk.Engine/PageInkGesture.cs) · [Eraser](src/PDFDesk.Engine/InkEraser.cs) |
-| Editable text and Chinese fonts | Text objects go into a stamp annotation’s appearance stream. PDF Desk retains the original text and layout information for later edits. For supported Chinese fonts, it checks embedding permissions and embeds a TrueType subset containing the glyphs used. [Text boxes](src/PDFDesk.Engine/PdfDocument.Text.cs) · [Font subsetting](src/PDFDesk.Engine/PdfTextFallback.cs) |
-| Images, signatures, and forms | Images and handwritten signatures use stamp annotations. PDF Desk can remove the paper background from an imported signature locally. The PDFium form environment handles form input, and a separate reader inspects existing digital signatures. [Image stamps](src/PDFDesk.Engine/PdfDocument.Stamps.cs) · [Background removal](src/PDFDesk.Engine/SignatureMatte.cs) · [Forms](src/PDFDesk.Engine/PdfDocument.Forms.cs) · [Digital signatures](src/PDFDesk.Engine/PdfDocument.Signatures.cs) |
-| Page operations and printing | PDFium imports, exports, and reorders pages. The print service renders pages for the selected paper and printable area, then passes them to the Windows print pipeline for preview and printing. [Page operations](src/PDFDesk.Engine/PdfDocument.Pages.cs) · [Flattening](src/PDFDesk.Engine/PdfDocument.Flatten.cs) · [Print service](src/PDFDesk.App/Services/PrintService.cs) |
-| Library and desktop integration | Library imports use a temporary copy and handle duplicate file names. Settings writes use a mutex and replace the destination with a temporary file. Single-instance activation routes subsequent file-open requests to the existing window. [Library](src/PDFDesk.Engine/PdfLibrary.cs) · [Settings and sessions](src/PDFDesk.Engine/AppState.cs) · [Window activation](src/PDFDesk.App/Services/SingleInstance.cs) |
+| Large documents | File access callbacks read PDF data on demand. The viewer requests tiles for the visible area and draws them on a Win2D virtual canvas. A scheduler prioritizes rendering and background work, while a cache keeps page handles available for reuse. [File access](windows/src/PDFDesk.PdfiumInterop/FileAccessAdapter.cs) · [Scheduler](windows/src/PDFDesk.Engine/RenderScheduler.cs) · [Page cache](windows/src/PDFDesk.Engine/PdfDocument.PageCache.cs) |
+| Layout, zoom, and search | The layout engine calculates each page’s bounds. Rotation transforms map document coordinates to the screen, zoom uses an anchor to preserve the reading position, and search uses extracted text and character positions. [Layout](windows/src/PDFDesk.Engine/PageLayout.cs) · [Zoom anchor](windows/src/PDFDesk.Engine/ZoomAnchor.cs) · [Search](windows/src/PDFDesk.Engine/DocumentSearch.cs) |
+| Ink, highlights, and notes | The engine writes standard PDF ink, text markup, and text annotations. It splits cross-page strokes at page boundaries, clips ink along the eraser’s path, and stores sticky-note text in the annotation’s `/Contents` entry. [Annotations](windows/src/PDFDesk.Engine/PdfDocument.Annotations.cs) · [Cross-page ink](windows/src/PDFDesk.Engine/PageInkGesture.cs) · [Eraser](windows/src/PDFDesk.Engine/InkEraser.cs) |
+| Editable text and Chinese fonts | Text objects go into a stamp annotation’s appearance stream. PDF Desk retains the original text and layout information for later edits. For supported Chinese fonts, it checks embedding permissions and embeds a TrueType subset containing the glyphs used. [Text boxes](windows/src/PDFDesk.Engine/PdfDocument.Text.cs) · [Font subsetting](windows/src/PDFDesk.Engine/PdfTextFallback.cs) |
+| Images, signatures, and forms | Images and handwritten signatures use stamp annotations. PDF Desk can remove the paper background from an imported signature locally. The PDFium form environment handles form input, and a separate reader inspects existing digital signatures. [Image stamps](windows/src/PDFDesk.Engine/PdfDocument.Stamps.cs) · [Background removal](windows/src/PDFDesk.Engine/SignatureMatte.cs) · [Forms](windows/src/PDFDesk.Engine/PdfDocument.Forms.cs) · [Digital signatures](windows/src/PDFDesk.Engine/PdfDocument.Signatures.cs) |
+| Page operations and printing | PDFium imports, exports, and reorders pages. The print service renders pages for the selected paper and printable area, then passes them to the Windows print pipeline for preview and printing. [Page operations](windows/src/PDFDesk.Engine/PdfDocument.Pages.cs) · [Flattening](windows/src/PDFDesk.Engine/PdfDocument.Flatten.cs) · [Print service](windows/src/PDFDesk.App/Services/PrintService.cs) |
+| Library and desktop integration | Library imports use a temporary copy and handle duplicate file names. Settings writes use a mutex and replace the destination with a temporary file. Single-instance activation routes subsequent file-open requests to the existing window. [Library](windows/src/PDFDesk.Engine/PdfLibrary.cs) · [Settings and sessions](windows/src/PDFDesk.Engine/AppState.cs) · [Window activation](windows/src/PDFDesk.App/Services/SingleInstance.cs) |
 
 ## Build from source
 
 Install the .NET 10 SDK on Windows and run the following commands in PowerShell from the repository root. NuGet restores WinUI, Win2D, PDFium, and the other dependencies. This example produces a self-contained ARM64 portable folder with the required .NET and Windows App SDK components.
 
 ```powershell
-dotnet publish src/PDFDesk.App/PDFDesk.App.csproj -c Release -r win-arm64 --self-contained -p:Platform=ARM64 -p:WindowsPackageType=None -o artifacts/portable/win-arm64
+dotnet publish windows/src/PDFDesk.App/PDFDesk.App.csproj -c Release -r win-arm64 --self-contained -p:Platform=ARM64 -p:WindowsPackageType=None -o artifacts/portable/win-arm64
 .\artifacts\portable\win-arm64\PDFDesk.exe
 ```
 
-For x64, use `-r win-x64`, set `-p:Platform=x64`, and choose a separate output folder. To work with the solution in an IDE, open [PDFDesk.slnx](PDFDesk.slnx).
+For x64, use `-r win-x64`, set `-p:Platform=x64`, and choose a separate output folder. To work with the solution in an IDE, open [windows/PDFDesk.slnx](windows/PDFDesk.slnx).
 
 ### Tests
 
 ```powershell
-dotnet test tests/PDFDesk.Tests/PDFDesk.Tests.csproj -c Release
+dotnet test windows/tests/PDFDesk.Tests/PDFDesk.Tests.csproj -c Release
 ```
 
 Tests cover page layout, render scheduling, text search, annotation and form round trips, reopening embedded fonts, page operations, and state persistence. Sample documents are in [tests/corpus](tests/corpus). The [desktop test cases and results (Simplified Chinese)](docs/测试用例与结果.md) describe UI scenarios, ARM64 memory measurements, and what was verified.

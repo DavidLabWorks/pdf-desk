@@ -26,7 +26,7 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $repo    = Split-Path -Parent $PSScriptRoot
-$catalog = Join-Path $repo 'src\PDFDesk.App\ShortcutCatalog.cs'
+$catalog = Join-Path $repo 'windows\src\PDFDesk.App\ShortcutCatalog.cs'
 $page    = Join-Path $repo 'site\features.html'
 
 foreach ($p in @($catalog, $page)) {

@@ -464,10 +464,10 @@ if (($pdfName -notmatch '^NASA') -and (-not $IAcceptLicenceRisk)) {
 }
 
 if (-not $Exe) {
-    $Exe = Join-Path $repo 'src\PDFDesk.App\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\PDFDesk.exe'
+    $Exe = Join-Path $repo 'windows\src\PDFDesk.App\bin\x64\Debug\net10.0-windows10.0.19041.0\win-x64\PDFDesk.exe'
 }
 if (-not (Test-Path $Exe)) {
-    throw "No PDFDesk.exe at $Exe. Build it first: dotnet build src/PDFDesk.App/PDFDesk.App.csproj -p:Platform=x64"
+    throw "No PDFDesk.exe at $Exe. Build it first: dotnet build windows/src/PDFDesk.App/PDFDesk.App.csproj -p:Platform=x64"
 }
 
 if (-not $OutRoot) { $OutRoot = Join-Path $repo 'artifacts\demo' }

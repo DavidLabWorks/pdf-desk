@@ -35,7 +35,7 @@
     file. The parse error it produces points at a brace forty lines away.
 
 .EXAMPLE
-    tools/check-package.ps1 artifacts/store/PDFDesk.App_0.0.7.0_x64_arm64_bundle.msixupload
+    windows/tools/check-package.ps1 artifacts/store/PDFDesk.App_0.0.7.0_x64_arm64_bundle.msixupload
 #>
 [CmdletBinding()]
 param(

@@ -27,7 +27,7 @@
 | F07 条目操作 | 支持打开、定位源文件、管理收藏、压缩导出等上下文动作，按文件状态决定可用性。长文件名截断时仍可辨认。最近记录失效时给出恢复或移除入口。 |
 | F08 批量管理 | 进入选择模式可逐项选择、全选和取消。收藏区取消收藏仍保留最近记录；从最近移除会一并清除该条目的收藏、位置和个人书签。选择同时删除源文件时，列明后果并移至系统废纸篓，已打开的 PDF 要先关闭。多文件部分失败时根据每项结果更新书架。 |
 
-实现入口：[书库文件操作](../src/PDFDesk.Engine/PdfLibrary.cs)、[书架](../src/PDFDesk.App/MainWindow.Shelf.cs)、[收藏](../src/PDFDesk.App/MainWindow.Favorites.cs)、[打开与新建](../src/PDFDesk.App/MainWindow.xaml.cs)。
+实现入口：[书库文件操作](../windows/src/PDFDesk.Engine/PdfLibrary.cs)、[书架](../windows/src/PDFDesk.App/MainWindow.Shelf.cs)、[收藏](../windows/src/PDFDesk.App/MainWindow.Favorites.cs)、[打开与新建](../windows/src/PDFDesk.App/MainWindow.xaml.cs)。
 
 ## 3. 标签、窗口、文件身份和保存
 
@@ -43,7 +43,7 @@
 
 **保存冲突验收。** 在窗口 A 编辑第 2 页，窗口 B 保持旧快照。A 保存后，B 应能读到原快照并识别新版。再从外部替换原文件，A 的下一次原位保存须提示冲突。移走原文件，执行保存副本并重开，核对最后输入的文字、书签和页序。失败分支必须保留可恢复的内容。
 
-实现入口：[多窗口编辑权](../src/PDFDesk.App/MainWindow.Documents.cs)、[保存与恢复](../src/PDFDesk.App/MainWindow.xaml.cs)、[保存引擎](../src/PDFDesk.Engine/PdfDocument.Annotations.cs)、[完整性回归用例](../tests/PDFDesk.Tests/DocumentIntegrityTests.cs)。
+实现入口：[多窗口编辑权](../windows/src/PDFDesk.App/MainWindow.Documents.cs)、[保存与恢复](../windows/src/PDFDesk.App/MainWindow.xaml.cs)、[保存引擎](../windows/src/PDFDesk.Engine/PdfDocument.Annotations.cs)、[完整性回归用例](../windows/tests/PDFDesk.Tests/DocumentIntegrityTests.cs)。
 
 ## 4. 阅读、导航、查找和截图
 
@@ -61,7 +61,7 @@
 | R10 演示 | 独立全屏逐页显示，从阅读位置开始。方向键、翻页键、空格、点击或触摸翻页；鼠标右键或非鼠标指针点左侧六分之一区域返回，其余区域点击前进。在末页再次点击前进区域退出，末页按键盘下一页停留在末页。Esc、F5 或退出控件结束，阅读器跟随最后展示页。 |
 | R11 截图 | 选择矩形或自由轮廓，在页面上拖动，松开复制到系统剪贴板。边缘自动滚动，允许跨视口、跨页；坐标绑定文档。按当前排版、旋转、显示倍率与夜间模式重新渲染，自由轮廓输出带透明区域的 PNG，并提供普通位图兼容表示。最长边受设备能力与 4096 px 限制。取消、失去捕获或切换文档时丢弃过期结果。 |
 
-实现入口：[阅读画布](../src/PDFDesk.App/Controls/PdfViewer.xaml.cs)、[排版](../src/PDFDesk.Engine/PageLayout.cs)、[旋转](../src/PDFDesk.Engine/PageRotationTransform.cs)、[文内搜索](../src/PDFDesk.Engine/DocumentSearch.cs)、[侧栏](../src/PDFDesk.App/Controls/DocumentView.xaml.cs)、[截图输出](../src/PDFDesk.App/Controls/CanvasScreenshot.cs)。
+实现入口：[阅读画布](../windows/src/PDFDesk.App/Controls/PdfViewer.xaml.cs)、[排版](../windows/src/PDFDesk.Engine/PageLayout.cs)、[旋转](../windows/src/PDFDesk.Engine/PageRotationTransform.cs)、[文内搜索](../windows/src/PDFDesk.Engine/DocumentSearch.cs)、[侧栏](../windows/src/PDFDesk.App/Controls/DocumentView.xaml.cs)、[截图输出](../windows/src/PDFDesk.App/Controls/CanvasScreenshot.cs)。
 
 ## 5. 批注、文字、图片和签名素材
 
@@ -80,7 +80,7 @@
 | A09 签名复用与放置 | 签名素材在本机保存，可选取复用和删除。预览、定位、等比缩放、移动与图片共用 Stamp 流程。分别记忆图片及签名放置宽度，签名默认 180 pt。 | 删除素材、关闭应用后重开签过的文件，页面签名仍存在且位置正确。 |
 | A10 对象和历史 | 对支持的批注显示选中边界、移动或角点控制柄、右键及删除键动作；重建批注时恢复索引和叠放顺序。每份可编辑文档统一管理可撤销的批注和页面操作，菜单显示下一项动作。参考预算 50 步、64 MiB 快照，执行新操作截断重做分支。 | 把页面移动和对象编辑交错执行，再撤销、重做；失败的重放可以重试且不重复创建对象。 |
 
-实现入口：[标准批注和保存](../src/PDFDesk.Engine/PdfDocument.Annotations.cs)、[局部擦除](../src/PDFDesk.Engine/InkEraser.cs)、[文字框写入](../src/PDFDesk.Engine/PdfDocument.Text.cs)、[字体](../src/PDFDesk.Engine/PdfTextFallback.cs)、[对象交互](../src/PDFDesk.App/Controls/PdfViewer.ObjectSelection.cs)、[签名去底](../src/PDFDesk.Engine/SignatureMatte.cs)、[签名库](../src/PDFDesk.App/Services/SignatureStore.cs)。
+实现入口：[标准批注和保存](../windows/src/PDFDesk.Engine/PdfDocument.Annotations.cs)、[局部擦除](../windows/src/PDFDesk.Engine/InkEraser.cs)、[文字框写入](../windows/src/PDFDesk.Engine/PdfDocument.Text.cs)、[字体](../windows/src/PDFDesk.Engine/PdfTextFallback.cs)、[对象交互](../windows/src/PDFDesk.App/Controls/PdfViewer.ObjectSelection.cs)、[签名去底](../windows/src/PDFDesk.Engine/SignatureMatte.cs)、[签名库](../windows/src/PDFDesk.App/Services/SignatureStore.cs)。
 
 ## 6. 表单、文档信息和既有数字签名
 
@@ -89,7 +89,7 @@
 - **D03 文档属性。** 分组展示标题、作者、主题等元数据、创建及修改时间、文件路径、大小、PDF 版本、页数、当前纸张尺寸、混合尺寸提示、加密与权限、Tagged PDF、表单类型、附件数和字体。解析 PDF 日期即时区，纸张显示常用名称、毫米及 pt。缺值有明确显示；字体后台扫描最多 50 页。
 - **D04 已有数字签名。** 显示签名数量和详情，包括声明的签署时间、原因、签名类型、文档修改权限及 ByteRange 对文件的覆盖情况。覆盖到末尾仅代表字节范围，界面必须说明验证能力边界。加密或已数字签名的文件无法使用压缩导出。
 
-实现入口：[表单交互](../src/PDFDesk.App/Controls/PdfViewer.Forms.cs)、[表单引擎](../src/PDFDesk.Engine/PdfDocument.Forms.cs)、[属性](../src/PDFDesk.Engine/PdfDocument.Properties.cs)、[签名信息](../src/PDFDesk.Engine/PdfDocument.Signatures.cs)、[覆盖判定](../src/PDFDesk.Engine/SignatureCoverage.cs)。
+实现入口：[表单交互](../windows/src/PDFDesk.App/Controls/PdfViewer.Forms.cs)、[表单引擎](../windows/src/PDFDesk.Engine/PdfDocument.Forms.cs)、[属性](../windows/src/PDFDesk.Engine/PdfDocument.Properties.cs)、[签名信息](../windows/src/PDFDesk.Engine/PdfDocument.Signatures.cs)、[覆盖判定](../windows/src/PDFDesk.Engine/SignatureCoverage.cs)。
 
 ## 7. 页面整理、复制、插入与提取
 
@@ -101,7 +101,7 @@
 | P04 书签与索引 | 插入使后续书签顺移；删除移除相应书签并前移后续页；移动按页身份映射。保存关联内容摘要，旧快照继续使用它自己的书签坐标。书签状态写入失败时区分「PDF 已保存」与「书签待保存」，后台重试。 | 在另一个窗口修改书签，同时调整页序并撤销，原有书签始终指向相同内容。 |
 | P05 重建后的同步 | 页面操作完成后统一刷新页数、选区、当前页、缩略图、目录、查找结果、页面句柄和渲染缓存。结构重建或恢复时保留内部链接、目录目的地、字段引用和批注层序。 | 先查词再删除命中页，检查旧高亮消失；撤销后点击目录应返回正确内容。 |
 
-实现入口：[页面操作](../src/PDFDesk.Engine/PdfDocument.Pages.cs)、[表单和链接传输](../src/PDFDesk.Engine/PdfDocument.PageTransfer.cs)、[草稿](../src/PDFDesk.Engine/PageDraft.cs)、[整理器](../src/PDFDesk.App/Controls/PageOrganizer.xaml.cs)、[书签映射](../src/PDFDesk.Engine/BookmarkRemap.cs)。
+实现入口：[页面操作](../windows/src/PDFDesk.Engine/PdfDocument.Pages.cs)、[表单和链接传输](../windows/src/PDFDesk.Engine/PdfDocument.PageTransfer.cs)、[草稿](../windows/src/PDFDesk.Engine/PageDraft.cs)、[整理器](../windows/src/PDFDesk.App/Controls/PageOrganizer.xaml.cs)、[书签映射](../windows/src/PDFDesk.Engine/BookmarkRemap.cs)。
 
 ## 8. 输出、压缩、打印与分享
 
@@ -120,7 +120,7 @@
 
 **O06 导出队列和文件安全。** 副本导出可后台运行，队列支持展开、折叠、查看阶段、进度和取消。全应用最多同时执行两个副本导出；同一源文件重复请求定位已有任务，同一目标不能被两个任务同时写入。先提交编辑、生成快照，再写目标目录内的暂存文件。替换前复核源文件版本、标签、编辑修订及正在输入或整理的状态；任一变化均中止替换。成功替换后更新书签摘要、可重载标签与封面。取消或失败应释放任务槽、目标占用及临时文件。检查源文件摘要与页数，验证中途取消没有留下半成品。
 
-实现入口：[压缩对话框](../src/PDFDesk.App/Controls/CompressionDialog.xaml.cs)、[压缩算法](../src/PDFDesk.App/Services/PdfCompression.cs)、[队列与提交](../src/PDFDesk.App/MainWindow.Compression.cs)、[展平](../src/PDFDesk.Engine/PdfDocument.Flatten.cs)、[打印](../src/PDFDesk.App/Services/PrintService.cs)、[复制文件](../src/PDFDesk.App/Services/PdfClipboard.cs)。
+实现入口：[压缩对话框](../windows/src/PDFDesk.App/Controls/CompressionDialog.xaml.cs)、[压缩算法](../windows/src/PDFDesk.App/Services/PdfCompression.cs)、[队列与提交](../windows/src/PDFDesk.App/MainWindow.Compression.cs)、[展平](../windows/src/PDFDesk.Engine/PdfDocument.Flatten.cs)、[打印](../windows/src/PDFDesk.App/Services/PrintService.cs)、[复制文件](../windows/src/PDFDesk.App/Services/PdfClipboard.cs)。
 
 ## 9. 设置、反馈和键盘操作
 
@@ -141,7 +141,7 @@
 | 文字框或表单焦点 | Ctrl+B/I 粗斜体，Ctrl+Shift+句号/逗号调整字号；文字框另支持 Ctrl+U 下划线及 Ctrl+L/E/R/J 对齐。Esc 结束输入并释放局部快捷键 |
 | 页面与草稿 | 缩略图 Ctrl/Shift+点击多选，Ctrl+C/X/V 复制/剪切/粘贴，Delete 删除，Ctrl+Z/Y 撤销/重做。整理器另有 Ctrl+A 全选、Ctrl+D 复制所选页、Ctrl+←/→ 移动、Ctrl+S 保存草稿、Ctrl+Shift+Z 重做 |
 
-验收同一按键在不同焦点下的作用。例如编辑表单时加粗不能顺便加书签；在整理器按删除只改变草稿；在输入框复制文字不能把页面放进剪贴板。参照[键盘路由](../src/PDFDesk.App/MainWindow.Keyboard.cs)、[快捷键目录](../src/PDFDesk.App/ShortcutCatalog.cs)、[设置](../src/PDFDesk.App/MainWindow.Settings.cs)。
+验收同一按键在不同焦点下的作用。例如编辑表单时加粗不能顺便加书签；在整理器按删除只改变草稿；在输入框复制文字不能把页面放进剪贴板。参照[键盘路由](../windows/src/PDFDesk.App/MainWindow.Keyboard.cs)、[快捷键目录](../windows/src/PDFDesk.App/ShortcutCatalog.cs)、[设置](../windows/src/PDFDesk.App/MainWindow.Settings.cs)。
 
 ## 10. macOS 实现方案与性能基线
 
@@ -164,7 +164,7 @@
 - 西文字体提供 Helvetica、Times、Courier 三类选择。表单中 Backspace、Delete、全选、Shift+方向键、Enter、Tab 和 Esc 需要分别验证，特别是输入法组合期间的回车。文字框、表单字段和普通阅读各自管理焦点。
 - 发出未修改文档的分享快照时，优先保留原始字节，避免重新编码已有数字签名。Windows 分享缓存清理以一天为阈值。对已有签名的 ByteRange 应区分覆盖、不完整和无法判断；遇到格式损坏或范围重叠时显示无法判断。
 
-实现入口：[配置模型](../src/PDFDesk.Engine/AppState.cs)、[文件读取](../src/PDFDesk.PdfiumInterop/FileAccessAdapter.cs)、[任务调度](../src/PDFDesk.Engine/RenderScheduler.cs)、[页面句柄缓存](../src/PDFDesk.Engine/PdfDocument.PageCache.cs)、[图块](../src/PDFDesk.Engine/Tiles.cs)、[缩放锚点](../src/PDFDesk.Engine/ZoomAnchor.cs)。
+实现入口：[配置模型](../windows/src/PDFDesk.Engine/AppState.cs)、[文件读取](../windows/src/PDFDesk.PdfiumInterop/FileAccessAdapter.cs)、[任务调度](../windows/src/PDFDesk.Engine/RenderScheduler.cs)、[页面句柄缓存](../windows/src/PDFDesk.Engine/PdfDocument.PageCache.cs)、[图块](../windows/src/PDFDesk.Engine/Tiles.cs)、[缩放锚点](../windows/src/PDFDesk.Engine/ZoomAnchor.cs)。
 
 ## 11. 与 Windows 对照的交互细则
 
@@ -179,7 +179,7 @@
 | 缩窄窗口 | Windows 最小内容体验按 640 × 420 逻辑单位设计。书架卡片基准宽 164、高 184；网格预留 16 单位的滚动条空间，增加列数留 12 单位缓冲。长文件名在字素边界中间省略，保留首尾供区分。窄窗口的编辑和文字格式工具条允许横向滚动。 |
 | 界面分区 | 标题栏含主页、文档标签和新文档入口。阅读工具栏左侧为视图操作，中间为页面工具，右侧为保存和文档菜单；右下为可折叠的阅读快捷工具和导出队列。侧栏宽度基准 280，标题行 44，触控目标基准 40。macOS 可以使用原生标题栏和菜单，保留这些入口的作用域和键盘可达性。 |
 
-视觉对照可从[书架](screenshots/bookshelf.png)、[阅读器](screenshots/reader.png)、[设置页](screenshots/settings.png)开始。尺寸和响应式行为见[设计资源](../src/PDFDesk.App/Styles/Tokens.xaml)、[网格测量](../src/PDFDesk.App/Controls/ShelfGridView.cs)、[名称截断](../src/PDFDesk.App/Controls/DocumentNameFormatter.cs)。
+视觉对照可从[书架](screenshots/bookshelf.png)、[阅读器](screenshots/reader.png)、[设置页](screenshots/settings.png)开始。尺寸和响应式行为见[设计资源](../windows/src/PDFDesk.App/Styles/Tokens.xaml)、[网格测量](../windows/src/PDFDesk.App/Controls/ShelfGridView.cs)、[名称截断](../windows/src/PDFDesk.App/Controls/DocumentNameFormatter.cs)。
 
 ### 11.2 文件打开、只读、覆盖与退出
 
@@ -192,7 +192,7 @@
 | 多窗口关闭 | 多窗口时关闭一个窗口只审查该窗口。最后一个窗口且启用关闭到托盘时，隐藏窗口并保留文档和后台任务；托盘不可用时最小化。真正关闭窗口或退出应用才要求完成或取消导出。退出期间其他窗口仍可能修改，须重新检查；一次「放弃」仅对当时的文档修订有效。 |
 | 配置同步 | 保存时在锁内合并「上次读取的基线、本窗口改动、最新磁盘值」，再以临时文件整体替换。窗口按 ID、阅读位置按窗口与路径、书签按内容版本与页处理。旧窗口可以更新自己的位置，但不能重新打开其他窗口刚关闭的标签。整份配置损坏回退初始状态；个别坏记录应尽量保留其他有效记录。 |
 
-对应回归见[窗口与配置合并](../tests/PDFDesk.Tests/AppStateTests.cs)、[文件身份与编辑修订](../tests/PDFDesk.Tests/DocumentIntegrityTests.cs)、[另存和提取](../tests/PDFDesk.Tests/PageEditTests.cs)。
+对应回归见[窗口与配置合并](../windows/tests/PDFDesk.Tests/AppStateTests.cs)、[文件身份与编辑修订](../windows/tests/PDFDesk.Tests/DocumentIntegrityTests.cs)、[另存和提取](../windows/tests/PDFDesk.Tests/PageEditTests.cs)。
 
 ### 11.3 阅读手感、命令优先级与输入
 
@@ -204,13 +204,13 @@
 - **触控与数位笔。** 长按选词容许约 12 逻辑单位的抖动。链接、字段和贴图对触摸增加 8 单位命中容差，换算成页内距离时除以缩放。缩放柄视觉尺寸为 10，触摸命中基准扩大到 24。点放与拖出贴图的移动阈值，鼠标为 8、触摸为 16。手写或擦除捕获发起指针，在动作结束或被取消时交还滚动与捏合。支持系统识别的笔尾橡皮擦或倒置笔。
 - **截图与演示。** 截图分裂按钮的主区域重复上次选择的形状，再点一次取消；切换形状可直接启动。截图前先提交待输入内容，靠近边缘 24 单位开始自动滚动，约每 32 ms 更新轮廓。演示使用独立临时全屏窗口，在原阅读窗口所在显示器上按比例居中，以黑色填充留边。当前页优先绘制，后台预取前后各一页，远页释放；继承阅读旋转及夜间状态。
 
-对照[文本查找栏](../src/PDFDesk.App/Controls/DocumentFindBar.xaml.cs)、[命令排序](../src/PDFDesk.App/Controls/CommandPalette.xaml.cs)、[触控指标](../src/PDFDesk.Engine/TouchMetrics.cs)、[演示](../src/PDFDesk.App/Controls/PresentationView.xaml.cs)和[缩放回归](../tests/PDFDesk.Tests/ZoomAnchorTests.cs)。
+对照[文本查找栏](../windows/src/PDFDesk.App/Controls/DocumentFindBar.xaml.cs)、[命令排序](../windows/src/PDFDesk.App/Controls/CommandPalette.xaml.cs)、[触控指标](../windows/src/PDFDesk.Engine/TouchMetrics.cs)、[演示](../windows/src/PDFDesk.App/Controls/PresentationView.xaml.cs)和[缩放回归](../windows/tests/PDFDesk.Tests/ZoomAnchorTests.cs)。
 
 ### 11.4 批注、表单和个人书签的往返编辑
 
 | 对象 | 读写、编辑与兼容行为 |
 |---|---|
-| 墨迹与文字标记 | 画笔每两个采样点组成线段，与各页矩形求交。快速跨越多页也要在每个经过的页边缘截断；笔画离页又返回时另起一段。保留亚像素采样与圆端点。荧光笔松手后提交并清掉选区。工具色板有 18 色、每行 6 色，色值顺序见 [MainWindow.Tools.cs](../src/PDFDesk.App/MainWindow.Tools.cs)。 |
+| 墨迹与文字标记 | 画笔每两个采样点组成线段，与各页矩形求交。快速跨越多页也要在每个经过的页边缘截断；笔画离页又返回时另起一段。保留亚像素采样与圆端点。荧光笔松手后提交并清掉选区。工具色板有 18 色、每行 6 色，色值顺序见 [MainWindow.Tools.cs](../windows/src/PDFDesk.App/MainWindow.Tools.cs)。 |
 | 文字框输入 | 点击插入时自动宽度，支持显式换行、保留空行；有框宽后自动折行。再次编辑可双击或从上下文菜单进入。点格式栏时保留编辑状态，退出编辑或按 Esc 时提交。新框只有空白则结束且不写入；清空已有框并提交则删除该对象。未改变内容和格式时保持原对象；成功放置文字后退出文字工具。 |
 | 文字排版与兼容 | 文字框字号档位为 8、9、10、11、12、14、16、18、20、24、28、36、48 pt；非档位值按方向跳到下一档。两端对齐只拉伸末行以外的行。没有私有样式键的旧文字框按左对齐、自动宽度回读。选中移动只改位置，调整角点才重新排版。未展平的文字框在本应用全文搜索中不作为正文命中。 |
 | 图片与签名放置 | 首次放普通图片按像素宽 × 72/96 得到自然宽，再取不超过半页宽的值并限制在 24–720 pt；以后使用各工具自己记忆的宽度。点击用预设大小，拖动按宽高比确定尺寸。放置成功退出该工具。导入读 EXIF 方向，Windows 放置用图在解码阶段限制最长边 1024 px。透明边缘保留 Alpha，连续缩放已有印章应避免累计失真。 |
@@ -219,7 +219,7 @@
 | 个人书签 | 每页最多一条，默认名为本地化的「第 N 页」语义，按页号排列。对同一页再执行书签命令即移除。重命名忽略纯空白；提交前核对当前文件摘要、页映射和原名称，防止覆盖对话框打开期间的更新。草稿复制页面时书签跟随原页；即使复制页与原页外观一样，也保留独立身份。 |
 | 文档属性与签名 | 属性值可选择复制。字体列表去重并显示字体名、嵌入情况和类型；超过扫描上限显示范围。加密文档逐项展示普通/高分辨率打印、修改、复制文字、批注、填写、辅助功能复制、重排权限。签名详情列原因、签署时间、SubFilter、覆盖状态；认证签名另列 DocMDP 等级。签署时间无法解析时仍可显示原始值。 |
 
-对照[页内文字编辑](../src/PDFDesk.App/Controls/PdfViewer.TextEditing.cs)、[贴图放置](../src/PDFDesk.App/Controls/PdfViewer.StampPlacement.cs)、[图片解码与签名存储](../src/PDFDesk.App/Services/SignatureStore.cs)、[字段输入回归](../tests/PDFDesk.Tests/FormEditingTests.cs)和[文档属性面板](../src/PDFDesk.App/Controls/DocumentPropertiesDialog.cs)。
+对照[页内文字编辑](../windows/src/PDFDesk.App/Controls/PdfViewer.TextEditing.cs)、[贴图放置](../windows/src/PDFDesk.App/Controls/PdfViewer.StampPlacement.cs)、[图片解码与签名存储](../windows/src/PDFDesk.App/Services/SignatureStore.cs)、[字段输入回归](../windows/tests/PDFDesk.Tests/FormEditingTests.cs)和[文档属性面板](../windows/src/PDFDesk.App/Controls/DocumentPropertiesDialog.cs)。
 
 ### 11.5 页面结构、导出、打印与反馈
 
@@ -231,7 +231,7 @@
 - **打印。** 系统面板提供全部或指定页、份数、方向、纸张、单双面、逐份打印，以及应用自己的颜色和缩放选择。按每页纸张可打印区域计算；仅缩小时倍率取 1、可用宽比、可用高比中的最小值。Windows 输出渲染最长边上限 8192 px，灰度转换保留 Alpha。打印用原 PDF 页面和已提交编辑；阅读区反色、查找选区和侧栏不会打印。
 - **弹窗和反馈。** 同一窗口仅承载一个模态决定，重复触发按取消处理，其他窗口仍独立。移到废纸篓的确认默认焦点为取消，列出将处理的文件；展平确认同样默认取消。常规通知以 5 秒为计时基准，窄于 360 逻辑单位时动作纵排。XFA 与已签名提示属于文档本身，手工关闭后应记住该文档视图已经看过，避免每次切回重复提示。
 
-对照[整理器实现](../src/PDFDesk.App/Controls/PageOrganizer.xaml.cs)、[草稿回归](../tests/PDFDesk.Tests/PageDraftTests.cs)、[导出进度卡](../src/PDFDesk.App/Controls/ExportProgressCard.xaml.cs)、[通知](../src/PDFDesk.App/Controls/NoticeHost.xaml.cs)和[弹窗宿主](../src/PDFDesk.App/Services/DialogHost.cs)。
+对照[整理器实现](../windows/src/PDFDesk.App/Controls/PageOrganizer.xaml.cs)、[草稿回归](../windows/tests/PDFDesk.Tests/PageDraftTests.cs)、[导出进度卡](../windows/src/PDFDesk.App/Controls/ExportProgressCard.xaml.cs)、[通知](../windows/src/PDFDesk.App/Controls/NoticeHost.xaml.cs)和[弹窗宿主](../windows/src/PDFDesk.App/Services/DialogHost.cs)。
 
 ## 12. Windows 与 macOS 的 PDF 文件兼容约定
 
@@ -253,7 +253,7 @@
 
 **中文嵌入边界。** Windows 为回退字符分配 CID，生成子集字体、CID 到字形映射和 ToUnicode 映射；这使得即使不同字符使用相同字形，也能保留正确的文本映射。写入前验证字形存在，以及字体允许编辑嵌入和子集化。当前 Windows 子集路径遇到 UTF-16 代理字符会返回失败，包含常用汉字的测试通过并不能说明所有 emoji 与扩展汉字均可写入。Mac 端若扩展字符覆盖，要另测展平后的提取、跨端显示与再次编辑；写入失败应保留输入并让用户可选择其他字体。
 
-实现依据见[文字对象与样式编解码](../src/PDFDesk.Engine/PdfDocument.Text.cs)、[字体子集](../src/PDFDesk.Engine/PdfTextFallback.cs)和[文字对象往返测试](../tests/PDFDesk.Tests/TextObjectProbeTests.cs)。
+实现依据见[文字对象与样式编解码](../windows/src/PDFDesk.Engine/PdfDocument.Text.cs)、[字体子集](../windows/src/PDFDesk.Engine/PdfTextFallback.cs)和[文字对象往返测试](../windows/tests/PDFDesk.Tests/TextObjectProbeTests.cs)。
 
 ### 12.2 墨迹、橡皮擦与透明印章
 
@@ -269,7 +269,7 @@
 
 **文字标记与便签。** 多行高亮按每行选区写四边形，批注外框取所有四边形的并集。页自身旋转或裁剪时调用相同的页坐标转换，避免只翻转 Y 轴。便签默认图标为 20 pt 的折角纸张，使用矢量外观，色值为 RGB(255,219,117)，正文单独写入 `/Contents`。打印时也应能看到图标。
 
-实现依据见[墨迹轮廓格式](../src/PDFDesk.Engine/InkFootprint.cs)、[擦除与重放](../src/PDFDesk.Engine/PdfDocument.InkErasing.cs)、[印章](../src/PDFDesk.Engine/PdfDocument.Stamps.cs)、[透明度与字段叠放测试](../tests/PDFDesk.Tests/StampTests.cs)。
+实现依据见[墨迹轮廓格式](../windows/src/PDFDesk.Engine/InkFootprint.cs)、[擦除与重放](../windows/src/PDFDesk.Engine/PdfDocument.InkErasing.cs)、[印章](../windows/src/PDFDesk.Engine/PdfDocument.Stamps.cs)、[透明度与字段叠放测试](../windows/tests/PDFDesk.Tests/StampTests.cs)。
 
 ### 12.3 表单外观、页间引用与文件替换
 
@@ -283,7 +283,7 @@
 | 原位保存遇到故障 | 提交表单焦点后，文档干净则直接返回。有修改时在同目录写暂存并强制刷盘，核对源版本后带备份原子替换。若替换失败且原路径已消失，尝试把备份移回；恢复也失败时向用户显示仍可取回原稿的备份路径。整段流程成功后才更新保存版本和脏标识。 |
 | 读取数字签名覆盖 | 将 ByteRange 按「偏移、长度」成对处理。缺失、负值、越界、重叠或乱序返回「无法判断」。合法范围未从文件头开始、未到文件末尾，或中间空隙显著超过签名内容十六进制表示所需长度时，报告「存在未覆盖内容」。Windows 对已知签名内容长度采用 `2 × 字节数 + 2 + 64` 的总空隙上限。通过覆盖检查仍须显示「未验证签名」。 |
 
-实现依据见[字段外观解析](../src/PDFDesk.Engine/FieldAppearance.cs)、[字段重绘](../src/PDFDesk.Engine/PdfDocument.Forms.cs)、[页间引用重写](../src/PDFDesk.Engine/PdfDocument.PageTransfer.cs)、[保存和恢复](../src/PDFDesk.Engine/PdfDocument.Annotations.cs)、[签名覆盖判定](../src/PDFDesk.Engine/SignatureCoverage.cs)。
+实现依据见[字段外观解析](../windows/src/PDFDesk.Engine/FieldAppearance.cs)、[字段重绘](../windows/src/PDFDesk.Engine/PdfDocument.Forms.cs)、[页间引用重写](../windows/src/PDFDesk.Engine/PdfDocument.PageTransfer.cs)、[保存和恢复](../windows/src/PDFDesk.Engine/PdfDocument.Annotations.cs)、[签名覆盖判定](../windows/src/PDFDesk.Engine/SignatureCoverage.cs)。
 
 ### 12.4 可直接使用的验收样本
 
@@ -326,4 +326,4 @@ Windows 核对记录：用仓库随附的 qpdf 读取上述六份样本，核对
 | T15 输入照片与签名 | 选带 EXIF 旋转的手机照片、透明 PNG、白纸签名各一份；创建签名后取消放置，再从签名库选取放入表单字段上方 | 方向正确，透明区域透出字段；取消放置后素材可再用。自动跳过去底不改变偏好，重复缩放和重开后不会出现白底或鬼影 |
 | T16 压缩的两种大小 | 对照片占比低的 PDF 打开估算，计算准确大小；在含未保存批注的文档上分别保存副本和替换，在等待队列中取消另一项 | 估算不可用时仍能准确计算；副本保留未保存批注。准确结果不比原文件小时禁用替换。取消任务进入取消中，之后释放目标，其余任务能完成 |
 
-**可复用资产。** [测试 PDF](../tests/corpus) 包含千页、表单、链接、幻灯片和损坏样本。[引擎测试](../tests/PDFDesk.Tests) 按功能分组，可直接移植断言；其中 DocumentIntegrityTests 覆盖同一文件身份、外部替换、快照、表单跨文档和书签并发等组合场景。[Windows 桌面实测记录](测试用例与结果.md) 可作为人工复现步骤。[中文使用说明与界面图](../README.zh-CN.md) 用于对照操作入口。[第三方声明](../THIRD-PARTY-NOTICES.md) 和[项目许可](../LICENSE) 随复用源码与依赖一并核对。
+**可复用资产。** [测试 PDF](../tests/corpus) 包含千页、表单、链接、幻灯片和损坏样本。[引擎测试](../windows/tests/PDFDesk.Tests) 按功能分组，可直接移植断言；其中 DocumentIntegrityTests 覆盖同一文件身份、外部替换、快照、表单跨文档和书签并发等组合场景。[Windows 桌面实测记录](测试用例与结果.md) 可作为人工复现步骤。[中文使用说明与界面图](../README.zh-CN.md) 用于对照操作入口。[第三方声明](../THIRD-PARTY-NOTICES.md) 和[项目许可](../LICENSE) 随复用源码与依赖一并核对。

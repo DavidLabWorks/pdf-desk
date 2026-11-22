@@ -483,3 +483,8 @@ $RECYCLE.BIN/
 
 # Release artifacts (zips, MSIX, certs)
 artifacts/
+
+# Xcode user settings and build output
+xcuserdata/
+DerivedData/
+/macos/build/
