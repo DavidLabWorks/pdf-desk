@@ -23,10 +23,7 @@ public sealed partial class MainWindow : Window
     private const int MinimumWindowWidth = 640;
     private const int MinimumWindowHeight = 420;
 
-    // site/tools/capture-demo.ps1 points this at a throwaway directory through
-    // PDFDESK_STATE_DIR, so a recording cannot pick up the user's own recents,
-    // theme or session and paint their filenames into every frame. Unset in
-    // normal use, the store uses the PDFDesk folder in Documents.
+    // Override the default state directory for an isolated session.
     private static readonly string? StateDirOverride =
         Environment.GetEnvironmentVariable("PDFDESK_STATE_DIR") is { Length: > 0 } dir ? dir : null;
 

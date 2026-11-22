@@ -151,26 +151,6 @@ windows/tools/
 tests/
   gen-corpus.ps1        Hand-authors the test PDFs (no PDF lib needed)
 
-site/tools/
-  gen-site-images.ps1   Store screenshots to resized JPEGs in site/img
-  gen-site-shortcuts.ps1 Rewrites the shortcut table in site/features.html from
-                        ShortcutCatalog.cs, so app and site cannot disagree
-  capture-demo.ps1      Drives the running app and grabs a timed frame sequence
-                        for the website's looping demos. Read its header and
-                        section 13's trap list before touching it.
-  gen-site-demos.ps1    Stacks a take into one JPEG strip and writes the
-                        matching element into site/index.html
-
-site/                   The website: three hand-written HTML pages and one
-  index.html            stylesheet. No generator, no build step, no
-  features.html         dependencies, and NO JAVASCRIPT AND NO THIRD-PARTY
-  privacy.html          REQUESTS AT ALL, which is what lets privacy.html say
-  style.css             what it says. Keep it that way: no analytics, no CDN
-  img/                  fonts, no embedded sponsor widget. Every path must stay
-                        relative, because Pages serves it from a repository subpath.
-                        Published by .github/workflows/pages.yml, but only on a
-                        push to main that touches site/**.
-
 docs/
   store-listing.md      Store submission copy: description, search terms, age
                         rating answers, runFullTrust justification, screenshot plan
@@ -453,17 +433,6 @@ dotnet test windows/tests/PDFDesk.Tests/PDFDesk.Tests.csproj
 # Regenerate assets when needed
 powershell -File tests/gen-corpus.ps1     # test PDFs → tests/corpus/
 powershell -File windows/tools/gen-icon.ps1       # icon + MSIX assets
-
-# Website assets
-powershell -File site/tools/gen-site-images.ps1     # store screenshots to site/img/*.jpg
-powershell -File site/tools/gen-site-shortcuts.ps1  # ShortcutCatalog.cs to features.html
-
-# Website demos: record first, then composite. Needs a licence-safe document
-# (section 8b) and a FRESH powershell.exe, because DPI awareness latches once
-# per process.
-powershell -File site/tools/capture-demo.ps1 -Clip reorder -Pdf <handbook> -Probe
-powershell -File site/tools/capture-demo.ps1 -Clip reorder -Pdf <handbook> -Takes 3
-powershell -File site/tools/gen-site-demos.ps1 -Take @{ reorder = 2 }
 ```
 
 **Test corpus** (`tests/corpus/`, generated): `hello.pdf` (2pp smoke),
@@ -1300,32 +1269,6 @@ thread's *lifetime* before suspecting the render.
   Store builds are signed by Microsoft.
 - Danial is **new to C#/.NET** — explain non-obvious concepts (P/Invoke, async
   void, XAML binding, MSIX) while building.
-- **The website carries no JavaScript and no third-party requests.** That is what
-  lets `privacy.html` say what it says, so it is a hard constraint and not a
-  style preference. It rules out an embedded GitHub Sponsors widget, a shields.io
-  badge on the site (the README is a different matter, it already has three), and
-  any analytics. It also rules out `<video autoplay loop>` for the demos: with no
-  script, CSS cannot pause, stop or seek a video, so an autoplaying loop has no
-  way to honour `prefers-reduced-motion` or WCAG 2.2.2. Hence the sprite strips.
-- **The looping site demos must be real captures.** `index.html` says "Every
-  screenshot here is the real application, not a mockup", and a hand-drawn CSS
-  animation would make that false. The application itself has no designed motion
-  (no storyboards, no composition animations, and every programmatic scroll
-  passes `disableAnimation: true`), so only genuinely visible behaviour can be
-  filmed: the thumbnail drag-reorder, the `SplitView` slide, night mode, and the
-  progressive tile pass.
-- **Two things keep the demos honest, and both live in the tools.** Any motion
-  added to `.demo` extends the single `prefers-reduced-motion` block in
-  `style.css`, which is the only place the site turns motion off; and
-  `gen-site-demos.ps1` throws on its `-MaxKB` budget rather than quietly
-  doubling the page weight. The strips loop forever on purpose, because three
-  passes finish at page load while the row is still offscreen, so the in-page
-  "Pause the moving demos" checkbox is what answers WCAG 2.2.2.
-- **Sponsorship framing.** The site asks for money two sections after promising
-  "no account, no subscription, no telemetry, no ads", so the support section
-  leads by saying what sponsorship is not, and puts a review and a bug report
-  beside it as equals. `.github/FUNDING.yml` and the four site links point at one
-  profile and resolve only once that profile is enrolled.
 - Plan files from past sessions live in `~\.claude\plans\`.
 - **This file is public.** Keep local paths, account addresses and anything else
   personal out of it — it ships in the repo like any other source file.
