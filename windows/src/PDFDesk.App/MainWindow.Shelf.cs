@@ -449,6 +449,15 @@ public sealed partial class MainWindow
         label.Text = DocumentNameFormatter.Fit(name, Fits);
     }
 
+    private sealed class MissingFileDialog : ContentDialog
+    {
+        public MissingFileDialog()
+        {
+            // Keep initial keyboard focus on Cancel without applying the default-button accent.
+            Opened += (_, _) => (GetTemplateChild("CloseButton") as Button)?.Focus(FocusState.Programmatic);
+        }
+    }
+
     private async void RecentOpen_Click(object sender, RoutedEventArgs e)
     {
         if (_capturedDrag != null) return;
@@ -466,12 +475,28 @@ public sealed partial class MainWindow
             }
             else
             {
-                var result = await ShowDialogAsync(new ContentDialog
+                bool fromFavorites = FavoritesTab.IsChecked == true;
+                var ui = UiText.Current;
+                var dialog = new MissingFileDialog
                 {
-                    Title = UiText.Current.FileMovedOrRenamed,
-                    Content = UiText.Format("Locate {0} to keep its reading position and bookmarks.", card.DisplayName),
-                    PrimaryButtonText = UiText.Current.LocatePDF, CloseButtonText = UiText.Current.Cancel
-                });
+                    Title = ui.FileMovedOrRenamed,
+                    Content = UiText.Format("Locate {0} to keep its reading position and bookmarks.", card.DisplayName)
+                        + "\n\n" + (fromFavorites ? ui.MissingUnfavoriteHint : ui.RemoveRecentHint),
+                    PrimaryButtonText = ui.LocatePDF,
+                    SecondaryButtonText = fromFavorites ? ui.Unfavorite : ui.RemoveRecord,
+                    CloseButtonText = ui.Cancel,
+                    PrimaryButtonStyle = (Style)Application.Current.Resources["AccentButtonStyle"],
+                };
+                if (!fromFavorites)
+                    dialog.SecondaryButtonStyle = (Style)Application.Current.Resources["DestructiveDialogButtonStyle"];
+
+                var result = await ShowDialogAsync(dialog);
+                if (result == ContentDialogResult.Secondary)
+                {
+                    if (fromFavorites) UnfavoriteCards([card]);
+                    else ForgetCards([card]);
+                    return;
+                }
                 if (result != ContentDialogResult.Primary) return;
                 var picked = await FilePickerHost.PickOpenAsync(WinRT.Interop.WindowNative.GetWindowHandle(this), ".pdf");
                 if (picked.Failed) { ShowError(FilePickerHost.FailureMessage); return; }

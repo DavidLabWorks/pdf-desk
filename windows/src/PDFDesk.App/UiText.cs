@@ -273,6 +273,9 @@ public sealed class UiText : INotifyPropertyChanged
         (false, false) => Chinese ? "最新在前" : "Newest first"
     };
     public string ManageRecent => Chinese ? "批量选择" : "Select multiple files";
+    public string RemoveRecord => Chinese ? "移除记录" : "Remove record";
+    public string MissingUnfavoriteHint => Chinese ? "取消收藏会保留最近记录、阅读位置和书签。" :
+        "Removing this favorite keeps its recent entry, reading position and bookmarks.";
     public string RemoveRecentHint => Chinese ? "移除记录会一并清除其收藏、阅读位置和书签。PDF 文件会保留。" :
         "Removing entries clears their favorites, reading positions and bookmarks. The PDF files are kept.";
     public string AlsoDeleteFiles => Chinese ? "同时删除文件" : "Also delete files";
