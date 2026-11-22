@@ -54,7 +54,7 @@ One slim toolbar. Everything else lives in a single menu, so the page gets the s
 
 **Open source**
 
-PDFDesk is GPLv3 and developed in the open at https://github.com/DavidLabWorks/pdf-desk-windows — read the code, file an issue, or build it yourself.
+PDFDesk is GPLv3 and developed in the open at https://github.com/DavidLabWorks/pdf-desk — read the code, file an issue, or build it yourself.
 
 ---
 
@@ -105,7 +105,7 @@ recently-opened file paths, per-document reading positions and bookmarks, and
 user preferences.
 
 Privacy policy URL (required field — point it at the repo's policy):
-`https://github.com/DavidLabWorks/pdf-desk-windows/blob/main/PRIVACY.md`
+`https://github.com/DavidLabWorks/pdf-desk/blob/main/PRIVACY.md`
 
 ---
 
@@ -124,7 +124,7 @@ Paste the following verbatim:
 > no network connections, runs no
 > background tasks, requires no elevation, modifies no system settings, and
 > collects no user data. PDFDesk is open source under the GPLv3 and the full source
-> is at https://github.com/DavidLabWorks/pdf-desk-windows
+> is at https://github.com/DavidLabWorks/pdf-desk
 
 The "no network connections" claim is unconditional as of v0.5.0: `UpdateService`
 was deleted, so no build of PDFDesk contains networking code. Adding any would
@@ -134,8 +134,8 @@ invalidate this justification and the privacy declaration together.
 
 ## Support / contact
 
-- Support: https://github.com/DavidLabWorks/pdf-desk-windows/issues
-- Website: https://github.com/DavidLabWorks/pdf-desk-windows
+- Support: https://github.com/DavidLabWorks/pdf-desk/issues
+- Website: https://github.com/DavidLabWorks/pdf-desk
 
 ---
 

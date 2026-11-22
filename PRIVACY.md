@@ -74,4 +74,4 @@ public and auditable.
 
 ## Contact
 
-Questions or concerns: https://github.com/DavidLabWorks/pdf-desk-windows/issues
+Questions or concerns: https://github.com/DavidLabWorks/pdf-desk/issues

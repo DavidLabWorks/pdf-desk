@@ -9,7 +9,7 @@ body:
         here is genuinely all there is to go on.
 
         **Found something exploitable?** Please do not file it here. Use
-        [private vulnerability reporting](https://github.com/DavidLabWorks/pdf-desk-windows/security/advisories/new)
+        [private vulnerability reporting](https://github.com/DavidLabWorks/pdf-desk/security/advisories/new)
         instead, so a fix can ship before the details are public.
 
   - type: textarea

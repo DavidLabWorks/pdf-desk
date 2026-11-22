@@ -2,7 +2,7 @@
 
 For the macOS project, see [macos/](../macos/) and the [cross-platform requirements](macOS版产品需求与实现规格.md). Commands below run from the repository root.
 
-The Windows version of PDF Desk originated from [Rune](https://github.com/DanialJaved/rune), developed by Danial Javed and contributors. [DavidLabWorks](https://github.com/DavidLabWorks/pdf-desk-windows) now maintains PDF Desk. The macOS app uses SwiftUI and PDFKit.
+The Windows version of PDF Desk originated from [Rune](https://github.com/DanialJaved/rune), developed by Danial Javed and contributors. [DavidLabWorks](https://github.com/DavidLabWorks/pdf-desk) now maintains PDF Desk. The macOS app uses SwiftUI and PDFKit.
 The sections from version history onward contain historical notes inherited from upstream.
 
 ---

@@ -6,7 +6,7 @@ rather than filing them in public.
 
 ## Reporting a vulnerability
 
-Use GitHub's **[private vulnerability reporting](https://github.com/DavidLabWorks/pdf-desk-windows/security/advisories/new)**
+Use GitHub's **[private vulnerability reporting](https://github.com/DavidLabWorks/pdf-desk/security/advisories/new)**
 on this repository. It is private between you and the maintainer until a fix
 ships.
 

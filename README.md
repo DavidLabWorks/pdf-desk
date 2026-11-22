@@ -18,7 +18,7 @@ Keep frequently used PDFs on a bookshelf and open them in tabs to read, annotate
 
 ## Getting started
 
-1. Check [GitHub Releases](https://github.com/DavidLabWorks/pdf-desk-windows/releases) for a Windows package matching your device (ARM64 or x64). For the portable edition, keep the folder together and run `PDFDesk.exe`.
+1. Check [GitHub Releases](https://github.com/DavidLabWorks/pdf-desk/releases) for a Windows package matching your device (ARM64 or x64). For the portable edition, keep the folder together and run `PDFDesk.exe`.
 2. Open a PDF from the bookshelf. Choose **Open original** to edit the file in place, or **Copy to library** to keep the original and edit a separate copy.
 3. Use the toolbar above the page to draw, highlight text, add a note, or insert a text box. Press `Ctrl+S` to save or `Ctrl+Shift+S` to save a copy. The Home button in the upper left returns you to the bookshelf.
 
@@ -105,4 +105,4 @@ The Windows version of PDF Desk originated from [Rune](https://github.com/Danial
 
 PDF Desk is licensed under the [GNU GPL v3](LICENSE). Licenses for bundled components are listed in the [third-party notices](THIRD-PARTY-NOTICES.md).
 
-To report a problem, open a [GitHub issue](https://github.com/DavidLabWorks/pdf-desk-windows/issues) with steps to reproduce it, the app version, your Windows version, and system architecture. Redact private file names and paths from screenshots and logs before attaching them.
+To report a problem, open a [GitHub issue](https://github.com/DavidLabWorks/pdf-desk/issues) with steps to reproduce it, the app version, your Windows version, and system architecture. Redact private file names and paths from screenshots and logs before attaching them.

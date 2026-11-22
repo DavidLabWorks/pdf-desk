@@ -1567,8 +1567,8 @@
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" Padding="16,8" MinHeight="52">
                                     <TextBlock Text="GitHub" VerticalAlignment="Center" />
                                     <HyperlinkButton Grid.Column="1" HorizontalAlignment="Right" Padding="0,4"
-                                                     NavigateUri="https://github.com/DavidLabWorks/pdf-desk-windows">
-                                        <TextBlock Text="github.com/DavidLabWorks/pdf-desk-windows" TextWrapping="Wrap" />
+                                                     NavigateUri="https://github.com/DavidLabWorks/pdf-desk">
+                                        <TextBlock Text="github.com/DavidLabWorks/pdf-desk" TextWrapping="Wrap" />
                                     </HyperlinkButton>
                                 </Grid>
                                 <Border Height="1" Margin="16,0" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
@@ -1576,7 +1576,7 @@
                                     <TextBlock Text="{Binding Feedback, Source={StaticResource UiText}}" VerticalAlignment="Center" />
                                     <HyperlinkButton Grid.Column="1" HorizontalAlignment="Right" Padding="0,4"
                                                      Content="{Binding OpenIssueTracker, Source={StaticResource UiText}}"
-                                                     NavigateUri="https://github.com/DavidLabWorks/pdf-desk-windows/issues/new" />
+                                                     NavigateUri="https://github.com/DavidLabWorks/pdf-desk/issues/new" />
                                 </Grid>
                             </StackPanel>
                         </Border>

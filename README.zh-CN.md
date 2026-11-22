@@ -18,7 +18,7 @@ PDF Desk 把书架和阅读器放在同一个窗口。你可以把常看的文�
 
 ## 开始使用
 
-1. 在 [GitHub Releases](https://github.com/DavidLabWorks/pdf-desk-windows/releases) 查看可用的 Windows 发布包。按设备架构选择 ARM64 或 x64。使用便携版时保留整个文件夹，运行其中的 `PDFDesk.exe`。
+1. 在 [GitHub Releases](https://github.com/DavidLabWorks/pdf-desk/releases) 查看可用的 Windows 发布包。按设备架构选择 ARM64 或 x64。使用便携版时保留整个文件夹，运行其中的 `PDFDesk.exe`。
 2. 在书架点击「打开或新建 PDF」，选择打开原文件或复制到书库。直接打开适合编辑已有文件；复制模式适合保留原稿，后续编辑写入书库里的副本。
 3. 打开文档后，从顶部工具栏选择画笔、荧光笔、便签或文字工具。`Ctrl+S` 保存到当前文件，`Ctrl+Shift+S` 另存一份。左上角的主页按钮可随时返回书架。
 
@@ -105,4 +105,4 @@ PDF Desk 的 Windows 版最初源自 Danial Javed 及贡献者开发的 [Rune](h
 
 PDF Desk 采用 [GNU GPL v3](LICENSE)。随程序分发的组件及其许可见[第三方声明](THIRD-PARTY-NOTICES.md)。
 
-如需反馈问题，可在 [GitHub Issues](https://github.com/DavidLabWorks/pdf-desk-windows/issues) 提交复现步骤，并附上应用版本、Windows 版本及系统架构。截图与日志如涉及私人文档，请先遮盖文件名和路径。
+如需反馈问题，可在 [GitHub Issues](https://github.com/DavidLabWorks/pdf-desk/issues) 提交复现步骤，并附上应用版本、Windows 版本及系统架构。截图与日志如涉及私人文档，请先遮盖文件名和路径。

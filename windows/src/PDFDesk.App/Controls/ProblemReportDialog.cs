@@ -63,7 +63,7 @@ internal static class ProblemReportDialog
         var result = await DialogHost.ShowAsync(owner, dialog);
         if (result == ContentDialogResult.Primary)
         {
-            await Launcher.LaunchUriAsync(new Uri("https://github.com/DavidLabWorks/pdf-desk-windows/issues/new"));
+            await Launcher.LaunchUriAsync(new Uri("https://github.com/DavidLabWorks/pdf-desk/issues/new"));
         }
 
     }
