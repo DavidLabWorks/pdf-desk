@@ -2,7 +2,7 @@
   <img src="assets/pdfdesk.svg" width="72" alt="PDF Desk icon">
   <h1>PDF Desk</h1>
   <p>A local PDF desktop app for Windows and macOS.</p>
-  <p><strong>English</strong> · <a href="docs/README.zh-CN.md" lang="zh-CN">简体中文</a></p>
+  <p><strong>English</strong> · <a href="README.zh-CN.md" lang="zh-CN">简体中文</a></p>
 </div>
 
 | Platform | Project | Current capabilities |

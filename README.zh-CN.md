@@ -1,20 +1,20 @@
 <div align="center">
-  <img src="../assets/pdfdesk.svg" width="72" alt="PDF Desk 图标">
+  <img src="assets/pdfdesk.svg" width="72" alt="PDF Desk 图标">
   <h1>PDF Desk</h1>
   <p>面向 Windows 和 macOS 的本地 PDF 桌面应用。</p>
-  <p><a href="../README.md" lang="en">English</a> · <strong>简体中文</strong></p>
+  <p><a href="README.md" lang="en">English</a> · <strong>简体中文</strong></p>
 </div>
 
 | 平台 | 工程入口 | 当前功能 |
 | --- | --- | --- |
-| Windows | [Visual Studio 解决方案](../windows/PDFDesk.slnx) | 书架、阅读、批注、表单、页面整理、压缩与打印。 |
-| macOS | [Xcode 工程](../macos/PDFDesk.xcodeproj) | SwiftUI + PDFKit 只读阅读器。在 macOS 13 或更高版本用 Xcode 打开工程并运行 PDFDesk，选择「文件 → 打开」即可阅读 PDF。 |
+| Windows | [Visual Studio 解决方案](windows/PDFDesk.slnx) | 书架、阅读、批注、表单、页面整理、压缩与打印。 |
+| macOS | [Xcode 工程](macos/PDFDesk.xcodeproj) | SwiftUI + PDFKit 只读阅读器。在 macOS 13 或更高版本用 Xcode 打开工程并运行 PDFDesk，选择「文件 → 打开」即可阅读 PDF。 |
 
-两端共用[产品需求](macOS版产品需求与实现规格.md)、[测试 PDF](../tests/corpus/) 和[设计技能](../skills/pdfdesk-design/SKILL.md)。以下是已发布 Windows 版的使用与构建说明。
+两端共用[产品需求](docs/macOS版产品需求与实现规格.md)、[测试 PDF](tests/corpus/) 和[设计技能](skills/pdfdesk-design/SKILL.md)。以下是已发布 Windows 版的使用与构建说明。
 
 PDF Desk 把书架和阅读器放在同一个窗口。你可以把常看的文档加入收藏，在多个 PDF 之间切换，填写表单、添加签名，或把不同文件中的几页整理成一份新文档。文档处理在本机完成，无需注册账号。界面支持简体中文和英文。
 
-![PDF Desk 中文阅读界面，左侧为页面缩略图，右侧为正文，上方为文档标签和批注工具](screenshots/reader.png)
+![PDF Desk 中文阅读界面，左侧为页面缩略图，右侧为正文，上方为文档标签和批注工具](docs/screenshots/reader.png)
 
 ## 开始使用
 
@@ -24,7 +24,7 @@ PDF Desk 把书架和阅读器放在同一个窗口。你可以把常看的文�
 
 ## 书架与阅读
 
-![最近文档书架，三份示例 PDF 以封面卡片排列，可切换收藏、列表或网格](screenshots/bookshelf.png)
+![最近文档书架，三份示例 PDF 以封面卡片排列，可切换收藏、列表或网格](docs/screenshots/bookshelf.png)
 
 - **书架**支持最近、收藏、封面卡片和列表视图。点击星标可以直接收藏，也可以指定收藏文件夹。可将书架文档或资源管理器中的 PDF 拖入左侧文件夹。选中文件夹即可浏览、重命名或删除。删除文件夹后，其中的 PDF 会保留在未分类收藏中。卡片显示文件名、添加日期和大小，可通过右键菜单定位文件或从列表移除。最近与收藏分别记住视图选择。
 - **多标签阅读**支持单列、双列和三列排版、适合宽度、适合页面、旋转、夜间阅读及全屏演示。启用会话恢复后，重启可回到之前的文档标签或主页。
@@ -50,9 +50,9 @@ PDF Desk 把书架和阅读器放在同一个窗口。你可以把常看的文�
 | Windows「文档」目录下的 `PDFDesk\Library` | 默认书库，用于存放复制进来的 PDF 和新建文档。可以在设置中选择其他书库目录。 |
 | `%LOCALAPPDATA%\PDFDesk` | 封面缩略图、供复用的签名图片、页面剪贴板数据，以及本机错误日志 `errors.log`。 |
 
-手写签名是页面上的可见批注。将它放入 PDF 并保存后，接收方即可看到签名图像；验证签署者身份则属于数字签名的用途。更多数据处理说明见[隐私政策](../PRIVACY.md)。
+手写签名是页面上的可见批注。将它放入 PDF 并保存后，接收方即可看到签名图像；验证签署者身份则属于数字签名的用途。更多数据处理说明见[隐私政策](PRIVACY.md)。
 
-![全局设置，可选择主题、界面语言、书库文件夹，并查看默认 PDF 应用状态](screenshots/settings.png)
+![全局设置，可选择主题、界面语言、书库文件夹，并查看默认 PDF 应用状态](docs/screenshots/settings.png)
 
 ## 技术实现
 
@@ -60,13 +60,13 @@ PDF Desk 把书架和阅读器放在同一个窗口。你可以把常看的文�
 
 | 功能 | 实现方式与代码入口 |
 | --- | --- |
-| 大文档阅读 | 通过文件访问回调按需读取 PDF。阅读器按视口请求图块，在 Win2D 虚拟画布上绘制；调度器按优先级处理渲染和后台任务，页面句柄由缓存复用。[文件读取](../windows/src/PDFDesk.PdfiumInterop/FileAccessAdapter.cs) · [渲染调度](../windows/src/PDFDesk.Engine/RenderScheduler.cs) · [页缓存](../windows/src/PDFDesk.Engine/PdfDocument.PageCache.cs) |
-| 排版、缩放与搜索 | 页面布局计算每页的显示矩形，旋转变换负责文档坐标与显示坐标之间的转换。缩放使用锚点维持阅读位置，搜索基于提取的页面文本及字符位置。[页面布局](../windows/src/PDFDesk.Engine/PageLayout.cs) · [缩放锚点](../windows/src/PDFDesk.Engine/ZoomAnchor.cs) · [搜索](../windows/src/PDFDesk.Engine/DocumentSearch.cs) |
-| 笔迹、高亮与便签 | 写入 PDF 标准墨迹、文本标记和文本批注。跨页笔迹按页拆分，橡皮擦根据擦除轨迹裁切笔画；便签把正文写入批注的 `/Contents`。[批注读写](../windows/src/PDFDesk.Engine/PdfDocument.Annotations.cs) · [跨页笔迹](../windows/src/PDFDesk.Engine/PageInkGesture.cs) · [局部擦除](../windows/src/PDFDesk.Engine/InkEraser.cs) |
-| 可编辑文字与中文字体 | 将文本对象写入印章批注的外观流，保留原文和排版信息供再次编辑。指定中文字体时检查嵌入权限，按所用字形生成 TrueType 子集，减少对接收方字体环境的依赖。[文字框](../windows/src/PDFDesk.Engine/PdfDocument.Text.cs) · [字体子集](../windows/src/PDFDesk.Engine/PdfTextFallback.cs) |
-| 图片、签名与表单 | 图片和手写签名使用印章批注，签名图片可在本地去除背景。表单输入交给 PDFium 的表单环境处理，文档已有数字签名的信息单独读取。[图片印章](../windows/src/PDFDesk.Engine/PdfDocument.Stamps.cs) · [签名去底](../windows/src/PDFDesk.Engine/SignatureMatte.cs) · [表单](../windows/src/PDFDesk.Engine/PdfDocument.Forms.cs) · [数字签名](../windows/src/PDFDesk.Engine/PdfDocument.Signatures.cs) |
-| 页面操作与打印 | 引擎通过 PDFium 导入、导出和重排页面。打印服务将 PDF 页按纸张和可打印区域渲染，交给 Windows 打印管线生成预览和作业。[页面编辑](../windows/src/PDFDesk.Engine/PdfDocument.Pages.cs) · [展平批注](../windows/src/PDFDesk.Engine/PdfDocument.Flatten.cs) · [打印服务](../windows/src/PDFDesk.App/Services/PrintService.cs) |
-| 书库与桌面集成 | 书库导入时先写临时副本并处理重名；配置写入使用互斥锁、临时文件和替换操作。单实例激活负责把后续打开文件的请求转交给已有窗口。[书库](../windows/src/PDFDesk.Engine/PdfLibrary.cs) · [配置与会话](../windows/src/PDFDesk.Engine/AppState.cs) · [窗口激活](../windows/src/PDFDesk.App/Services/SingleInstance.cs) |
+| 大文档阅读 | 通过文件访问回调按需读取 PDF。阅读器按视口请求图块，在 Win2D 虚拟画布上绘制；调度器按优先级处理渲染和后台任务，页面句柄由缓存复用。[文件读取](windows/src/PDFDesk.PdfiumInterop/FileAccessAdapter.cs) · [渲染调度](windows/src/PDFDesk.Engine/RenderScheduler.cs) · [页缓存](windows/src/PDFDesk.Engine/PdfDocument.PageCache.cs) |
+| 排版、缩放与搜索 | 页面布局计算每页的显示矩形，旋转变换负责文档坐标与显示坐标之间的转换。缩放使用锚点维持阅读位置，搜索基于提取的页面文本及字符位置。[页面布局](windows/src/PDFDesk.Engine/PageLayout.cs) · [缩放锚点](windows/src/PDFDesk.Engine/ZoomAnchor.cs) · [搜索](windows/src/PDFDesk.Engine/DocumentSearch.cs) |
+| 笔迹、高亮与便签 | 写入 PDF 标准墨迹、文本标记和文本批注。跨页笔迹按页拆分，橡皮擦根据擦除轨迹裁切笔画；便签把正文写入批注的 `/Contents`。[批注读写](windows/src/PDFDesk.Engine/PdfDocument.Annotations.cs) · [跨页笔迹](windows/src/PDFDesk.Engine/PageInkGesture.cs) · [局部擦除](windows/src/PDFDesk.Engine/InkEraser.cs) |
+| 可编辑文字与中文字体 | 将文本对象写入印章批注的外观流，保留原文和排版信息供再次编辑。指定中文字体时检查嵌入权限，按所用字形生成 TrueType 子集，减少对接收方字体环境的依赖。[文字框](windows/src/PDFDesk.Engine/PdfDocument.Text.cs) · [字体子集](windows/src/PDFDesk.Engine/PdfTextFallback.cs) |
+| 图片、签名与表单 | 图片和手写签名使用印章批注，签名图片可在本地去除背景。表单输入交给 PDFium 的表单环境处理，文档已有数字签名的信息单独读取。[图片印章](windows/src/PDFDesk.Engine/PdfDocument.Stamps.cs) · [签名去底](windows/src/PDFDesk.Engine/SignatureMatte.cs) · [表单](windows/src/PDFDesk.Engine/PdfDocument.Forms.cs) · [数字签名](windows/src/PDFDesk.Engine/PdfDocument.Signatures.cs) |
+| 页面操作与打印 | 引擎通过 PDFium 导入、导出和重排页面。打印服务将 PDF 页按纸张和可打印区域渲染，交给 Windows 打印管线生成预览和作业。[页面编辑](windows/src/PDFDesk.Engine/PdfDocument.Pages.cs) · [展平批注](windows/src/PDFDesk.Engine/PdfDocument.Flatten.cs) · [打印服务](windows/src/PDFDesk.App/Services/PrintService.cs) |
+| 书库与桌面集成 | 书库导入时先写临时副本并处理重名；配置写入使用互斥锁、临时文件和替换操作。单实例激活负责把后续打开文件的请求转交给已有窗口。[书库](windows/src/PDFDesk.Engine/PdfLibrary.cs) · [配置与会话](windows/src/PDFDesk.Engine/AppState.cs) · [窗口激活](windows/src/PDFDesk.App/Services/SingleInstance.cs) |
 
 ## 从源码构建
 
@@ -77,7 +77,7 @@ dotnet publish windows/src/PDFDesk.App/PDFDesk.App.csproj -c Release -r win-arm6
 .\artifacts\portable\win-arm64\PDFDesk.exe
 ```
 
-构建 x64 版时，将 RID 改为 `win-x64`、平台改为 `-p:Platform=x64`，并使用独立的输出目录。开发时可打开 [windows/PDFDesk.slnx](../windows/PDFDesk.slnx)。
+构建 x64 版时，将 RID 改为 `win-x64`、平台改为 `-p:Platform=x64`，并使用独立的输出目录。开发时可打开 [windows/PDFDesk.slnx](windows/PDFDesk.slnx)。
 
 ### 测试
 
@@ -85,7 +85,7 @@ dotnet publish windows/src/PDFDesk.App/PDFDesk.App.csproj -c Release -r win-arm6
 dotnet test windows/tests/PDFDesk.Tests/PDFDesk.Tests.csproj -c Release
 ```
 
-测试覆盖阅读布局、渲染调度、文字搜索、批注与表单读写、字体保存后重开、页面操作和状态持久化。测试样本位于 [tests/corpus](../tests/corpus)。桌面交互用例、ARM64 内存压力测试的测量方法和已验证范围记录在[测试用例与结果](测试用例与结果.md)。
+测试覆盖阅读布局、渲染调度、文字搜索、批注与表单读写、字体保存后重开、页面操作和状态持久化。测试样本位于 [tests/corpus](tests/corpus)。桌面交互用例、ARM64 内存压力测试的测量方法和已验证范围记录在[测试用例与结果](docs/测试用例与结果.md)。
 
 ## 常用快捷键
 
@@ -101,6 +101,6 @@ dotnet test windows/tests/PDFDesk.Tests/PDFDesk.Tests.csproj -c Release
 
 ## 来源与许可
 
-PDF Desk 基于 Danial Javed 和贡献者开发的 [Rune](https://github.com/DanialJaved/rune) 继续开发，采用 [GNU GPL v3](../LICENSE)。随程序分发的组件及其许可见[第三方声明](../THIRD-PARTY-NOTICES.md)。
+PDF Desk 基于 Danial Javed 和贡献者开发的 [Rune](https://github.com/DanialJaved/rune) 继续开发，采用 [GNU GPL v3](LICENSE)。随程序分发的组件及其许可见[第三方声明](THIRD-PARTY-NOTICES.md)。
 
 如需反馈问题，可在 [GitHub Issues](https://github.com/DavidLabWorks/pdf-desk-windows/issues) 提交复现步骤，并附上应用版本、Windows 版本及系统架构。截图与日志如涉及私人文档，请先遮盖文件名和路径。
